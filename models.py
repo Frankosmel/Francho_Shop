@@ -1,7 +1,10 @@
 # models.py
 
-from app import db
+from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
+
+# Creamos aquí db para que no dependa de app.py
+db = SQLAlchemy()
 
 class User(db.Model, UserMixin):
     id = db.Column(db.Integer, primary_key=True)
@@ -10,7 +13,6 @@ class User(db.Model, UserMixin):
     password = db.Column(db.String(100), nullable=False)
     saldo = db.Column(db.Float, default=0.0)
     role = db.Column(db.String(10), default='user')  # 'user' o 'admin'
-
     recargas = db.relationship('Recarga', backref='cliente', lazy=True)
 
 class Recarga(db.Model):
@@ -21,6 +23,5 @@ class Recarga(db.Model):
     player_id = db.Column(db.String(100), nullable=False)
     whatsapp = db.Column(db.String(50), nullable=True)
     captura = db.Column(db.String(200), nullable=True)
-    estado = db.Column(db.String(30), default='pendiente')  # pendiente, en proceso, completado
-
+    estado = db.Column(db.String(30), default='pendiente')
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)

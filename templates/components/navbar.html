@@ -1,0 +1,19 @@
+<!-- templates/components/navbar.html -->
+
+<nav class="navbar">
+  <a href="/">Francho Shop</a>
+  <ul>
+    {% if current_user.is_authenticated %}
+      <li><a href="{{ url_for('user.dashboard') }}">Mi Panel</a></li>
+      {% if current_user.role == 'admin' %}
+        <li><a href="{{ url_for('admin.panel') }}">Admin</a></li>
+      {% endif %}
+      <li><a href="{{ url_for('auth.logout') }}">Cerrar sesión</a></li>
+    {% else %}
+      <li><a href="{{ url_for('auth.login') }}">Login</a></li>
+      <li><a href="{{ url_for('auth.register') }}">Registro</a></li>
+    {% endif %}
+    <li><a href="/extra/about.html">Sobre Nosotros</a></li>
+    <li><a href="/extra/faq.html">FAQ</a></li>
+  </ul>
+</nav>

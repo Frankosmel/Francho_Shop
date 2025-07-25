@@ -3,8 +3,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import login_user, logout_user, login_required, current_user
-from app import db
-from models import User
+from models import db, User
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -14,16 +13,12 @@ def login():
         usuario = request.form['username']
         clave = request.form['password']
         user = User.query.filter_by(username=usuario).first()
-
         if user and check_password_hash(user.password, clave):
             login_user(user)
-            flash('Bienvenido, ' + user.username, 'success')
-            if user.role == 'admin':
-                return redirect(url_for('admin.panel'))
-            return redirect(url_for('user.dashboard'))
+            flash(f'Bienvenido, {user.username}', 'success')
+            return redirect(url_for('admin.panel') if user.role=='admin' else url_for('user.dashboard'))
         else:
             flash('Credenciales incorrectas ❌', 'danger')
-    
     return render_template('auth/login.html')
 
 @auth_bp.route('/register', methods=['GET', 'POST'])
@@ -32,11 +27,9 @@ def register():
         usuario = request.form['username']
         email = request.form['email']
         clave = request.form['password']
-
         if User.query.filter_by(username=usuario).first():
             flash('El usuario ya existe ⚠️', 'warning')
             return redirect(url_for('auth.register'))
-
         nuevo = User(
             username=usuario,
             email=email,
@@ -46,7 +39,6 @@ def register():
         db.session.commit()
         flash('Cuenta creada con éxito ✅', 'success')
         return redirect(url_for('auth.login'))
-
     return render_template('auth/register.html')
 
 @auth_bp.route('/logout')

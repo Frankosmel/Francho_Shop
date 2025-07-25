@@ -2,8 +2,7 @@
 
 from flask import Blueprint, render_template, request, redirect, url_for, flash
 from flask_login import login_required, current_user
-from app import db
-from models import Recarga, User
+from models import db, Recarga, User
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
 
@@ -16,7 +15,6 @@ def panel():
     if not es_admin():
         flash('Acceso restringido 🚫', 'danger')
         return redirect(url_for('user.dashboard'))
-    
     recargas = Recarga.query.order_by(Recarga.id.desc()).all()
     usuarios = User.query.all()
     return render_template('admin/panel.html', recargas=recargas, usuarios=usuarios)
@@ -27,7 +25,6 @@ def cambiar_estado(id):
     if not es_admin():
         flash('Sin permiso para cambiar estado', 'danger')
         return redirect(url_for('user.dashboard'))
-
     estado = request.form.get('estado')
     recarga = Recarga.query.get(id)
     if recarga:
@@ -42,7 +39,6 @@ def editar_saldo(user_id):
     if not es_admin():
         flash('Sin permiso para editar saldo', 'danger')
         return redirect(url_for('user.dashboard'))
-
     saldo = request.form.get('saldo')
     user = User.query.get(user_id)
     if user:

@@ -4,8 +4,7 @@ import os
 from flask import Blueprint, render_template, request, redirect, url_for, flash, current_app
 from flask_login import login_required, current_user
 from werkzeug.utils import secure_filename
-from app import db
-from models import Recarga
+from models import db, Recarga
 
 user_bp = Blueprint('user', __name__, url_prefix='/user')
 
@@ -26,26 +25,27 @@ def nuevo_pedido():
     metodo = request.form['metodo_pago']
     player_id = request.form['player_id']
     whatsapp = request.form['whatsapp']
-    captura = None
+    captura_path = None
 
     file = request.files.get('captura')
     if file and allowed_file(file.filename):
         filename = secure_filename(file.filename)
-        path = os.path.join(current_app.config['UPLOAD_FOLDER'], filename)
-        file.save(path)
-        captura = f'/static/uploads/{filename}'
+        upload_folder = current_app.config['UPLOAD_FOLDER']
+        os.makedirs(upload_folder, exist_ok=True)
+        file.save(os.path.join(upload_folder, filename))
+        captura_path = f'/static/uploads/{filename}'
 
-    nuevo = Recarga(
+    nueva = Recarga(
         juego=juego,
         oferta=oferta,
         metodo_pago=metodo,
         player_id=player_id,
         whatsapp=whatsapp,
-        captura=captura,
+        captura=captura_path,
         user_id=current_user.id
     )
-    db.session.add(nuevo)
+    db.session.add(nueva)
     db.session.commit()
 
-    flash('Tu pedido fue enviado correctamente ✅', 'success')
+    flash('✅ Tu pedido ha sido enviado y está pendiente de aprobación.', 'success')
     return redirect(url_for('user.dashboard'))

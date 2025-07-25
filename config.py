@@ -7,6 +7,6 @@ class Config:
     SQLALCHEMY_DATABASE_URI = 'sqlite:///database.db'
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
-    # Configuración de subida de archivos (comprobantes)
+    # Carpeta para subir comprobantes
     UPLOAD_FOLDER = os.path.join(os.getcwd(), 'static', 'uploads')
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}

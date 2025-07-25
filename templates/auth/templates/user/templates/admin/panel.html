@@ -1,0 +1,92 @@
+<!-- templates/admin/panel.html -->
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Panel del Administrador | Francho Shop</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h2>🛠️ Panel del Administrador</h2>
+
+        <h3>📦 Pedidos de recargas</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Usuario</th>
+                    <th>Juego</th>
+                    <th>Oferta</th>
+                    <th>Método</th>
+                    <th>Estado</th>
+                    <th>Cambiar</th>
+                    <th>Captura</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for r in recargas %}
+                <tr>
+                    <td>{{ r.id }}</td>
+                    <td>{{ r.cliente.username }}</td>
+                    <td>{{ r.juego }}</td>
+                    <td>{{ r.oferta }}</td>
+                    <td>{{ r.metodo_pago }}</td>
+                    <td>{{ r.estado }}</td>
+                    <td>
+                        <form method="POST" action="/admin/cambiar_estado/{{ r.id }}">
+                            <select name="estado" onchange="this.form.submit()">
+                                <option value="pendiente" {% if r.estado == 'pendiente' %}selected{% endif %}>Pendiente</option>
+                                <option value="en proceso" {% if r.estado == 'en proceso' %}selected{% endif %}>En proceso</option>
+                                <option value="completado" {% if r.estado == 'completado' %}selected{% endif %}>Completado</option>
+                            </select>
+                        </form>
+                    </td>
+                    <td>
+                        {% if r.captura %}
+                            <a href="{{ r.captura }}" target="_blank">📷 Ver</a>
+                        {% else %}
+                            -
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <hr>
+
+        <h3>👥 Usuarios</h3>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Usuario</th>
+                    <th>Email</th>
+                    <th>Saldo</th>
+                    <th>Editar</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for u in usuarios %}
+                <tr>
+                    <td>{{ u.id }}</td>
+                    <td>{{ u.username }}</td>
+                    <td>{{ u.email }}</td>
+                    <td>{{ u.saldo }}</td>
+                    <td>
+                        <form method="POST" action="/admin/editar_saldo/{{ u.id }}">
+                            <input type="number" step="0.01" name="saldo" value="{{ u.saldo }}" style="width: 80px;">
+                            <button type="submit">💾</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+        <p><a href="/auth/logout">🔚 Cerrar sesión</a></p>
+    </div>
+</body>
+</html>

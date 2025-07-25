@@ -3,18 +3,16 @@
 from flask import Flask
 from flask_login import LoginManager
 from config import Config
-
-# Importamos db pendiente de inicializar
 from models import db, User, Recarga
 
-# Inicializamos la app
+# Inicializar la app
 app = Flask(__name__)
 app.config.from_object(Config)
 
-# Inicializamos la base de datos con la app
+# Inicializar la base de datos
 db.init_app(app)
 
-# Login manager
+# Configurar Flask-Login
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'auth.login'
@@ -23,7 +21,7 @@ login_manager.login_view = 'auth.login'
 def load_user(user_id):
     return User.query.get(int(user_id))
 
-# Registrar Blueprints
+# Registrar blueprints
 from routes.auth import auth_bp
 from routes.user import user_bp
 from routes.admin import admin_bp
@@ -36,5 +34,7 @@ app.register_blueprint(admin_bp)
 with app.app_context():
     db.create_all()
 
+# Ejecutar la app en todas las interfaces para ser accesible desde tu VPS
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(host='0.0.0.0', port=5000, debug=True)
+```0

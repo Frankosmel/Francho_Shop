@@ -1,1 +1,17 @@
+<!-- templates/auth/login.html -->
 
+{% extends 'general/base.html' %}
+{% block title %}Iniciar sesión - Francho Shop{% endblock %}
+{% block content %}
+
+<h2>Iniciar Sesión 🔐</h2>
+
+<form method="POST">
+    <input type="text" name="username" placeholder="Nombre de usuario" required>
+    <input type="password" name="password" placeholder="Contraseña" required>
+    <button type="submit">Entrar</button>
+</form>
+
+<p>¿No tienes cuenta? <a href="{{ url_for('auth.register') }}">Regístrate aquí</a></p>
+
+{% endblock %}

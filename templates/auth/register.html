@@ -1,0 +1,22 @@
+<!-- templates/auth/register.html -->
+
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Registrarse | Francho Shop</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <h2>📝 Registro</h2>
+        <form method="POST">
+            <input type="text" name="username" placeholder="Nombre de usuario" required>
+            <input type="email" name="email" placeholder="Correo electrónico" required>
+            <input type="password" name="password" placeholder="Contraseña" required>
+            <button type="submit">Crear cuenta</button>
+        </form>
+        <p>¿Ya tienes cuenta? <a href="/auth/login">Inicia sesión</a></p>
+    </div>
+</body>
+</html>

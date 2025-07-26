@@ -1,90 +1,106 @@
 /* static/css/style.css */
 
-body {
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: #121212;
-    color: #f1f1f1;
-    margin: 0;
-    padding: 0;
+html, body {
+  height: 100%;
+  margin: 0;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background: #121212;
+  color: #f1f1f1;
 }
 
 .container {
-    max-width: 800px;
-    margin: 2rem auto;
-    background-color: #1e1e1e;
-    padding: 2rem;
-    border-radius: 12px;
-    box-shadow: 0 0 15px rgba(0,255,100,0.15);
+  width: 90%;
+  max-width: 800px;
+  margin: 2rem auto;
+  padding: 1rem;
+  background-color: #1e1e1e;
+  border-radius: 12px;
+  box-shadow: 0 0 15px rgba(0,255,100,0.15);
 }
 
 h2, h3 {
-    color: #00ff99;
-    margin-bottom: 1rem;
+  color: #00ff99;
+  margin-bottom: 1rem;
 }
 
-form {
-    display: flex;
-    flex-direction: column;
-    gap: 0.8rem;
+form, table {
+  width: 100%;
+}
+
+.table-responsive {
+  overflow-x: auto;
 }
 
 input, select, button {
-    padding: 10px;
-    border: none;
-    border-radius: 6px;
-    font-size: 1rem;
+  padding: 10px;
+  border: none;
+  border-radius: 6px;
+  font-size: 1rem;
 }
 
 input, select {
-    background-color: #2c2c2c;
-    color: #f1f1f1;
+  background-color: #2c2c2c;
+  color: #f1f1f1;
 }
 
 button {
-    background: #00ff99;
-    color: #000;
-    font-weight: bold;
-    cursor: pointer;
-    transition: background 0.3s ease;
+  background: #00ff99;
+  color: #000;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.3s ease;
 }
 
 button:hover {
-    background: #00cc77;
+  background: #00cc77;
 }
 
 a {
-    color: #00ccff;
-    text-decoration: none;
+  color: #00ccff;
+  text-decoration: none;
 }
 
 a:hover {
-    text-decoration: underline;
+  text-decoration: underline;
 }
 
 table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 1rem;
-    background-color: #1a1a1a;
+  border-collapse: collapse;
+  margin-top: 1rem;
+  background-color: #1a1a1a;
 }
 
 th, td {
-    padding: 10px;
-    text-align: center;
-    border-bottom: 1px solid #333;
+  padding: 10px;
+  text-align: center;
+  border-bottom: 1px solid #333;
 }
 
 th {
-    background-color: #2e2e2e;
-    color: #00ff99;
+  background-color: #2e2e2e;
+  color: #00ff99;
 }
 
 tr:hover {
-    background-color: #252525;
+  background-color: #252525;
 }
 
 hr {
-    margin: 2rem 0;
-    border: none;
-    border-top: 1px solid #444;
+  margin: 2rem 0;
+  border: none;
+  border-top: 1px solid #444;
+}
+
+@media (max-width: 600px) {
+  h2, h3 {
+    font-size: 1.2rem;
+  }
+  input, select, button {
+    font-size: 0.9rem;
+    padding: 8px;
+  }
+  nav.navbar ul {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
 }

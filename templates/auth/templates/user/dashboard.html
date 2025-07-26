@@ -1,77 +1,68 @@
-<!-- templates/user/dashboard.html -->
+{% extends 'general/base.html' %}
 
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <title>Panel del Usuario | Francho Shop</title>
-    <link rel="stylesheet" href="/static/css/style.css">
-</head>
-<body>
-    <div class="container">
-        <h2>👤 Bienvenido, {{ current_user.username }}</h2>
-        <p>💰 Saldo disponible: <strong>{{ current_user.saldo }} CUP</strong></p>
+{% block title %}Panel del Usuario | Francho Shop{% endblock %}
 
-        <h3>🛒 Hacer nueva recarga</h3>
-        <form method="POST" action="/user/pedido" enctype="multipart/form-data">
-            <input type="text" name="juego" placeholder="Nombre del juego (Ej: Free Fire)" required>
-            <input type="text" name="oferta" placeholder="Ej: 100 diamantes" required>
-            
-            <select name="metodo_pago" required>
-                <option value="">Selecciona método de pago</option>
-                <option value="CUP">💵 CUP</option>
-                <option value="Transferencia">🏦 Transferencia</option>
-                <option value="Saldo Móvil">📱 Saldo móvil</option>
-                <option value="PayPal">🌐 PayPal</option>
-            </select>
+{% block content %}
+  <h2>👤 Bienvenido, {{ current_user.username }}</h2>
+  <p>💰 Saldo disponible: <strong>{{ current_user.saldo }} CUP</strong></p>
 
-            <input type="text" name="player_id" placeholder="ID del jugador" required>
-            <input type="text" name="whatsapp" placeholder="Número de WhatsApp" required>
-            <label>📤 Adjunta captura del pago:</label>
-            <input type="file" name="captura" accept="image/*">
-            
-            <button type="submit">Enviar pedido</button>
-        </form>
+  <h3>🛒 Hacer nueva recarga</h3>
+  <form method="POST" action="{{ url_for('user.nuevo_pedido') }}" enctype="multipart/form-data">
+    <input type="text" name="juego" placeholder="Nombre del juego (Ej: Free Fire)" required>
+    <input type="text" name="oferta" placeholder="Ej: 100 diamantes" required>
+    <select name="metodo_pago" required>
+      <option value="">Selecciona método de pago</option>
+      <option value="CUP">💵 CUP</option>
+      <option value="Transferencia">🏦 Transferencia</option>
+      <option value="Saldo Móvil">📱 Saldo móvil</option>
+      <option value="PayPal">🌐 PayPal</option>
+    </select>
+    <input type="text" name="player_id" placeholder="ID del jugador" required>
+    <input type="text" name="whatsapp" placeholder="Número de WhatsApp" required>
+    <label>📤 Adjunta captura del pago:</label>
+    <input type="file" name="captura" accept="image/*">
+    <button type="submit">Enviar pedido</button>
+  </form>
 
-        <hr>
+  <hr>
 
-        <h3>📋 Historial de recargas</h3>
-        {% if recargas %}
-            <table>
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Juego</th>
-                        <th>Oferta</th>
-                        <th>Método</th>
-                        <th>Estado</th>
-                        <th>Captura</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for r in recargas %}
-                    <tr>
-                        <td>{{ r.id }}</td>
-                        <td>{{ r.juego }}</td>
-                        <td>{{ r.oferta }}</td>
-                        <td>{{ r.metodo_pago }}</td>
-                        <td>{{ r.estado }}</td>
-                        <td>
-                            {% if r.captura %}
-                                <a href="{{ r.captura }}" target="_blank">Ver</a>
-                            {% else %}
-                                -
-                            {% endif %}
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        {% else %}
-            <p>No tienes recargas registradas aún.</p>
-        {% endif %}
-
-        <p><a href="/auth/logout">🔙 Cerrar sesión</a></p>
+  <h3>📋 Historial de recargas</h3>
+  {% if recargas %}
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Juego</th>
+            <th>Oferta</th>
+            <th>Método</th>
+            <th>Estado</th>
+            <th>Captura</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in recargas %}
+            <tr>
+              <td>{{ r.id }}</td>
+              <td>{{ r.juego }}</td>
+              <td>{{ r.oferta }}</td>
+              <td>{{ r.metodo_pago }}</td>
+              <td>{{ r.estado }}</td>
+              <td>
+                {% if r.captura %}
+                  <a href="{{ r.captura }}" target="_blank">Ver</a>
+                {% else %}
+                  -
+                {% endif %}
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
-</body>
-</html>
+  {% else %}
+    <p>No tienes recargas registradas aún.</p>
+  {% endif %}
+
+  <p><a href="{{ url_for('auth.logout') }}">🔙 Cerrar sesión</a></p>
+{% endblock %}

@@ -200,7 +200,8 @@ const openTelegramTopUp = async () => {
     window.open(url, '_blank', 'noopener,noreferrer')
     return
   }
-  if (tg?.close) {
+  const isInsideTelegram = !!(tg && tg.platform && tg.platform !== 'unknown')
+  if (tg?.close && isInsideTelegram) {
     tg.close()
     return
   }
@@ -351,6 +352,7 @@ function AppInner() {
       } catch (e) {
         console.warn("Root audio unlock failed:", e);
       }
+      window.hasUserInteracted = true;
       window.removeEventListener('click', unlockAudio);
       window.removeEventListener('touchstart', unlockAudio);
     };
@@ -551,7 +553,8 @@ function AppInner() {
   }
 
   useEffect(() => {
-    if (tg) {
+    const isInsideTelegram = !!(tg && tg.platform && tg.platform !== 'unknown')
+    if (tg && isInsideTelegram) {
       tg.ready()
       tg.expand()
       try { tg.setHeaderColor('#0f1419'); tg.setBackgroundColor('#0f1419') } catch {}
@@ -560,7 +563,7 @@ function AppInner() {
     // El SDK de Telegram crea window.Telegram.WebApp incluso en navegadores normales.
     // Para distinguir: dentro de Telegram real, platform es "android", "ios", "tdesktop", etc.
     // En navegador normal, platform es "unknown".
-    const isInsideTelegram = !!(tg && tg.platform && tg.platform !== 'unknown')
+    const isInsideTelegram2 = !!(tg && tg.platform && tg.platform !== 'unknown')
 
     api.me()
       .then((data) => {
@@ -630,7 +633,7 @@ function AppInner() {
           setLoading(false)
           return
         }
-        if (isInsideTelegram) {
+        if (isInsideTelegram2) {
           // Dentro de Telegram real pero initData falló
           setError(
             'No se pudo iniciar sesión automáticamente.\n\n' +
@@ -771,7 +774,8 @@ function AppInner() {
       if (state?.screen === 'exit_sentinel') {
         const now = Date.now()
         if (now - lastBackPress.current < 2000) {
-          if (tg) {
+          const isInsideTelegram = !!(tg && tg.platform && tg.platform !== 'unknown')
+          if (isInsideTelegram) {
             tg.close()
           } else {
             window.close()
@@ -779,7 +783,8 @@ function AppInner() {
         } else {
           lastBackPress.current = now
           try {
-            if (tg?.HapticFeedback) {
+            const isInsideTelegram = !!(tg && tg.platform && tg.platform !== 'unknown')
+            if (tg?.HapticFeedback && isInsideTelegram) {
               tg.HapticFeedback.impactOccurred('light')
             }
           } catch {}
@@ -851,7 +856,8 @@ function AppInner() {
   }, [screen, guideSlug])
 
   useEffect(() => {
-    if (!tg?.BackButton) return
+    const isInsideTelegram = !!(tg && tg.platform && tg.platform !== 'unknown')
+    if (!tg?.BackButton || !isInsideTelegram) return
     if (screen === 'home') {
       tg.BackButton.hide()
       return
@@ -1865,12 +1871,16 @@ function HomeScreen({ me, onSelectGame, onNav, onLoginRequired, onOpenNotificati
       (me?.is_guest ? api.publicGames() : api.games()).catch(() => []),
       (me?.is_guest ? api.publicManualProducts() : api.manualProducts()).catch(() => []),
     ]).then(([g, mp]) => {
+      const uniqueGames = Array.isArray(g)
+        ? [...new Map(g.filter(Boolean).map(item => [item.name, item])).values()]
+        : []
       const manualList = Array.isArray(mp) ? mp : []
-      setGames(Array.isArray(g) ? g : [])
-      setManualProducts(manualList)
+      const uniqueManual = [...new Map(manualList.filter(Boolean).map(item => [item.id, item])).values()]
+      setGames(uniqueGames)
+      setManualProducts(uniqueManual)
       const manualId = Number(new URLSearchParams(window.location.search).get('manual_product') || 0)
       if (manualId) {
-        const match = manualList.find(p => Number(p.id) === manualId)
+        const match = uniqueManual.find(p => Number(p.id) === manualId)
         if (match) setBuyingManual(match)
       }
       setLoading(false)
@@ -2216,7 +2226,8 @@ function RegionsScreen({ game, gameData, me, onSelectRegion, onCountKnown }) {
     (me?.is_guest ? api.publicRegions(game) : api.regions(game)).then((r) => {
       if (cancelled) return
       const arr = Array.isArray(r) ? r : []
-      setRegions(arr)
+      const uniqueRegions = [...new Map(arr.filter(Boolean).map(item => [item.raw_name || item.name || item, item])).values()]
+      setRegions(uniqueRegions)
       setLoading(false)
     }).catch((e) => {
       if (cancelled) return
@@ -2390,7 +2401,12 @@ function ProductsScreen({ game, gameData, region, me, onSelectProduct, onLoginRe
 
   useEffect(() => {
     (me?.is_guest ? api.publicProducts(game, region) : api.products(game, region))
-      .then((p) => { setProducts(sortProductsByValue(Array.isArray(p) ? p : [])); setLoading(false) })
+      .then((p) => {
+        const arr = Array.isArray(p) ? p : []
+        const uniqueProducts = [...new Map(arr.filter(Boolean).map(item => [item.id, item])).values()]
+        setProducts(sortProductsByValue(uniqueProducts))
+        setLoading(false)
+      })
       .catch((e) => { setErr(e.message); setLoading(false) })
   }, [game, region, me?.is_guest])
 
@@ -2674,7 +2690,17 @@ function ProductsScreen({ game, gameData, region, me, onSelectProduct, onLoginRe
                 disabled={!allFilled || submitting}
                 onClick={handleBuy}
                 className="min-w-0 flex-1 rounded-xl bg-gradient-to-r from-accent to-accent2 px-3 py-3 font-bold active:scale-95 disabled:opacity-50">
-                {submitting ? <span className="inline-flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Procesando...</span> : <span className="inline-flex items-center justify-center gap-2"><ShoppingCart className="h-5 w-5" />Comprar por ${Number(selectedProduct.price).toFixed(2)} USDT</span>}
+                {submitting ? (
+                  <span key="submitting" className="inline-flex items-center justify-center gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <span>Procesando...</span>
+                  </span>
+                ) : (
+                  <span key="buy" className="inline-flex items-center justify-center gap-2">
+                    <ShoppingCart className="h-5 w-5" />
+                    <span>Comprar por ${Number(selectedProduct.price).toFixed(2)} USDT</span>
+                  </span>
+                )}
               </button>
             </div>
             {orderError && <p className="text-xs text-red-400 text-center mt-2">{orderError}</p>}
@@ -3034,7 +3060,17 @@ function ProductDetailScreen({ productId, region, me, onCancel, onBought, onLogi
           </button>
           <button disabled={me?.is_guest ? false : !canBuy} onClick={handleDirectBuy}
             className="min-w-0 flex-1 rounded-xl bg-gradient-to-r from-accent to-accent2 px-3 py-3 font-bold active:scale-95 disabled:opacity-50">
-            {submitting ? <span className="inline-flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Procesando...</span> : <span className="inline-flex items-center justify-center gap-2"><ShoppingCart className="h-5 w-5" />Comprar por ${Number(detail.price).toFixed(2)} USDT</span>}
+            {submitting ? (
+              <span key="submitting" className="inline-flex items-center justify-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Procesando...</span>
+              </span>
+            ) : (
+              <span key="buy" className="inline-flex items-center justify-center gap-2">
+                <ShoppingCart className="h-5 w-5" />
+                <span>Comprar por ${Number(detail.price).toFixed(2)} USDT</span>
+              </span>
+            )}
           </button>
         </div>
       </div>
@@ -3154,7 +3190,13 @@ function ResultScreen({ result, onHome }) {
     <div className="p-4 text-center">
       <div className="mx-auto mt-6 mb-4 flex justify-center"><CatalogLogo compact /></div>
       <div className="mb-5 flex justify-center">
-        {isOk ? <CircleCheck className="h-16 w-16 text-green-400" aria-hidden="true" /> : isFailed ? <CircleX className="h-16 w-16 text-red-300" aria-hidden="true" /> : <Loader2 className="h-16 w-16 animate-spin text-yellow-400" aria-hidden="true" />}
+        {isOk ? (
+          <CircleCheck key="ok" className="h-16 w-16 text-green-400" aria-hidden="true" />
+        ) : isFailed ? (
+          <CircleX key="failed" className="h-16 w-16 text-red-300" aria-hidden="true" />
+        ) : (
+          <Loader2 key="pending" className="h-16 w-16 animate-spin text-yellow-400" aria-hidden="true" />
+        )}
       </div>
       <h2 className="mb-2 text-2xl font-black">
         {isOk ? 'Recarga completada exitosamente' : isFailed ? 'La recarga no pudo completarse' : 'Pedido creado, esperando confirmación'}
@@ -5009,7 +5051,15 @@ function AccountSellerFinancePanel({ finance, onRefresh }) {
         <input value={amount} onChange={e => setAmount(e.target.value)} inputMode="decimal" placeholder="Monto USDT" className="rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm outline-none focus:border-accent" />
         <input value={address} onChange={e => setAddress(e.target.value)} placeholder="Wallet BEP20 0x..." className="rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm outline-none focus:border-accent md:col-span-2" />
         <input value={note} onChange={e => setNote(e.target.value)} placeholder="Nota opcional" className="rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm outline-none focus:border-accent md:col-span-2" />
-        <button onClick={requestWithdrawal} disabled={loading || Number(wallet.available_balance || 0) <= 0} className="rounded-lg bg-green-500/15 px-3 py-2 text-sm font-bold text-green-300 disabled:opacity-50">{loading ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Solicitar retiro'}</button>
+        <button onClick={requestWithdrawal} disabled={loading || Number(wallet.available_balance || 0) <= 0} className="rounded-lg bg-green-500/15 px-3 py-2 text-sm font-bold text-green-300 disabled:opacity-50">
+          {loading ? (
+            <span key="loading" className="inline-flex items-center justify-center">
+              <Loader2 className="h-4 w-4 animate-spin" />
+            </span>
+          ) : (
+            <span key="ready">Solicitar retiro</span>
+          )}
+        </button>
       </div>
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         <div className="rounded-lg bg-bg p-3">
@@ -5089,7 +5139,15 @@ function SellerDashboardPanel({ dashboard, onGoProducts, onGoOrders, onRefresh }
           <input value={withdrawAmount} onChange={e => setWithdrawAmount(e.target.value)} inputMode="decimal" placeholder="Monto USDT" className="rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm outline-none focus:border-accent" />
           <input value={withdrawAddress} onChange={e => setWithdrawAddress(e.target.value)} placeholder="Wallet BEP20 0x..." className="rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm outline-none focus:border-accent md:col-span-2" />
           <input value={withdrawNote} onChange={e => setWithdrawNote(e.target.value)} placeholder="Nota opcional" className="rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm outline-none focus:border-accent md:col-span-2" />
-          <button onClick={requestWithdrawal} disabled={requestingWithdrawal || Number(wallet.available_balance || 0) <= 0} className="rounded-lg bg-green-500/15 px-3 py-2 text-sm font-bold text-green-300 disabled:opacity-50">{requestingWithdrawal ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Solicitar retiro'}</button>
+          <button onClick={requestWithdrawal} disabled={requestingWithdrawal || Number(wallet.available_balance || 0) <= 0} className="rounded-lg bg-green-500/15 px-3 py-2 text-sm font-bold text-green-300 disabled:opacity-50">
+            {requestingWithdrawal ? (
+              <span key="loading" className="inline-flex items-center justify-center">
+                <Loader2 className="h-4 w-4 animate-spin" />
+              </span>
+            ) : (
+              <span key="ready">Solicitar retiro</span>
+            )}
+          </button>
         </div>
         {(withdrawals || []).slice(0, 3).map(w => <p key={w.id} className="mt-2 border-t border-white/5 pt-2 text-xs text-white/50">#{w.id} · {w.status} · ${Number(w.amount || 0).toFixed(2)} · neto ${Number(w.net_amount || 0).toFixed(2)}</p>)}
       </div>
@@ -5766,7 +5824,13 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
               disabled={restoringProduct}
               className="rounded-lg bg-green-500/20 px-3 py-2 text-sm font-bold text-green-300 disabled:opacity-60"
             >
-              {restoringProduct ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Restaurar'}
+              {restoringProduct ? (
+                <span key="restoring" className="inline-flex items-center justify-center">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                </span>
+              ) : (
+                <span key="restore">Restaurar</span>
+              )}
             </button>
           </div>
         </div>
@@ -5834,7 +5898,11 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
                     </button>
                     <button onClick={() => handleDelete(p.id)} disabled={deleting === p.id}
                       className="px-4 py-2 rounded-lg bg-red-500/20 text-red-400 text-sm active:scale-95">
-                      {deleting === p.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                      {deleting === p.id ? (
+                        <Loader2 key="deleting" className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Trash2 key="delete" className="h-4 w-4" />
+                      )}
                     </button>
                   </div>
                 </div>
@@ -6132,7 +6200,15 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
               <input value={newAccountSellerMax} onChange={e => setNewAccountSellerMax(e.target.value)} inputMode="numeric" placeholder="Máx cuentas activas" className="rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm outline-none focus:border-accent" />
               <input value={newAccountSellerCommission} onChange={e => setNewAccountSellerCommission(e.target.value)} inputMode="decimal" placeholder="Comisión %" className="rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm outline-none focus:border-accent" />
             </div>
-            <button onClick={handleCreateAccountSeller} disabled={savingAccountSeller} className="mt-3 w-full rounded-lg bg-green-500/20 px-3 py-2 text-sm font-bold text-green-300 disabled:opacity-60">{savingAccountSeller ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Convertir en vendedor de cuentas'}</button>
+            <button onClick={handleCreateAccountSeller} disabled={savingAccountSeller} className="mt-3 w-full rounded-lg bg-green-500/20 px-3 py-2 text-sm font-bold text-green-300 disabled:opacity-60">
+              {savingAccountSeller ? (
+                <span key="saving" className="inline-flex items-center justify-center">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                </span>
+              ) : (
+                <span key="convert">Convertir en vendedor de cuentas</span>
+              )}
+            </button>
             <div className="mt-3 grid gap-2 md:grid-cols-2">
               {accountSellers.map(seller => (
                 <div key={seller.user_id} className="rounded-xl border border-white/10 bg-bg p-3">
@@ -6193,7 +6269,15 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
                 </div>
               </button>
               <div className="mt-3 grid grid-cols-3 gap-2">
-                <button onClick={() => openSellerDetail(seller.user_id)} className="rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold text-white/75">{loadingSellerDetail === seller.user_id ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Detalle'}</button>
+                <button onClick={() => openSellerDetail(seller.user_id)} className="rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold text-white/75">
+                  {loadingSellerDetail === seller.user_id ? (
+                    <span key="loading" className="inline-flex items-center justify-center">
+                      <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+                    </span>
+                  ) : (
+                    <span key="ready">Detalle</span>
+                  )}
+                </button>
                 {seller.store_slug && <button onClick={() => window.open(`/seller/${seller.store_slug}`, '_blank')} className="rounded-lg bg-green-500/15 px-3 py-2 text-sm font-bold text-green-300">Tienda</button>}
                 {seller.is_active && <button onClick={() => handleRemoveSeller(seller.user_id)} className="rounded-lg bg-red-500/20 px-3 py-2 text-sm font-bold text-red-300"><span className="inline-flex items-center justify-center gap-1"><Trash2 className="h-4 w-4" />Quitar</span></button>}
               </div>
@@ -6230,7 +6314,15 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
                     <label className="col-span-2 flex items-center gap-2 rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm"><input type="checkbox" checked={sellerDraft.can_sell_recharges} onChange={e => setSellerDraft(d => ({ ...d, can_sell_recharges: e.target.checked }))} /> Puede vender recargas automáticas</label>
                   </div>
                   <textarea value={sellerDraft.notes} onChange={e => setSellerDraft(d => ({ ...d, notes: e.target.value }))} rows={3} placeholder="Notas internas del vendedor" className="mt-2 w-full rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm outline-none focus:border-accent resize-none" />
-                  <button onClick={saveSellerDetail} disabled={savingSeller} className="mt-3 w-full rounded-lg bg-accent/20 px-3 py-2 text-sm font-bold text-accent disabled:opacity-60">{savingSeller ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Guardar cambios'}</button>
+                  <button onClick={saveSellerDetail} disabled={savingSeller} className="mt-3 w-full rounded-lg bg-accent/20 px-3 py-2 text-sm font-bold text-accent disabled:opacity-60">
+                    {savingSeller ? (
+                      <span key="saving" className="inline-flex items-center justify-center">
+                        <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+                      </span>
+                    ) : (
+                      <span key="ready">Guardar cambios</span>
+                    )}
+                  </button>
                 </div>
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   <div className="card p-4"><p className="mb-2 text-sm font-semibold">Productos</p>{sellerDetail.products.slice(0, 8).map(p => <p key={p.id} className="border-t border-white/5 py-2 text-xs text-white/60">{p.name} · ${Number(p.price || 0).toFixed(2)} · {p.is_active ? 'Activo' : 'Inactivo'}</p>)}</div>
@@ -6291,7 +6383,15 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
             <p className="mt-1 text-xs text-white/45">El usuario puede tener rol revendedor, pero solo recibe precios preferenciales cuando su total depositado pagado llega a este mínimo.</p>
             <div className="mt-3 flex gap-2">
               <input value={resellerMinDeposit} onChange={e => setResellerMinDeposit(e.target.value)} inputMode="decimal" className="min-w-0 flex-1 rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm outline-none focus:border-accent" />
-              <button onClick={saveResellerSettings} disabled={savingResellerSettings} className="rounded-lg bg-accent/20 px-3 py-2 text-sm font-bold text-accent disabled:opacity-60">{savingResellerSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Guardar'}</button>
+              <button onClick={saveResellerSettings} disabled={savingResellerSettings} className="rounded-lg bg-accent/20 px-3 py-2 text-sm font-bold text-accent disabled:opacity-60">
+                {savingResellerSettings ? (
+                  <span key="saving" className="inline-flex items-center justify-center">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  </span>
+                ) : (
+                  <span key="ready">Guardar</span>
+                )}
+              </button>
             </div>
             <p className="mt-2 text-xs text-white/40">Mínimo permitido: 50 USDT.</p>
           </div>
@@ -6322,7 +6422,15 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
                 <input value={sellerPayoutSettings.seller_withdraw_fee_usdt} onChange={e => setSellerPayoutSettings(v => ({ ...v, seller_withdraw_fee_usdt: e.target.value }))} inputMode="decimal" className="mt-1 w-full rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm text-white outline-none focus:border-accent" />
               </label>
             </div>
-            <button onClick={saveSellerPayoutSettings} disabled={savingSellerPayoutSettings} className="mt-3 w-full rounded-lg bg-accent/20 px-3 py-2 text-sm font-bold text-accent disabled:opacity-60">{savingSellerPayoutSettings ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Guardar reglas de vendedores'}</button>
+            <button onClick={saveSellerPayoutSettings} disabled={savingSellerPayoutSettings} className="mt-3 w-full rounded-lg bg-accent/20 px-3 py-2 text-sm font-bold text-accent disabled:opacity-60">
+              {savingSellerPayoutSettings ? (
+                <span key="saving" className="inline-flex items-center justify-center">
+                  <Loader2 className="mx-auto h-4 w-4 animate-spin" />
+                </span>
+              ) : (
+                <span key="ready">Guardar reglas de vendedores</span>
+              )}
+            </button>
           </div>
 
           <div className="card p-4">
@@ -6332,7 +6440,13 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
                 <p className="mt-1 text-xs text-white/45">Cambia imagen, nombre, orden, visibilidad y márgenes. También puedes traer productos nuevos desde BuffPin.</p>
               </div>
               <button onClick={refreshBuffpinCatalog} disabled={refreshingBuffpin} className="flex-shrink-0 rounded-lg bg-accent/20 px-3 py-2 text-xs font-bold text-accent disabled:opacity-60">
-                {refreshingBuffpin ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Actualizar'}
+                {refreshingBuffpin ? (
+                  <span key="refreshing" className="inline-flex items-center justify-center">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  </span>
+                ) : (
+                  <span key="ready">Actualizar</span>
+                )}
               </button>
             </div>
           </div>
@@ -6402,7 +6516,13 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
                       {isAdminRole && <PremiumStickerPicker value={selectedPricingItem.instructions || ''} onInsert={(code) => updatePricingField(selectedPricingItem.game_name, 'instructions', `${selectedPricingItem.instructions || ''}${selectedPricingItem.instructions && !String(selectedPricingItem.instructions).endsWith(' ') ? ' ' : ''}${code} `)} />}
                     </div>
                     <button onClick={() => saveGameVisual(selectedPricingItem)} disabled={savingGameVisual === selectedPricingItem.game_name} className="col-span-2 rounded-lg bg-white/10 px-3 py-2 text-sm font-bold text-white/75 disabled:opacity-60">
-                      {savingGameVisual === selectedPricingItem.game_name ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Guardar imagen, datos y ayuda'}
+                      {savingGameVisual === selectedPricingItem.game_name ? (
+                        <span key="saving" className="inline-flex items-center justify-center">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        </span>
+                      ) : (
+                        <span key="ready">Guardar imagen, datos y ayuda</span>
+                      )}
                     </button>
                   </div>
 
@@ -6434,7 +6554,16 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
                     disabled={savingPricing === selectedPricingItem.game_name}
                     className="mt-4 w-full rounded-lg bg-accent/20 px-3 py-2 text-sm font-bold text-accent disabled:opacity-60"
                   >
-                    {savingPricing === selectedPricingItem.game_name ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : <span className="inline-flex items-center justify-center gap-1"><Save className="h-4 w-4" />Guardar ganancia</span>}
+                    {savingPricing === selectedPricingItem.game_name ? (
+                      <span key="saving" className="inline-flex items-center justify-center">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      </span>
+                    ) : (
+                      <span key="save" className="inline-flex items-center justify-center gap-1">
+                        <Save className="h-4 w-4" />
+                        <span>Guardar ganancia</span>
+                      </span>
+                    )}
                   </button>
                 </div>
               </div>
@@ -7183,7 +7312,15 @@ function AdminEditProductScreen({ product, onSaved, onCancel, me }) {
                   </select>
                 </div>
                 <textarea value={digitalStockText} onChange={e => setDigitalStockText(e.target.value)} rows={5} placeholder={"ABC-123-XYZ\nusuario:clave\nPack 1 | link privado"} className="mt-2 w-full rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm outline-none focus:border-accent resize-none" />
-                <button onClick={importStockItems} disabled={loadingStock} className="mt-3 w-full rounded-lg bg-accent/20 px-3 py-2 text-sm font-bold text-accent disabled:opacity-60">{loadingStock ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Importar stock'}</button>
+                <button onClick={importStockItems} disabled={loadingStock} className="mt-3 w-full rounded-lg bg-accent/20 px-3 py-2 text-sm font-bold text-accent disabled:opacity-60">
+                  {loadingStock ? (
+                    <span key="loading" className="inline-flex items-center justify-center">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    </span>
+                  ) : (
+                    <span key="ready">Importar stock</span>
+                  )}
+                </button>
               </>
             )}
           </div>
@@ -7198,7 +7335,11 @@ function AdminEditProductScreen({ product, onSaved, onCancel, me }) {
               </div>
               <div className="min-w-0 flex-1">
                 <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-accent/20 px-3 py-2 text-sm font-bold text-accent active:scale-95">
-                  {uploadingIcon ? <Loader2 className="h-4 w-4 animate-spin" /> : <Package className="h-4 w-4" />}
+                  {uploadingIcon ? (
+                    <Loader2 key="uploading" className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Package key="icon" className="h-4 w-4" />
+                  )}
                   {uploadingIcon ? 'Preparando...' : 'Seleccionar imagen'}
                   <input
                     type="file"
@@ -7642,6 +7783,9 @@ function ReceiptIcon({ receipt, isMine }) {
 
 let sharedAudioCtx = null;
 function playNotificationSound() {
+  if (!window.hasUserInteracted) {
+    return;
+  }
   try {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     if (!AudioContext) return;

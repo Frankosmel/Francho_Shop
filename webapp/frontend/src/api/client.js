@@ -40,8 +40,9 @@ async function request(path, options = {}) {
   const fallback = text && !text.trim().startsWith("<") ? text.trim() : ""
   if (!res.ok) {
     if (res.status === 401) {
+      const hadToken = !!getToken()
       clearToken()
-      if (typeof window !== 'undefined' && !window.Telegram?.WebApp?.initData) {
+      if (hadToken && typeof window !== 'undefined' && !window.Telegram?.WebApp?.initData) {
         window.location.reload()
       }
     }

@@ -13,6 +13,73 @@ import { api, tg, setSellerId, getSellerId } from './api/client'
 
 const iconClass = 'h-5 w-5 flex-shrink-0'
 const bigIconClass = 'h-12 w-12 flex-shrink-0'
+
+function CustomSelect({ value, onChange, options, placeholder = "Seleccionar...", className = "" }) {
+  const [isOpen, setIsOpen] = useState(false)
+  
+  const selectedOpt = options.find(o => String(o.value) === String(value))
+  const displayLabel = selectedOpt ? selectedOpt.label : (placeholder || (options[0] ? options[0].label : ''))
+  
+  const handleSelect = (val) => {
+    onChange(val)
+    setIsOpen(false)
+  }
+  
+  return (
+    <div className="relative w-full">
+      <button
+        type="button"
+        onClick={() => setIsOpen(true)}
+        className={`flex w-full items-center justify-between rounded-xl border border-white/10 bg-card px-4 py-3 text-left text-sm font-medium text-white transition active:scale-[0.99] ${className}`}
+      >
+        <span className={selectedOpt ? "text-white" : "text-white/40"}>
+          {displayLabel}
+        </span>
+        <ChevronDown className="h-4 w-4 text-white/40 flex-shrink-0" />
+      </button>
+
+      {isOpen && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-xs">
+          <div className="absolute inset-0" onClick={() => setIsOpen(false)} />
+          <div className="relative w-full max-w-md rounded-t-2xl bg-card border-t border-white/10 p-4 pb-8 shadow-2xl animate-in slide-in-from-bottom duration-200">
+            <div className="mx-auto mb-4 h-1.5 w-12 rounded-full bg-white/20" />
+            <div className="mb-3 flex items-center justify-between">
+              <span className="text-sm font-bold text-white/50">{placeholder || "Selecciona una opción"}</span>
+              <button
+                type="button"
+                onClick={() => setIsOpen(false)}
+                className="rounded-lg bg-white/5 p-1 text-white/50 hover:bg-white/10"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <div className="max-h-[60vh] overflow-y-auto space-y-1.5 scrollbar-thin">
+              {options.map((opt) => {
+                const isSelected = String(opt.value) === String(value)
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => handleSelect(opt.value)}
+                    className={`flex w-full items-center justify-between rounded-xl px-4 py-3 text-left text-sm transition active:scale-[0.99] ${
+                      isSelected
+                        ? "bg-accent/20 text-accent font-bold"
+                        : "bg-white/5 text-white hover:bg-white/10"
+                    }`}
+                  >
+                    <span>{opt.label}</span>
+                    {isSelected && <Check className="h-4 w-4 text-accent" />}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 const DEPOSIT_PRESETS = [5, 10, 25, 50, 100, 250]
 const NAV_STATE_KEY = 'fs_last_nav_v1'
 const WHATSAPP_SUPPORT_URL = 'https://wa.me/5363785631'
@@ -1618,8 +1685,8 @@ function Header({ me, onBack, onProfile, onTopUp, onOpenNotifications, unreadNot
         <div className="flex items-center gap-2">
           <div className="text-right">
             <button onClick={onTopUp} className="card px-3 py-2 text-right active:scale-95 transition">
-              <p className="text-[10px] text-white/50 leading-none mb-1">Saldo</p>
-              <p className="text-lg font-bold leading-none">${me.balance.toFixed(2)}</p>
+              <span className="block text-[10px] text-white/50 leading-none mb-1">Saldo</span>
+              <span className="block text-lg font-bold leading-none">${me.balance.toFixed(2)}</span>
             </button>
             {me.role === 'reseller' && (
               <span className="inline-block mt-1 text-[10px] bg-accent2/20 text-accent2 px-2 py-0.5 rounded-full">
@@ -1761,15 +1828,15 @@ function SellerStoreScreen({ slug, me, onLoginRequired }) {
       <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3">
         {products.map((product) => (
           <button key={product.id} onClick={() => { setBuyingManual(product); setBuyResult(null) }} className="overflow-hidden rounded-xl border border-white/10 bg-card text-left active:scale-[0.99]">
-            <div className="aspect-square bg-bg">
-              {product.icon_url ? <OptimizedImage src={product.icon_url} className="h-full w-full object-cover" alt={product.name} /> : <div className="flex h-full items-center justify-center"><User className="h-8 w-8 text-white/35" /></div>}
-            </div>
-            <div className="p-3">
-              <p className="line-clamp-2 min-h-[2.5rem] text-sm font-bold leading-snug">{product.name}</p>
-              <p className="mt-1 text-[11px] text-white/45">{product.account_game || categoryLabel(product.category)}</p>
+            <span className="block aspect-square bg-bg">
+              {product.icon_url ? <OptimizedImage src={product.icon_url} className="h-full w-full object-cover" alt={product.name} /> : <span className="block flex h-full items-center justify-center"><User className="h-8 w-8 text-white/35" /></span>}
+            </span>
+            <span className="block p-3">
+              <span className="block line-clamp-2 min-h-[2.5rem] text-sm font-bold leading-snug">{product.name}</span>
+              <span className="block mt-1 text-[11px] text-white/45">{product.account_game || categoryLabel(product.category)}</span>
               <SocialStatsLine item={product} compact />
-              <p className="mt-2 text-sm font-black text-accent">${Number(product.price || 0).toFixed(2)} USDT</p>
-            </div>
+              <span className="block mt-2 text-sm font-black text-accent">${Number(product.price || 0).toFixed(2)} USDT</span>
+            </span>
           </button>
         ))}
       </div>
@@ -1960,8 +2027,8 @@ function HomeScreen({ me, onSelectGame, onNav, onLoginRequired, onOpenNotificati
             )}
           </div>
           <button onClick={() => me?.is_guest ? typeof onLoginRequired === 'function' ? onLoginRequired() : null : openTelegramTopUp()} className="rounded-lg border border-white/10 bg-card px-3 py-1.5 text-right active:scale-95">
-            <p className="text-[10px] leading-none text-white/45">Saldo</p>
-            <p className="mt-1 text-xs font-black leading-none text-white">{me?.is_guest ? "Entrar" : "$" + Number(me.balance || 0).toFixed(2)}</p>
+            <span className="block text-[10px] leading-none text-white/45">Saldo</span>
+            <span className="block mt-1 text-xs font-black leading-none text-white">{me?.is_guest ? "Entrar" : "$" + Number(me.balance || 0).toFixed(2)}</span>
           </button>
         </div>
       </div>
@@ -2053,11 +2120,11 @@ function HomeScreen({ me, onSelectGame, onNav, onLoginRequired, onOpenNotificati
       <div className="mt-8 border-t border-white/10 pt-6">
         <p className="mb-3 inline-flex w-full items-center justify-center gap-1 text-center text-xs text-white/40"><Info className="h-3.5 w-3.5" aria-hidden="true" />Informacion</p>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-          <button onClick={() => onNav?.('guides')} className="card p-3 text-center active:scale-95"><Globe2 className="mx-auto mb-1 h-6 w-6" aria-hidden="true" /><p className="text-[11px] font-semibold">Guías</p><p className="mt-0.5 text-[9px] leading-tight text-white/40">Recargas y compras</p></button>
-          <button onClick={() => onNav?.('help')} className="card p-3 text-center active:scale-95"><BookOpen className="mx-auto mb-1 h-6 w-6" aria-hidden="true" /><p className="text-[11px] font-semibold">Ayuda</p></button>
-          <button onClick={() => onNav?.('faq')} className="card p-3 text-center active:scale-95"><CircleHelp className="mx-auto mb-1 h-6 w-6" aria-hidden="true" /><p className="text-[11px] font-semibold">FAQ</p></button>
-          <button onClick={() => onNav?.('terms')} className="card p-3 text-center active:scale-95"><FileText className="mx-auto mb-1 h-6 w-6" aria-hidden="true" /><p className="text-[11px] font-semibold">Términos</p></button>
-          <button onClick={() => onNav?.('contact')} className="card p-3 text-center active:scale-95"><MessageCircle className="mx-auto mb-1 h-6 w-6" aria-hidden="true" /><p className="text-[11px] font-semibold">Contacto</p><p className="mt-0.5 text-[9px] leading-tight text-white/40">Soporte y novedades oficiales</p></button>
+          <button onClick={() => onNav?.('guides')} className="card p-3 text-center active:scale-95"><Globe2 className="mx-auto mb-1 h-6 w-6" aria-hidden="true" /><span className="block text-[11px] font-semibold">Guías</span><span className="block mt-0.5 text-[9px] leading-tight text-white/40">Recargas y compras</span></button>
+          <button onClick={() => onNav?.('help')} className="card p-3 text-center active:scale-95"><BookOpen className="mx-auto mb-1 h-6 w-6" aria-hidden="true" /><span className="block text-[11px] font-semibold">Ayuda</span></button>
+          <button onClick={() => onNav?.('faq')} className="card p-3 text-center active:scale-95"><CircleHelp className="mx-auto mb-1 h-6 w-6" aria-hidden="true" /><span className="block text-[11px] font-semibold">FAQ</span></button>
+          <button onClick={() => onNav?.('terms')} className="card p-3 text-center active:scale-95"><FileText className="mx-auto mb-1 h-6 w-6" aria-hidden="true" /><span className="block text-[11px] font-semibold">Términos</span></button>
+          <button onClick={() => onNav?.('contact')} className="card p-3 text-center active:scale-95"><MessageCircle className="mx-auto mb-1 h-6 w-6" aria-hidden="true" /><span className="block text-[11px] font-semibold">Contacto</span><span className="block mt-0.5 text-[9px] leading-tight text-white/40">Soporte y novedades oficiales</span></button>
         </div>
         <div className="mt-4 space-y-1 text-center text-[10px] text-white/30">
           <p>Francho Shop · Recargas de juegos · Gift cards · Suscripciones · Productos digitales</p>
@@ -2101,14 +2168,14 @@ function flattenCatalogChildren(children) {
 function CatalogViewMoreCard({ title, onClick }) {
   return (
     <button onClick={onClick} className="group block w-full min-w-0 overflow-hidden rounded-lg border border-white/10 bg-card text-left transition active:scale-95 hover:border-accent/50" aria-label={`Ver más ${title}`}>
-      <div className="flex aspect-square items-center justify-center bg-white/5 text-accent">
+      <span className="block flex aspect-square items-center justify-center bg-white/5 text-accent">
         <ChevronRight className="h-8 w-8" />
-      </div>
-      <div className="p-1.5">
-        <p className="line-clamp-2 min-h-[28px] break-words text-[11px] font-bold leading-tight text-accent">Ver más</p>
-        <div className="mt-1 flex min-w-0 items-center justify-between gap-1"><span className="truncate text-[9px] text-white/45">{title}</span><ChevronRight className="h-3 w-3 flex-shrink-0 text-white/35" /></div>
-        <div className="mt-1 h-3.5 text-[8px] leading-none text-transparent">&nbsp;</div>
-      </div>
+      </span>
+      <span className="block p-1.5">
+        <span className="block line-clamp-2 min-h-[28px] break-words text-[11px] font-bold leading-tight text-accent">Ver más</span>
+        <span className="block mt-1 flex min-w-0 items-center justify-between gap-1"><span className="truncate text-[9px] text-white/45">{title}</span><ChevronRight className="h-3 w-3 flex-shrink-0 text-white/35" /></span>
+        <span className="block mt-1 h-3.5 text-[8px] leading-none text-transparent">&nbsp;</span>
+      </span>
     </button>
   )
 }
@@ -2173,17 +2240,17 @@ function ManualCatalogCard({ product, onSelect }) {
   // Local cacheBust removed
   return (
     <button onClick={onSelect} className="group block w-full min-w-0 overflow-hidden rounded-lg border border-white/10 bg-card text-left transition active:scale-95 hover:border-accent/50">
-      <div className="aspect-square bg-[#101820]">
-        {product.icon_url ? <OptimizedImage src={`${product.icon_url}?v=${cacheBust}`} className="h-full w-full object-cover transition group-hover:scale-[1.03]" alt={product.name} /> : <div className="flex h-full w-full items-center justify-center bg-white/5"><CategoryIcon category={product.category} className="h-9 w-9 text-white/55" /></div>}
-      </div>
-      <div className="p-1.5">
-        <p className="line-clamp-2 min-h-[28px] break-words text-[11px] font-bold leading-tight">{product.name}</p>
-        <div className="mt-1 min-w-0">
+      <span className="block aspect-square bg-[#101820]">
+        {product.icon_url ? <OptimizedImage src={`${product.icon_url}?v=${cacheBust}`} className="h-full w-full object-cover transition group-hover:scale-[1.03]" alt={product.name} /> : <span className="block flex h-full w-full items-center justify-center bg-white/5"><CategoryIcon category={product.category} className="h-9 w-9 text-white/55" /></span>}
+      </span>
+      <span className="block p-1.5">
+        <span className="block line-clamp-2 min-h-[28px] break-words text-[11px] font-bold leading-tight">{product.name}</span>
+        <span className="block mt-1 min-w-0">
           <span className="block truncate text-xs font-black text-accent">{manualProductPriceRange(product)}</span>
           <span className="mt-0.5 inline-block max-w-full truncate rounded bg-white/8 px-1 py-0.5 text-[8px] text-white/45">{deliveryTypeLabel(product.delivery_type, product.category)}</span>
           <SocialStatsLine item={product} compact />
-        </div>
-      </div>
+        </span>
+      </span>
     </button>
   )
 }
@@ -2198,16 +2265,16 @@ function GameCard({ game, onSelect }) {
 
   return (
     <button onClick={onSelect} className="group block w-full min-w-0 overflow-hidden rounded-lg border border-white/10 bg-card text-left transition active:scale-95 hover:border-accent/50">
-      <div className="relative aspect-square bg-[#101820]">
+      <span className="block relative aspect-square bg-[#101820]">
         {showImage && <OptimizedImage src={imgSrc} alt={game.title || game.name} className={`h-full w-full object-cover transition duration-300 group-hover:scale-[1.03] ${imgLoaded ? 'opacity-100' : 'opacity-0'}`} onError={() => setImgError(true)} onLoad={() => setImgLoaded(true)} />}
-        {(!showImage || !imgLoaded) && <div className="absolute inset-0 flex items-center justify-center bg-white/5"><TypeIcon className="h-10 w-10 text-white/55" aria-hidden="true" /></div>}
-        <div className="absolute left-1.5 top-1.5 max-w-[calc(100%-12px)] truncate rounded bg-black/55 px-1.5 py-0.5 text-[9px] font-bold text-white/80 backdrop-blur">{game.catalogType === 'card' ? 'Card' : game.catalogType === 'direct-topup' ? 'Top-Up' : game.catalogType === 'game-cdkey' ? 'CD-Key' : 'Game'}</div>
-      </div>
-      <div className="p-1.5">
-        <p className="line-clamp-2 min-h-[28px] break-words text-[11px] font-bold leading-tight">{game.title || game.name}</p>
-        <div className="mt-1 flex min-w-0 items-center justify-between gap-1"><span className="truncate text-[9px] text-white/45">{game.count} productos</span><ChevronDown className="h-3 w-3 flex-shrink-0 -rotate-90 text-white/35" /></div>
+        {(!showImage || !imgLoaded) && <span className="block absolute inset-0 flex items-center justify-center bg-white/5"><TypeIcon className="h-10 w-10 text-white/55" aria-hidden="true" /></span>}
+        <span className="block absolute left-1.5 top-1.5 max-w-[calc(100%-12px)] truncate rounded bg-black/55 px-1.5 py-0.5 text-[9px] font-bold text-white/80 backdrop-blur">{game.catalogType === 'card' ? 'Card' : game.catalogType === 'direct-topup' ? 'Top-Up' : game.catalogType === 'game-cdkey' ? 'CD-Key' : 'Game'}</span>
+      </span>
+      <span className="block p-1.5">
+        <span className="block line-clamp-2 min-h-[28px] break-words text-[11px] font-bold leading-tight">{game.title || game.name}</span>
+        <span className="block mt-1 flex min-w-0 items-center justify-between gap-1"><span className="truncate text-[9px] text-white/45">{game.count} productos</span><ChevronDown className="h-3 w-3 flex-shrink-0 -rotate-90 text-white/35" /></span>
         <SocialStatsLine item={game} compact />
-      </div>
+      </span>
     </button>
   )
 }
@@ -2482,17 +2549,16 @@ function ProductsScreen({ game, gameData, region, me, onSelectProduct, onLoginRe
             <div key={key}>
               <label className="mb-1 block text-sm font-semibold">{isIdField ? 'ID de jugador / usuario' : f.name}</label>
               {f.is_select && f.values?.length > 0 ? (
-                <select
+                <CustomSelect
                   value={fields[key] || ''}
-                  onChange={(e) => setFields({ ...fields, [key]: e.target.value })}
-                  className="w-full rounded-lg border border-white/20 bg-bg px-4 py-3 outline-none focus:border-accent">
-                  <option value="">Seleccionar {f.name}</option>
-                  {f.values.map((v) => (
-                    <option key={v.serverId} value={v.serverId}>
-                      {v.serverName || v.name}
-                    </option>
-                  ))}
-                </select>
+                  onChange={(val) => setFields({ ...fields, [key]: val })}
+                  placeholder={`Seleccionar ${f.name}`}
+                  options={f.values.map((v) => ({
+                    value: v.serverId,
+                    label: v.serverName || v.name
+                  }))}
+                  className="border-white/20 bg-bg"
+                />
               ) : (
                 <input
                   type="text"
@@ -2608,18 +2674,18 @@ function ProductsScreen({ game, gameData, region, me, onSelectProduct, onLoginRe
                       className={`w-full rounded-lg border px-2.5 py-2 text-left transition active:scale-[0.99] ${
                         isSelected ? 'border-accent bg-accent/15' : 'border-white/10 bg-card hover:border-accent/50'
                       }`}>
-                      <div className="flex items-center gap-2.5">
-                        <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-md bg-gradient-to-br from-accent/20 to-accent2/20">
+                      <span className="block flex items-center gap-2.5">
+                        <span className="block flex h-8 w-8 flex-shrink-0 items-center justify-center overflow-hidden rounded-md bg-gradient-to-br from-accent/20 to-accent2/20">
                           {iconUrl ? <OptimizedImage src={`${iconUrl}?v=${cacheBust}`} alt="" className="h-full w-full object-cover" /> : <Gamepad2 className="h-5 w-5 text-white/60" aria-hidden="true" />}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="break-words text-xs font-bold leading-snug text-white/90">{p.displayName || p.name}</p>
+                        </span>
+                        <span className="block min-w-0 flex-1">
+                          <span className="block break-words text-xs font-bold leading-snug text-white/90">{p.displayName || p.name}</span>
                           <SocialStatsLine item={p} compact />
-                        </div>
-                        <div className={`flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border-2 ${isSelected ? 'border-accent bg-accent' : 'border-white/25'}`}>
+                        </span>
+                        <span className={'block ' + `flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full border-2 ${isSelected ? 'border-accent bg-accent' : 'border-white/25'}`}>
                           {isSelected && <span className="text-[10px]">✓</span>}
-                        </div>
-                      </div>
+                        </span>
+                      </span>
                     </button>
                   )
                 })}
@@ -2965,17 +3031,16 @@ function ProductDetailScreen({ productId, region, me, onCancel, onBought, onLogi
               <div key={key}>
                 <label className="text-xs text-white/50 block mb-1">{f.name}</label>
                 {f.is_select && f.values?.length > 0 ? (
-                  <select
+                  <CustomSelect
                     value={fields[key] || ''}
-                    onChange={(e) => setFields({ ...fields, [key]: e.target.value })}
-                    className="w-full bg-card border border-white/10 rounded-xl px-4 py-3 outline-none focus:border-accent">
-                    <option value="">Selecciona...</option>
-                    {f.values.map((v) => (
-                      <option key={v.serverId} value={v.serverId}>
-                        {v.serverName || v.name}
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(val) => setFields({ ...fields, [key]: val })}
+                    placeholder={`Seleccionar ${f.name}`}
+                    options={f.values.map((v) => ({
+                      value: v.serverId,
+                      label: v.serverName || v.name
+                    }))}
+                    className="border-white/10 bg-card"
+                  />
                 ) : (
                   <input
                     type="text"
@@ -3104,26 +3169,40 @@ function ConfirmScreen({ product, region, me, onSuccess }) {
   return (
     <div className="px-2.5 py-4 md:p-6">
       <h2 className="text-xl font-bold mb-4 flex items-center gap-2"><ClipboardList className="h-5 w-5" aria-hidden="true" />Confirmar compra</h2>
-      <div className="card p-4 space-y-3">
-        <div>
-          <p className="text-xs text-white/50">Producto</p>
-          <p className="font-semibold">{detail.name}</p>
+      <div className="card p-4 space-y-4">
+        <div className="flex items-center gap-3 pb-3 border-b border-white/10">
+          {detail.icon_url ? (
+            <OptimizedImage
+              src={`${storeAssetUrl(detail.icon_url)}?v=${cacheBust}`}
+              alt=""
+              className="w-14 h-14 rounded-xl object-cover flex-shrink-0"
+              eager
+            />
+          ) : (
+            <div className="w-14 h-14 rounded-xl bg-bg flex items-center justify-center flex-shrink-0">
+              <Gamepad2 className="h-6 w-6 text-white/40" />
+            </div>
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="text-xs text-white/50">Producto</p>
+            <h3 className="font-bold text-sm truncate">{detail.name}</h3>
+            <p className="text-lg font-black text-accent mt-0.5">${detail.price.toFixed(2)} USDT</p>
+          </div>
         </div>
-        {region && region !== '__standard__' && (
-          <div>
-            <p className="text-xs text-white/50">Región</p>
-            <p className="font-semibold">{stripEmoji(region)}</p>
-          </div>
-        )}
-        {Object.entries(fields).map(([k, v]) => (
-          <div key={k}>
-            <p className="text-xs text-white/50">{k}</p>
-            <p className="font-mono text-sm">{v}</p>
-          </div>
-        ))}
-        <div className="border-t border-white/10 pt-3">
-          <p className="text-xs text-white/50">Total</p>
-          <p className="text-3xl font-bold text-accent">${detail.price.toFixed(2)} <span className="text-sm text-white/40">USDT</span></p>
+
+        <div className="space-y-3">
+          {region && region !== '__standard__' && (
+            <div>
+              <p className="text-xs text-white/50">Región</p>
+              <p className="font-semibold">{stripEmoji(region)}</p>
+            </div>
+          )}
+          {Object.entries(fields).map(([k, v]) => (
+            <div key={k}>
+              <p className="text-xs text-white/50">{k}</p>
+              <p className="font-mono text-sm">{v}</p>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -3204,15 +3283,32 @@ function ResultScreen({ result, onHome }) {
       <p className="mb-4 text-sm text-white/65">
         {isOk ? 'El proveedor confirmó la entrega del producto.' : isFailed ? 'No se pudo completar la recarga. Revisa el pedido o contacta soporte.' : polling ? 'Estamos actualizando el estado automáticamente.' : 'El proveedor sigue procesando la recarga. Puedes revisar el estado en tus pedidos.'}
       </p>
-      <div className="card mb-6 p-4 text-left text-sm">
-        <p className="mb-3 text-base font-bold leading-tight">{current.product || 'Producto automático'}</p>
-        <div className="grid gap-2 text-xs text-white/70">
-          <p><span className="text-white/40">Orden:</span> <code>{current.order_id || current.id}</code></p>
-          <p><span className="text-white/40">Estado:</span> {statusText}</p>
-          {date && <p><span className="text-white/40">Creada:</span> {date}</p>}
-          {current.price !== undefined && <p><span className="text-white/40">Total:</span> ${Number(current.price || 0).toFixed(2)} USDT</p>}
-          {details.map((item, index) => <p key={index}><span className="text-white/40">{item.label}:</span> {item.value}</p>)}
-          {isFailed && current.error && <p className="rounded-lg bg-red-500/10 p-2 text-red-200"><span className="text-red-100/70">Detalle:</span> {current.error}</p>}
+      <div className="card mb-6 p-4 text-left text-sm flex items-center gap-3">
+        {(() => {
+          const displayImage = current.icon_url || current.image_url || current.product_image || ''
+          return displayImage ? (
+            <OptimizedImage
+              src={`${storeAssetUrl(displayImage)}?v=${cacheBust}`}
+              alt=""
+              className="w-16 h-16 rounded-xl object-cover flex-shrink-0"
+              eager
+            />
+          ) : (
+            <div className="w-16 h-16 rounded-xl bg-bg flex items-center justify-center flex-shrink-0">
+              <Gamepad2 className="h-8 w-8 text-white/40" />
+            </div>
+          )
+        })()}
+        <div className="min-w-0 flex-1">
+          <p className="mb-2 text-base font-bold leading-tight truncate">{current.product || 'Producto automático'}</p>
+          <div className="grid gap-1 text-xs text-white/70">
+            <p><span className="text-white/40">Orden:</span> <code>{current.order_id || current.id}</code></p>
+            <p><span className="text-white/40">Estado:</span> {statusText}</p>
+            {date && <p><span className="text-white/40">Creada:</span> {date}</p>}
+            {current.price !== undefined && <p><span className="text-white/40">Total:</span> ${Number(current.price || 0).toFixed(2)} USDT</p>}
+            {details.map((item, index) => <p key={index}><span className="text-white/40">{item.label}:</span> {item.value}</p>)}
+            {isFailed && current.error && <p className="rounded-lg bg-red-500/10 p-2 text-red-200"><span className="text-red-100/70">Detalle:</span> {current.error}</p>}
+          </div>
         </div>
       </div>
       <button onClick={onHome} className="btn-primary"><span className="inline-flex items-center justify-center gap-2"><LabelIcon icon={Home} />Volver al inicio</span></button>
@@ -4025,15 +4121,15 @@ function PartnerHelpScreen({ me, onTopUp }) {
           const Icon = section.icon
           return (
             <button key={section.id} onClick={() => setSelectedId(section.id)} className="card w-full p-4 text-left active:scale-[0.99]">
-              <div className="flex items-start gap-3">
-                <div className="rounded-lg bg-accent/15 p-2"><Icon className="h-5 w-5 text-accent" /></div>
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold">{section.title}</p>
-                  <p className="mt-1 text-sm text-white/55">{section.subtitle}</p>
-                  <p className="mt-2 text-xs text-white/35">Tocar para ver explicación completa</p>
-                </div>
+              <span className="block flex items-start gap-3">
+                <span className="block rounded-lg bg-accent/15 p-2"><Icon className="h-5 w-5 text-accent" /></span>
+                <span className="block min-w-0 flex-1">
+                  <span className="block font-semibold">{section.title}</span>
+                  <span className="block mt-1 text-sm text-white/55">{section.subtitle}</span>
+                  <span className="block mt-2 text-xs text-white/35">Tocar para ver explicación completa</span>
+                </span>
                 <span className="text-lg text-white/25">›</span>
-              </div>
+              </span>
             </button>
           )
         })}
@@ -4086,12 +4182,12 @@ function GuidesScreen({ onOpenGuide, onHome }) {
       <section className="mt-4 grid gap-3 md:grid-cols-3">
         {GUIDE_ARTICLES.map(article => (
           <button key={article.slug} onClick={() => onOpenGuide(article.slug)} className="card p-4 text-left active:scale-[0.99]">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-bg text-accent"><Gamepad2 className="h-5 w-5" /></div>
+            <span className="block mb-3 flex items-center justify-between gap-3">
+              <span className="block flex h-10 w-10 items-center justify-center rounded-lg bg-bg text-accent"><Gamepad2 className="h-5 w-5" /></span>
               <ChevronRight className="h-5 w-5 text-white/30" />
-            </div>
-            <h2 className="text-base font-bold leading-snug">{article.cardTitle}</h2>
-            <p className="mt-2 line-clamp-3 text-xs leading-relaxed text-white/50">{article.description}</p>
+            </span>
+            <span className="block text-base font-bold leading-snug">{article.cardTitle}</span>
+            <span className="block mt-2 line-clamp-3 text-xs leading-relaxed text-white/50">{article.description}</span>
           </button>
         ))}
       </section>
@@ -4494,10 +4590,10 @@ function AccountImageGallery({ product }) {
   return (
     <div className="mb-4">
       <button onClick={() => setViewerOpen(true)} className="block w-full overflow-hidden rounded-xl border border-white/10 bg-card active:scale-[0.995]">
-        <div className="relative aspect-video bg-black/30">
+        <span className="block relative aspect-video bg-black/30">
           <OptimizedImage src={current} className="h-full w-full object-cover" alt={product.name} eager />
-          <div className="absolute bottom-2 right-2 rounded-full bg-black/65 px-2 py-1 text-[10px] font-bold text-white/80">{selected + 1}/{images.length}</div>
-        </div>
+          <span className="block absolute bottom-2 right-2 rounded-full bg-black/65 px-2 py-1 text-[10px] font-bold text-white/80">{selected + 1}/{images.length}</span>
+        </span>
       </button>
       {images.length > 1 && (
         <div className="mt-2 flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -4604,10 +4700,24 @@ function ManualBuyModal({ product, onClose, onBought, buyResult, me, onLoginRequ
           <div className="flex h-full flex-col justify-center p-6 text-center">
             <CircleCheck className="mx-auto mb-4 h-12 w-12 text-green-400" aria-hidden="true" />
             <h3 className="text-xl font-bold mb-2">¡Pedido creado!</h3>
-            <div className="card p-4 mb-4">
-              <p className="text-sm font-semibold">{buyResult.product}</p>
-              <p className="text-2xl font-bold text-accent mt-1">${buyResult.price?.toFixed(2)} USDT</p>
-              <p className="text-xs text-white/50 mt-2">Pedido #{buyResult.order_id}</p>
+            <div className="card p-4 mb-4 flex items-center gap-3 text-left">
+              {product.icon_url ? (
+                <OptimizedImage
+                  src={`${storeAssetUrl(product.icon_url)}?v=${cacheBust}`}
+                  alt=""
+                  className="w-14 h-14 rounded-xl object-cover flex-shrink-0"
+                  eager
+                />
+              ) : (
+                <div className="w-14 h-14 rounded-xl bg-bg flex items-center justify-center flex-shrink-0">
+                  <Gamepad2 className="h-6 w-6 text-white/40" />
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-semibold truncate">{buyResult.product}</p>
+                <p className="text-lg font-black text-accent mt-0.5">${buyResult.price?.toFixed(2)} USDT</p>
+                <p className="text-[10px] text-white/40 mt-1">Pedido #{buyResult.order_id}</p>
+              </div>
             </div>
             <p className="text-sm text-white/60 mb-6">{buyResult.message}</p>
             <button onClick={onClose}
@@ -4682,17 +4792,16 @@ function ManualBuyModal({ product, onClose, onBought, buyResult, me, onLoginRequ
                 {activeOptions.length > 0 && (
                   <div className="mb-4">
                     <label className="mb-2 block text-xs font-semibold text-white/50">Selecciona una opción</label>
-                    <select
+                    <CustomSelect
                       value={selectedOptionId || ''}
-                      onChange={(e) => { setSelectedOptionId(Number(e.target.value)); setErr(null) }}
-                      className="w-full rounded-xl border border-white/10 bg-card px-3 py-3 text-sm font-semibold outline-none focus:border-accent"
-                    >
-                      {activeOptions.map(opt => (
-                        <option key={opt.id} value={opt.id}>
-                          {opt.name} - ${Number(opt.price).toFixed(2)} USDT{opt.stock >= 0 ? ` - Stock ${opt.stock}` : ''}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(val) => { setSelectedOptionId(Number(val)); setErr(null) }}
+                      placeholder="Selecciona una opción"
+                      options={activeOptions.map(opt => ({
+                        value: opt.id,
+                        label: `${opt.name} - $${Number(opt.price).toFixed(2)} USDT${opt.stock >= 0 ? ` - Stock ${opt.stock}` : ''}`
+                      }))}
+                      className="border-white/10 bg-card px-3 py-3 font-semibold"
+                    />
                     {selectedOption && (
                       <div className="mt-2 rounded-lg border border-accent/15 bg-accent/10 p-3 text-xs text-white/65">
                         <p><span className="text-white/40">Opción:</span> <span className="font-semibold text-white/85">{selectedOption.name}</span></p>
@@ -4875,17 +4984,17 @@ function AccountSellerSalesPanel({ sales, onOpenOrder, title = 'Ventas de cuenta
           const date = sale.created_at ? new Date(sale.created_at * 1000).toLocaleString('es-ES') : ''
           return (
             <button key={sale.order_id} onClick={() => onOpenOrder?.({ id: sale.order_id })} className="w-full rounded-lg border border-white/10 bg-bg p-3 text-left active:scale-[0.99]">
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-bold">#{sale.order_id} · {sale.product_name}</p>
-                  <p className="text-xs text-white/45">{sale.store_name ? `Tienda: ${sale.store_name} · ` : ''}{sale.customer_name || sale.customer_username || 'Cliente'} #{sale.customer_id} · Caso {sale.case_id || sale.case_id_live || '-'}</p>
-                  <p className="text-[11px] text-white/35">{date}</p>
-                </div>
-                <div className="flex-shrink-0 text-right">
-                  <p className="text-sm font-black text-accent">${Number(sale.sale_price || 0).toFixed(2)}</p>
-                  <p className={sale.status === 'completed' ? 'text-xs text-green-300' : sale.status === 'pending' ? 'text-xs text-yellow-300' : 'text-xs text-red-300'}>{sale.status}</p>
-                </div>
-              </div>
+              <span className="block flex items-start justify-between gap-3">
+                <span className="block min-w-0">
+                  <span className="block truncate text-sm font-bold">#{sale.order_id} · {sale.product_name}</span>
+                  <span className="block text-xs text-white/45">{sale.store_name ? `Tienda: ${sale.store_name} · ` : ''}{sale.customer_name || sale.customer_username || 'Cliente'} #{sale.customer_id} · Caso {sale.case_id || sale.case_id_live || '-'}</span>
+                  <span className="block text-[11px] text-white/35">{date}</span>
+                </span>
+                <span className="block flex-shrink-0 text-right">
+                  <span className="block text-sm font-black text-accent">${Number(sale.sale_price || 0).toFixed(2)}</span>
+                  <span className={'block ' + sale.status === 'completed' ? 'text-xs text-green-300' : sale.status === 'pending' ? 'text-xs text-yellow-300' : 'text-xs text-red-300'}>{sale.status}</span>
+                </span>
+              </span>
             </button>
           )
         })}
@@ -5161,14 +5270,14 @@ function SellerDashboardPanel({ dashboard, onGoProducts, onGoOrders, onRefresh }
           <div className="space-y-2">
             {stockAlerts.slice(0, 5).map((a, i) => (
               <button key={`stock-${i}`} onClick={onGoProducts} className="w-full rounded-lg bg-black/20 p-3 text-left active:scale-[0.99]">
-                <p className="text-sm font-semibold">{a.name}</p>
-                <p className={a.level === 'critical' ? 'text-xs text-red-300' : 'text-xs text-yellow-200'}>{a.message}</p>
+                <span className="block text-sm font-semibold">{a.name}</span>
+                <span className={'block ' + a.level === 'critical' ? 'text-xs text-red-300' : 'text-xs text-yellow-200'}>{a.message}</span>
               </button>
             ))}
             {pendingAlerts.slice(0, 5).map((a) => (
               <button key={`pending-${a.order_id}`} onClick={onGoOrders} className="w-full rounded-lg bg-black/20 p-3 text-left active:scale-[0.99]">
-                <p className="text-sm font-semibold">Pedido #{a.order_id} · {a.product_name}</p>
-                <p className="text-xs text-yellow-200">{a.message}</p>
+                <span className="block text-sm font-semibold">Pedido #{a.order_id} · {a.product_name}</span>
+                <span className="block text-xs text-yellow-200">{a.message}</span>
               </button>
             ))}
           </div>
@@ -5208,13 +5317,13 @@ function SellerDashboardPanel({ dashboard, onGoProducts, onGoOrders, onRefresh }
           <div className="space-y-2">
             {recentPending.map((o) => (
               <button key={o.id} onClick={onGoOrders} className="w-full rounded-lg bg-black/20 p-3 text-left active:scale-[0.99]">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-semibold">#{o.id} · {o.product_name}</p>
-                    <p className="text-xs text-white/40">Cliente #{o.user_id} · {o.option_name || 'Sin opción'}</p>
-                  </div>
-                  <p className="text-sm font-bold text-accent">{money(o.price)}</p>
-                </div>
+                <span className="block flex items-start justify-between gap-3">
+                  <span className="block min-w-0">
+                    <span className="block truncate text-sm font-semibold">#{o.id} · {o.product_name}</span>
+                    <span className="block text-xs text-white/40">Cliente #{o.user_id} · {o.option_name || 'Sin opción'}</span>
+                  </span>
+                  <span className="block text-sm font-bold text-accent">{money(o.price)}</span>
+                </span>
               </button>
             ))}
           </div>
@@ -6256,17 +6365,17 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
           {sellers.map(seller => (
             <div key={seller.user_id} className="card p-4">
               <button onClick={() => openSellerDetail(seller.user_id)} className="w-full text-left">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="truncate font-semibold">{seller.store_name || seller.first_name || seller.email || seller.username || 'Usuario'} <span className="text-xs text-white/35">#{seller.user_id}</span></p>
-                    {seller.store_slug && <p className="text-xs text-green-300">Tienda /{seller.store_slug} · {seller.seller_type === 'general' ? 'vendedor normal' : 'cuentas'}</p>}
-                    <p className="text-xs text-white/45">Productos {seller.products_count}/{seller.max_products} · Activos {seller.active_products || 0} · Pendientes {seller.pending_orders || 0}</p>
-                    <p className="text-xs text-white/45">Ventas {seller.completed_orders}/{seller.total_orders} · ${Number(seller.completed_revenue || 0).toFixed(2)} · Comisión {Number(seller.commission_pct || 0).toFixed(1)}%</p>
-                    <p className="text-xs text-white/45">Recargas {seller.recharge_completed || 0}/{seller.recharge_orders || 0} · Ganado ${Number(seller.recharge_earned || 0).toFixed(2)} · {seller.can_sell_recharges ? 'Recargas activas' : 'Recargas off'}</p>
-                    <p className="text-xs text-white/45">Wallet USDT BEP20 · Retenido ${Number(seller.held_balance || 0).toFixed(2)} · Disponible ${Number(seller.available_balance || 0).toFixed(2)}</p>
-                  </div>
+                <span className="block flex items-start justify-between gap-3">
+                  <span className="block min-w-0">
+                    <span className="block truncate font-semibold">{seller.store_name || seller.first_name || seller.email || seller.username || 'Usuario'} <span className="text-xs text-white/35">#{seller.user_id}</span></span>
+                    {seller.store_slug && <span className="block text-xs text-green-300">Tienda /{seller.store_slug} · {seller.seller_type === 'general' ? 'vendedor normal' : 'cuentas'}</span>}
+                    <span className="block text-xs text-white/45">Productos {seller.products_count}/{seller.max_products} · Activos {seller.active_products || 0} · Pendientes {seller.pending_orders || 0}</span>
+                    <span className="block text-xs text-white/45">Ventas {seller.completed_orders}/{seller.total_orders} · ${Number(seller.completed_revenue || 0).toFixed(2)} · Comisión {Number(seller.commission_pct || 0).toFixed(1)}%</span>
+                    <span className="block text-xs text-white/45">Recargas {seller.recharge_completed || 0}/{seller.recharge_orders || 0} · Ganado ${Number(seller.recharge_earned || 0).toFixed(2)} · {seller.can_sell_recharges ? 'Recargas activas' : 'Recargas off'}</span>
+                    <span className="block text-xs text-white/45">Wallet USDT BEP20 · Retenido ${Number(seller.held_balance || 0).toFixed(2)} · Disponible ${Number(seller.available_balance || 0).toFixed(2)}</span>
+                  </span>
                   <span className={seller.is_active ? 'text-xs text-green-400' : 'text-xs text-red-400'}>{seller.is_active ? 'Activo' : 'Quitado'}</span>
-                </div>
+                </span>
               </button>
               <div className="mt-3 grid grid-cols-3 gap-2">
                 <button onClick={() => openSellerDetail(seller.user_id)} className="rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold text-white/75">
@@ -6453,15 +6562,15 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
           <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(3, minmax(0, 1fr))' }}>
             {pricing.map(item => (
               <button key={item.game_name} onClick={() => setSelectedPricingGame(item.game_name)} className="min-w-0 overflow-hidden rounded-lg border border-white/10 bg-bg text-left active:scale-95">
-                <div className="relative aspect-square w-full overflow-hidden bg-white/5">
-                  {item.icon_url ? <img src={(item.icon_url || '') + '?v=' + Math.floor(Date.now() / 3600000)} className="h-full w-full object-cover" alt={item.display_name || item.game_name} /> : <div className="flex h-full w-full items-center justify-center"><Gamepad2 className="h-8 w-8 text-white/30" /></div>}
+                <span className="block relative aspect-square w-full overflow-hidden bg-white/5">
+                  {item.icon_url ? <img src={(item.icon_url || '') + '?v=' + Math.floor(Date.now() / 3600000)} className="h-full w-full object-cover" alt={item.display_name || item.game_name} /> : <span className="block flex h-full w-full items-center justify-center"><Gamepad2 className="h-8 w-8 text-white/30" /></span>}
                   <span className={(item.icon_url ? 'bg-green-500/80' : 'bg-red-500/80') + ' absolute left-1.5 top-1.5 rounded px-1.5 py-0.5 text-[9px] font-bold text-white'}>
                     {item.icon_url ? 'Con imagen' : 'Sin imagen'}
                   </span>
-                </div>
-                <div className="p-2">
-                  <p className="line-clamp-2 min-h-[28px] text-[11px] font-bold leading-tight text-white/80">{item.display_name || item.game_name}</p>
-                </div>
+                </span>
+                <span className="block p-2">
+                  <span className="block line-clamp-2 min-h-[28px] text-[11px] font-bold leading-tight text-white/80">{item.display_name || item.game_name}</span>
+                </span>
               </button>
             ))}
           </div>
@@ -6708,15 +6817,15 @@ function AdminUsersPanel() {
 
       {users.map(u => (
         <button key={u.user_id} onClick={() => loadUserDetail(u.user_id)} className={`w-full rounded-xl border p-4 text-left ${selected?.user_id === u.user_id ? 'border-accent bg-accent/10' : 'border-white/10 bg-card'}`}>
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
-              <p className="font-semibold">{u.name}</p>
-              <p className="text-xs text-white/45">ID: {u.user_id}{u.username ? ` · @${u.username}` : ''}</p>
-              {u.email && <p className="text-xs text-white/45">{u.email}</p>}
-              <p className="mt-1 text-xs text-white/40">Rol: {u.role}{u.is_banned ? ' · Suspendido' : ''}</p>
-            </div>
-            <p className="text-lg font-bold text-accent">${Number(u.balance || 0).toFixed(2)}</p>
-          </div>
+          <span className="block flex items-start justify-between gap-3">
+            <span className="block min-w-0">
+              <span className="block font-semibold">{u.name}</span>
+              <span className="block text-xs text-white/45">ID: {u.user_id}{u.username ? ` · @${u.username}` : ''}</span>
+              {u.email && <span className="block text-xs text-white/45">{u.email}</span>}
+              <span className="block mt-1 text-xs text-white/40">Rol: {u.role}{u.is_banned ? ' · Suspendido' : ''}</span>
+            </span>
+            <span className="block text-lg font-bold text-accent">${Number(u.balance || 0).toFixed(2)}</span>
+          </span>
         </button>
       ))}
 
@@ -7573,25 +7682,25 @@ function ProfileScreen({ onOrders, onHome, onAdmin, onPartnerHelp }) {
 
       {/* Pedidos */}
       <button onClick={onOrders} className="card p-4 w-full flex items-center justify-between mb-3 active:scale-95">
-        <div className="flex items-center gap-3">
+        <span className="block flex items-center gap-3">
           <ClipboardList className="h-6 w-6 text-accent" />
-          <div className="text-left">
-            <p className="font-semibold">Mis pedidos</p>
-            <p className="text-xs text-white/50">Ver historial</p>
-          </div>
-        </div>
+          <span className="block text-left">
+            <span className="block font-semibold">Mis pedidos</span>
+            <span className="block text-xs text-white/50">Ver historial</span>
+          </span>
+        </span>
         <span className="text-white/30">›</span>
       </button>
 
       {['reseller', 'seller', 'admin'].includes(profile.role) && (
         <button onClick={onPartnerHelp} className="card p-4 w-full flex items-center justify-between mb-3 active:scale-95 border-accent/20">
-          <div className="flex items-center gap-3">
+          <span className="block flex items-center gap-3">
             <BookOpen className="h-6 w-6 text-accent" />
-            <div className="text-left">
-              <p className="font-semibold text-accent">Ayuda para vender</p>
-              <p className="text-xs text-white/50">Funciones, entregas y reglas de revendedor</p>
-            </div>
-          </div>
+            <span className="block text-left">
+              <span className="block font-semibold text-accent">Ayuda para vender</span>
+              <span className="block text-xs text-white/50">Funciones, entregas y reglas de revendedor</span>
+            </span>
+          </span>
           <span className="text-white/30">›</span>
         </button>
       )}
@@ -7607,13 +7716,13 @@ function ProfileScreen({ onOrders, onHome, onAdmin, onPartnerHelp }) {
       {/* Panel Privado — visible para admins, vendedores y revendedores */}
       {['admin', 'seller', 'reseller'].includes(profile.role) && (
         <button onClick={onAdmin} className="card p-4 w-full flex items-center justify-between mb-4 active:scale-95 border-yellow-500/30">
-          <div className="flex items-center gap-3">
+          <span className="block flex items-center gap-3">
             <Crown className="h-6 w-6 text-yellow-400" />
-            <div className="text-left">
-              <p className="font-semibold text-yellow-400">Panel Privado</p>
-              <p className="text-xs text-white/50">Administración y herramientas comerciales</p>
-            </div>
-          </div>
+            <span className="block text-left">
+              <span className="block font-semibold text-yellow-400">Panel Privado</span>
+              <span className="block text-xs text-white/50">Administración y herramientas comerciales</span>
+            </span>
+          </span>
           <span className="text-white/30">›</span>
         </button>
       )}
@@ -7702,15 +7811,15 @@ function ProfileScreen({ onOrders, onHome, onAdmin, onPartnerHelp }) {
       <div className="card p-4 mb-3">
         <button onClick={() => setChangePwd(!changePwd)}
           className="w-full flex items-center justify-between">
-          <div className="flex items-center gap-3">
+          <span className="block flex items-center gap-3">
             <KeyRound className="h-6 w-6 text-accent" />
-            <div className="text-left">
-              <p className="font-semibold text-sm">Contraseña web</p>
-              <p className="text-xs text-white/50">
+            <span className="block text-left">
+              <span className="block font-semibold text-sm">Contraseña web</span>
+              <span className="block text-xs text-white/50">
                 {profile.has_password ? 'Configurada' : 'Sin configurar'}
-              </p>
-            </div>
-          </div>
+              </span>
+            </span>
+          </span>
           <ChevronDown className={`h-4 w-4 text-white/30 transition-transform ${changePwd ? 'rotate-180' : ''}`} aria-hidden="true" />
         </button>
         {changePwd && (
@@ -9252,12 +9361,12 @@ function ResellerCatalog({ me, onBought }) {
                   {g.icon_url ? (
                     <img src={g.icon_url} className="h-10 w-10 rounded-lg object-cover" alt={g.title} />
                   ) : (
-                    <div className="h-10 w-10 bg-black/40 rounded-lg flex items-center justify-center text-lg">{g.emoji || '🎮'}</div>
+                    <span className="block h-10 w-10 bg-black/40 rounded-lg flex items-center justify-center text-lg">{g.emoji || '🎮'}</span>
                   )}
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold truncate">{g.title}</p>
-                    <p className="text-[10px] text-white/45 mt-0.5">{g.count} productos</p>
-                  </div>
+                  <span className="block min-w-0 flex-1">
+                    <span className="block text-xs font-bold truncate">{g.title}</span>
+                    <span className="block text-[10px] text-white/45 mt-0.5">{g.count} productos</span>
+                  </span>
                   <ChevronRight className="h-4 w-4 text-white/30" />
                 </button>
               ))
@@ -9472,10 +9581,31 @@ function ResellerCatalog({ me, onBought }) {
             </div>
 
             {orderResult ? (
-              <div className="text-center p-6 space-y-3">
+              <div className="text-center p-4 space-y-4">
                 <div className="w-12 h-12 rounded-full bg-emerald-500/10 text-emerald-400 flex items-center justify-center mx-auto text-xl font-bold">✓</div>
                 <h3 className="font-bold text-sm">¡Pedido enviado con éxito!</h3>
-                <p className="text-xs text-white/50">El pedido #{orderResult.order_id} fue recibido. El administrador lo entregará pronto.</p>
+                
+                <div className="card p-3 flex items-center gap-3 text-left">
+                  {buyingManualProduct.icon_url ? (
+                    <OptimizedImage
+                      src={`${storeAssetUrl(buyingManualProduct.icon_url)}?v=${cacheBust}`}
+                      alt=""
+                      className="w-12 h-12 rounded-xl object-cover flex-shrink-0"
+                      eager
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-xl bg-bg flex items-center justify-center flex-shrink-0">
+                      <Gamepad2 className="h-5 w-5 text-white/40" />
+                    </div>
+                  )}
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold truncate">{buyingManualProduct.name}</p>
+                    <p className="text-sm font-black text-accent mt-0.5">${(buyingManualProduct.options?.find(o => String(o.id) === String(selectedOptionId))?.price || buyingManualProduct.price).toFixed(2)} USDT</p>
+                    <p className="text-[10px] text-white/40 mt-0.5">Pedido #{orderResult.order_id}</p>
+                  </div>
+                </div>
+
+                <p className="text-xs text-white/50">El pedido fue recibido y el administrador lo entregará pronto.</p>
                 <button onClick={() => setBuyingManualProduct(null)} className="mt-4 w-full bg-accent text-bg py-2 rounded-xl text-xs font-bold">Cerrar</button>
               </div>
             ) : (
@@ -9483,15 +9613,16 @@ function ResellerCatalog({ me, onBought }) {
                 {buyingManualProduct.options && buyingManualProduct.options.length > 0 && (
                   <div>
                     <label className="text-[10px] text-white/50 mb-1.5 block font-bold uppercase tracking-wider">Selecciona Opción</label>
-                    <select
+                    <CustomSelect
                       value={selectedOptionId}
-                      onChange={e => setSelectedOptionId(e.target.value)}
-                      className="w-full bg-bg border border-white/10 rounded-xl px-3 py-2.5 text-xs outline-none focus:border-accent text-white"
-                    >
-                      {buyingManualProduct.options.map(o => (
-                        <option key={o.id} value={o.id}>{o.name} - ${o.price.toFixed(2)}</option>
-                      ))}
-                    </select>
+                      onChange={val => setSelectedOptionId(val)}
+                      placeholder="Selecciona Opción"
+                      options={buyingManualProduct.options.map(o => ({
+                        value: o.id,
+                        label: `${o.name} - $${o.price.toFixed(2)}`
+                      }))}
+                      className="border-white/10 bg-bg px-3 py-2.5 text-xs"
+                    />
                   </div>
                 )}
 

@@ -7184,7 +7184,22 @@ function AdminEditProductScreen({ product, onSaved, onCancel, me }) {
         </button>
         <button onClick={handleSave} disabled={saving}
           className="flex-1 py-3 rounded-xl bg-gradient-to-r from-accent to-accent2 font-bold active:scale-95 disabled:opacity-50">
-          <>{saving ? <span className="inline-flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Guardando...</span> : isNew ? <span className="inline-flex items-center justify-center gap-2"><Check className="h-4 w-4" />Crear</span> : <span className="inline-flex items-center justify-center gap-2"><Save className="h-4 w-4" />Guardar</span>}</>
+          {saving ? (
+            <span key="saving" className="inline-flex items-center justify-center gap-2">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Guardando...</span>
+            </span>
+          ) : isNew ? (
+            <span key="new" className="inline-flex items-center justify-center gap-2">
+              <Check className="h-4 w-4" />
+              <span>Crear</span>
+            </span>
+          ) : (
+            <span key="save" className="inline-flex items-center justify-center gap-2">
+              <Save className="h-4 w-4" />
+              <span>Guardar</span>
+            </span>
+          )}
         </button>
       </div>
     </div>

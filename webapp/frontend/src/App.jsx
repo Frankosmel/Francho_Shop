@@ -3276,7 +3276,17 @@ function LoginScreen({ onSuccess, onRegister, onForgot }) {
         onChange={e => setPassword(e.target.value)} onKeyDown={e => e.key === 'Enter' && handleLogin()} />
       <button onClick={handleLogin} disabled={loading || !email || !password}
         className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-accent to-accent2 active:scale-95 transition disabled:opacity-50">
-        <>{loading ? <span className="inline-flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Entrando...</span> : <span className="inline-flex items-center justify-center gap-2"><LockKeyhole className="h-4 w-4" />Entrar</span>}</>
+        {loading ? (
+          <span key="entering" className="inline-flex items-center justify-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Entrando...</span>
+          </span>
+        ) : (
+          <span key="login" className="inline-flex items-center justify-center gap-2">
+            <LockKeyhole className="h-4 w-4" />
+            <span>Entrar</span>
+          </span>
+        )}
       </button>
       <div className="flex justify-between mt-4 text-sm">
         <button onClick={onForgot} className="text-accent">¿Olvidaste la contraseña?</button>
@@ -3343,7 +3353,17 @@ function RegisterScreen({ onSuccess, onLogin }) {
         onChange={e => setPassword2(e.target.value)} />
       <button onClick={handleRegister} disabled={loading || !email || !password}
         className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-accent to-accent2 active:scale-95 transition disabled:opacity-50">
-        <>{loading ? <span className="inline-flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Creando...</span> : <span className="inline-flex items-center justify-center gap-2"><Edit3 className="h-4 w-4" />Crear cuenta</span>}</>
+        {loading ? (
+          <span key="registering" className="inline-flex items-center justify-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Creando...</span>
+          </span>
+        ) : (
+          <span key="register" className="inline-flex items-center justify-center gap-2">
+            <Edit3 className="h-4 w-4" />
+            <span>Crear cuenta</span>
+          </span>
+        )}
       </button>
       <button onClick={onLogin} className="text-accent text-sm mt-4 block mx-auto">
         Ya tengo cuenta — Iniciar sesión
@@ -3391,7 +3411,17 @@ function ForgotScreen({ onCodeSent, onLogin }) {
         className="w-full bg-card border border-white/20 rounded-xl px-4 py-3 mb-4 outline-none focus:border-accent" />
       <button onClick={handleSend} disabled={loading || !email}
         className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-accent to-accent2 disabled:opacity-50">
-        <>{loading ? <span className="inline-flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Enviando...</span> : <span className="inline-flex items-center justify-center gap-2"><Mail className="h-4 w-4" />Enviar código</span>}</>
+        {loading ? (
+          <span key="sending" className="inline-flex items-center justify-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Enviando...</span>
+          </span>
+        ) : (
+          <span key="forgot" className="inline-flex items-center justify-center gap-2">
+            <Mail className="h-4 w-4" />
+            <span>Enviar código</span>
+          </span>
+        )}
       </button>
       <button onClick={onLogin} className="text-accent text-sm mt-4 block mx-auto">
         Volver al login
@@ -3426,7 +3456,17 @@ function VerifyScreen({ onSuccess }) {
         className="w-full bg-card border border-white/20 rounded-xl px-4 py-3 mb-4 outline-none focus:border-accent text-center text-2xl tracking-widest font-mono" />
       <button onClick={handleVerify} disabled={loading || !email || code.length < 6}
         className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-accent to-accent2 disabled:opacity-50">
-        <>{loading ? <span className="inline-flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Verificando...</span> : <span className="inline-flex items-center justify-center gap-2"><Check className="h-4 w-4" />Verificar</span>}</>
+        {loading ? (
+          <span key="verifying" className="inline-flex items-center justify-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>Verificando...</span>
+          </span>
+        ) : (
+          <span key="verify" className="inline-flex items-center justify-center gap-2">
+            <Check className="h-4 w-4" />
+            <span>Verificar</span>
+          </span>
+        )}
       </button>
     </AuthWrapper>
   )
@@ -3475,7 +3515,14 @@ function ResetScreen({ onSuccess }) {
         onChange={e => setPassword(e.target.value)} />
       <button onClick={handleReset} disabled={loading || !email || code.length < 6 || !password}
         className="w-full py-3 rounded-xl font-bold bg-gradient-to-r from-accent to-accent2 disabled:opacity-50">
-        <>{loading ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : <span className="inline-flex items-center justify-center gap-2"><Lock className="h-4 w-4" />Cambiar contraseña</span>}</>
+        {loading ? (
+          <Loader2 key="resetting" className="mx-auto h-4 w-4 animate-spin" />
+        ) : (
+          <span key="reset" className="inline-flex items-center justify-center gap-2">
+            <Lock className="h-4 w-4" />
+            <span>Cambiar contraseña</span>
+          </span>
+        )}
       </button>
     </AuthWrapper>
   )
@@ -4711,7 +4758,17 @@ Francho Shop no vende cuentas robadas, hackeadas, recuperadas, baneadas o con da
                 </button>
                 <button onClick={handleBuy} disabled={buying}
                   className="min-w-0 flex-1 rounded-xl bg-gradient-to-r from-accent to-accent2 px-3 py-3 font-bold active:scale-95 disabled:opacity-50">
-                  <>{buying ? <span className="inline-flex items-center justify-center gap-2"><Loader2 className="h-4 w-4 animate-spin" />Procesando...</span> : <span className="inline-flex items-center justify-center gap-2"><ShoppingCart className="h-5 w-5" />Comprar por ${Number(displayPrice).toFixed(2)} USDT</span>}</>
+                  {buying ? (
+                    <span key="buying" className="inline-flex items-center justify-center gap-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Procesando...</span>
+                    </span>
+                  ) : (
+                    <span key="buy" className="inline-flex items-center justify-center gap-2">
+                      <ShoppingCart className="h-5 w-5" />
+                      <span>Comprar por ${Number(displayPrice).toFixed(2)} USDT</span>
+                    </span>
+                  )}
                 </button>
               </div>
             </div>
@@ -7525,7 +7582,14 @@ function ProfileScreen({ onOrders, onHome, onAdmin, onPartnerHelp }) {
               onChange={e => setPwdNew(e.target.value)} />
             <button onClick={handleChangePwd} disabled={pwdLoading || !pwdNew}
               className="w-full py-2 rounded-lg bg-accent/20 text-accent text-sm font-semibold disabled:opacity-50">
-              <>{pwdLoading ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : <span className="inline-flex items-center justify-center gap-1"><KeyRound className="h-4 w-4" />Guardar contraseña</span>}</>
+              {pwdLoading ? (
+                <Loader2 key="pwdloading" className="mx-auto h-4 w-4 animate-spin" />
+              ) : (
+                <span key="pwdready" className="inline-flex items-center justify-center gap-1">
+                  <KeyRound className="h-4 w-4" />
+                  <span>Guardar contraseña</span>
+                </span>
+              )}
             </button>
             {pwdMsg && <p className="text-xs text-center text-white/60">{pwdMsg}</p>}
           </div>

@@ -1,0 +1,20 @@
+{
+  "name": "Francho Shop",
+  "short_name": "Francho Shop",
+  "description": "Recargas de juegos y gift cards",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0f1419",
+  "theme_color": "#0f1419",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/api/icons/franchoshop.jpg",
+      "sizes": "192x192",
+      "type": "image/jpeg",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["shopping", "games"],
+  "lang": "es"
+}

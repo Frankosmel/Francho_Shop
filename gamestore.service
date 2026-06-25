@@ -1,0 +1,17 @@
+[Unit]
+Description=GameStore Bot (BuffPin + OxaPay)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/gamestore
+EnvironmentFile=/root/gamestore/.env
+ExecStart=/usr/bin/python3 /root/gamestore/bot.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

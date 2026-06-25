@@ -1,0 +1,32 @@
+# Entornos virtuales
+venv/
+.venv/
+webapp/api/.venv/
+
+# Node modules y compilación frontend
+node_modules/
+dist/
+webapp/frontend/node_modules/
+webapp/frontend/dist/
+
+# Bases de datos y configuraciones confidenciales
+*.db
+*.db-shm
+*.db-wal
+.env
+.env*
+!.env.example
+
+# Logs y caches
+*.log
+logs/
+__pycache__/
+*.pyc
+
+# Catálogos y exports temporales
+buffpin_live_catalog.*
+buffpin_products_export.csv
+catalogo_completo.json
+_cleanup_pending/
+_franchoshop_review/
+_ux_backups/

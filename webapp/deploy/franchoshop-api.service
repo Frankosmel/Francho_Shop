@@ -1,0 +1,18 @@
+[Unit]
+Description=Francho Shop API (FastAPI)
+After=network.target gamestore.service
+Wants=gamestore.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/gamestore
+EnvironmentFile=/home/ubuntu/gamestore/.env
+ExecStart=/usr/bin/python3 -m uvicorn webapp.api.main:app --host 127.0.0.1 --port 8001 --workers 1 --app-dir /home/ubuntu/gamestore
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

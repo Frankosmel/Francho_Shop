@@ -83,6 +83,18 @@ DEFAULTS = {
 
     # Branding
     "brand_name": "GameStore",
+
+    # SMS / Números Virtuales
+    "sms_default_markup": "1.50",
+    "sms_min_price_usd": "0.75",
+    "sms_catalog_image_url": "https://images.unsplash.com/photo-1562408590-e32931084e23?auto=format&fit=crop&w=600&q=75",
+    "sms_terms_and_conditions": (
+        "1. Los números virtuales son temporales y de un solo uso.\n"
+        "2. El número permanecerá activo hasta 20 minutos esperando tu código.\n"
+        "3. Si cancelas el número o si expira el tiempo sin recibir ningún SMS, el dinero se devuelve automáticamente a tu saldo de la web.\n"
+        "4. Una vez que llega el código de verificación, la orden se considera completada y no admite reembolsos.\n"
+        "5. No nos hacemos responsables por el bloqueo o suspensión posterior de tus cuentas por parte de las aplicaciones externas."
+    ),
 }
 
 

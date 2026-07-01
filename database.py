@@ -37,6 +37,8 @@ async def init_db():
                 user_id       INTEGER PRIMARY KEY,
                 username      TEXT,
                 first_name    TEXT,
+                display_name  TEXT,
+                photo_url     TEXT,
                 language      TEXT DEFAULT 'es',
                 role          TEXT DEFAULT 'user',       -- user/reseller/admin
                 balance       REAL DEFAULT 0.0,
@@ -427,6 +429,112 @@ async def init_db():
                 revoked_at  REAL
             );
             CREATE INDEX IF NOT EXISTS idx_pushsub_user ON push_subscriptions(user_id);
+
+            -- ═══════════════════════════════════════
+            --   NUMEROS VIRTUALES (SMS)
+            -- ═══════════════════════════════════════
+            CREATE TABLE IF NOT EXISTS sms_orders (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id             INTEGER NOT NULL,
+                fivesim_order_id    TEXT UNIQUE,
+                phone               TEXT,
+                country             TEXT NOT NULL,
+                service             TEXT NOT NULL,
+                operator            TEXT DEFAULT 'any',
+                cost_price          REAL DEFAULT 0,
+                sell_price          REAL NOT NULL,
+                code                TEXT,
+                status              TEXT DEFAULT 'pending', -- pending, completed, canceled, expired, failed
+                raw_response        TEXT,
+                error_message       TEXT,
+                created_at          REAL DEFAULT (unixepoch()),
+                updated_at          REAL DEFAULT (unixepoch()),
+                completed_at        REAL,
+                canceled_at         REAL,
+                refunded_at         REAL,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_sms_orders_user ON sms_orders(user_id, created_at);
+            CREATE INDEX IF NOT EXISTS idx_sms_orders_status ON sms_orders(status);
+
+            CREATE TABLE IF NOT EXISTS sms_catalog_overrides (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                item_type           TEXT NOT NULL, -- country, service, operator, home
+                item_key            TEXT NOT NULL,
+                display_name        TEXT,
+                icon_url            TEXT,
+                banner_url          TEXT,
+                is_featured         INTEGER DEFAULT 0,
+                is_hidden           INTEGER DEFAULT 0,
+                sort_order          INTEGER DEFAULT 100,
+                custom_markup       REAL,
+                min_price           REAL,
+                created_at          REAL DEFAULT (unixepoch()),
+                updated_at          REAL DEFAULT (unixepoch()),
+                UNIQUE(item_type, item_key)
+            );
+
+            -- ═══════════════════════════════════════
+            --   SOPORTE Y CHATS UNIFICADOS
+            -- ═══════════════════════════════════════
+            CREATE TABLE IF NOT EXISTS support_tickets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                category TEXT NOT NULL,
+                subject TEXT NOT NULL,
+                description TEXT,
+                associated_order_id TEXT,
+                associated_order_type TEXT,
+                associated_seller_id INTEGER,
+                status TEXT DEFAULT 'open',
+                created_at REAL DEFAULT (unixepoch()),
+                updated_at REAL DEFAULT (unixepoch()),
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_support_tickets_user ON support_tickets(user_id);
+            CREATE INDEX IF NOT EXISTS idx_support_tickets_status ON support_tickets(status);
+
+            CREATE TABLE IF NOT EXISTS chat_rooms (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                ticket_id INTEGER,
+                customer_id INTEGER NOT NULL,
+                seller_id INTEGER,
+                room_type TEXT DEFAULT 'support',
+                status TEXT DEFAULT 'active',
+                last_message_at REAL DEFAULT (unixepoch()),
+                created_at REAL DEFAULT (unixepoch()),
+                FOREIGN KEY (ticket_id) REFERENCES support_tickets(id) ON DELETE SET NULL,
+                FOREIGN KEY (customer_id) REFERENCES users(user_id),
+                FOREIGN KEY (seller_id) REFERENCES users(user_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_chat_rooms_customer ON chat_rooms(customer_id);
+            CREATE INDEX IF NOT EXISTS idx_chat_rooms_seller ON chat_rooms(seller_id);
+            CREATE INDEX IF NOT EXISTS idx_chat_rooms_ticket ON chat_rooms(ticket_id);
+
+            CREATE TABLE IF NOT EXISTS chat_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                room_id INTEGER NOT NULL,
+                sender_id INTEGER NOT NULL,
+                sender_role TEXT NOT NULL,
+                message_text TEXT NOT NULL,
+                attachment_url TEXT,
+                attachment_type TEXT,
+                created_at REAL DEFAULT (unixepoch()),
+                FOREIGN KEY (room_id) REFERENCES chat_rooms(id) ON DELETE CASCADE,
+                FOREIGN KEY (sender_id) REFERENCES users(user_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_chat_messages_room ON chat_messages(room_id, created_at);
+
+            CREATE TABLE IF NOT EXISTS chat_room_reads (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                room_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                read_at REAL DEFAULT 0,
+                UNIQUE(room_id, user_id),
+                FOREIGN KEY (room_id) REFERENCES chat_rooms(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_room_reads_room ON chat_room_reads(room_id);
         """)
         await db.commit()
 
@@ -437,6 +545,8 @@ async def init_db():
             ("password_hash", "TEXT"),
             ("google_id", "TEXT"),
             ("auth_method", "TEXT DEFAULT 'telegram'"),  # telegram, email, google
+            ("photo_url", "TEXT"),
+            ("display_name", "TEXT"),
         ]
         async with db.execute("PRAGMA table_info(users)") as c:
             existing = {r[1] for r in await c.fetchall()}
@@ -483,6 +593,26 @@ async def init_db():
                 ))
                 await db.commit()
 
+        # Migraciones para soporte y chats unificados
+        async with db.execute("PRAGMA table_info(support_tickets)") as c:
+            st_cols = {r[1] for r in await c.fetchall()}
+        if st_cols and "associated_order_type" not in st_cols:
+            await db.execute("ALTER TABLE support_tickets ADD COLUMN associated_order_type TEXT")
+            await db.commit()
+
+        async with db.execute("PRAGMA table_info(chat_rooms)") as c:
+            cr_cols = {r[1] for r in await c.fetchall()}
+        if cr_cols and "room_type" not in cr_cols:
+            await db.execute("ALTER TABLE chat_rooms ADD COLUMN room_type TEXT DEFAULT 'support'")
+            await db.commit()
+
+        async with db.execute("PRAGMA table_info(chat_messages)") as c:
+            cm_cols = {r[1] for r in await c.fetchall()}
+        for col, defn in [("attachment_url", "TEXT"), ("attachment_type", "TEXT")]:
+            if cm_cols and col not in cm_cols:
+                await db.execute(f"ALTER TABLE chat_messages ADD COLUMN {col} {defn}")
+        await db.commit()
+
     log.info("✅ DB inicializada")
 
 
@@ -509,6 +639,41 @@ async def get_user(user_id: int) -> dict | None:
         async with db.execute("SELECT * FROM users WHERE user_id=?", (user_id,)) as c:
             r = await c.fetchone()
             return dict(r) if r else None
+
+
+async def update_user_photo(user_id: int, photo_url: str):
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("UPDATE users SET photo_url=?, last_seen=? WHERE user_id=?", (photo_url or "", time.time(), user_id))
+        await db.commit()
+
+
+async def update_user_profile(user_id: int, display_name: str = None, email: str = None):
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT email FROM users WHERE user_id=?", (user_id,)) as c:
+            row = await c.fetchone()
+        current_email = (row["email"] if row else "") or ""
+        fields = ["last_seen=?"]
+        vals = [time.time()]
+        if display_name is not None:
+            fields.append("display_name=?")
+            vals.append(display_name.strip())
+        if email is not None:
+            clean_email = email.strip().lower()
+            if clean_email and clean_email != current_email.lower():
+                async with db.execute("SELECT user_id FROM users WHERE lower(email)=lower(?) AND user_id<>?", (clean_email, user_id)) as c:
+                    exists = await c.fetchone()
+                if exists:
+                    raise ValueError("Ese email ya está en uso")
+                fields.append("email=?")
+                vals.append(clean_email)
+                fields.append("email_verified=0")
+            elif not clean_email and current_email:
+                fields.append("email=NULL")
+                fields.append("email_verified=0")
+        vals.append(user_id)
+        await db.execute(f"UPDATE users SET {', '.join(fields)} WHERE user_id=?", vals)
+        await db.commit()
 
 
 async def get_user_role(user_id: int) -> str:
@@ -1135,6 +1300,22 @@ async def get_cached_product(product_id: int) -> dict | None:
         """, (product_id,)) as c:
             r = await c.fetchone()
             return dict(r) if r else None
+
+
+async def get_cached_products_by_ids(product_ids: list[int]) -> dict[int, dict]:
+    if not product_ids:
+        return {}
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        placeholders = ",".join("?" for _ in product_ids)
+        async with db.execute(f"""
+            SELECT p.*, o.is_hidden, o.is_featured, o.custom_price, o.display_name, o.admin_note
+            FROM products_cache p
+            LEFT JOIN product_overrides o ON p.id = o.product_id
+            WHERE p.id IN ({placeholders})
+        """, tuple(product_ids)) as c:
+            rows = await c.fetchall()
+            return {r["id"]: dict(r) for r in rows}
 
 
 async def get_available_types(include_hidden: bool = False) -> list[int]:
@@ -2995,3 +3176,508 @@ async def count_unread_notifications(user_id: int) -> int:
         """, (user_id,)) as c:
             row = await c.fetchone()
             return int(row[0]) if row else 0
+
+
+# ══════════════════════════════════════
+#  NÚMEROS VIRTUALES (SMS)
+# ══════════════════════════════════════
+
+async def create_sms_order(user_id: int, fivesim_order_id: str, phone: str, country: str, service: str, operator: str, cost_price: float, sell_price: float, raw_response: str) -> int:
+    async with aiosqlite.connect(DB) as db:
+        cur = await db.execute("""
+            INSERT INTO sms_orders (user_id, fivesim_order_id, phone, country, service, operator, cost_price, sell_price, raw_response, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+        """, (user_id, fivesim_order_id, phone, country, service, operator, cost_price, sell_price, raw_response))
+        await db.commit()
+        return int(cur.lastrowid)
+
+async def get_sms_order(order_id: int) -> dict | None:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM sms_orders WHERE id = ?", (order_id,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+async def get_sms_order_by_fivesim_id(fivesim_order_id: str) -> dict | None:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM sms_orders WHERE fivesim_order_id = ?", (fivesim_order_id,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+async def get_user_sms_orders(user_id: int, limit: int = 50) -> list[dict]:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT * FROM sms_orders
+            WHERE user_id = ?
+            ORDER BY created_at DESC
+            LIMIT ?
+        """, (user_id, limit)) as c:
+            return [dict(r) for r in await c.fetchall()]
+
+async def update_sms_order_status(order_id: int, status: str, code: str = None, error_message: str = None):
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        if status == 'completed':
+            await db.execute("""
+                UPDATE sms_orders
+                SET status = ?, code = ?, completed_at = ?, updated_at = ?
+                WHERE id = ?
+            """, (status, code, now, now, order_id))
+        elif status in ('canceled', 'expired', 'failed'):
+            await db.execute("""
+                UPDATE sms_orders
+                SET status = ?, error_message = ?, canceled_at = ?, updated_at = ?
+                WHERE id = ?
+            """, (status, error_message, now, now, order_id))
+        else:
+            await db.execute("""
+                UPDATE sms_orders
+                SET status = ?, updated_at = ?
+                WHERE id = ?
+            """, (status, now, order_id))
+        await db.commit()
+
+async def refund_sms_order(order_id: int, reason: str = "Cancelación SMS") -> bool:
+    order = await get_sms_order(order_id)
+    if not order:
+        return False
+    if order.get("refunded_at"):
+        return False # Ya reembolsado
+    
+    sell_price = float(order["sell_price"])
+    user_id = int(order["user_id"])
+    
+    # Reembolsar balance
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        # Aumentar balance del usuario
+        await db.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (sell_price, user_id))
+        # Registrar movimiento en balance_log
+        await db.execute("""
+            INSERT INTO balance_log (user_id, amount, type, ref_id, note)
+            VALUES (?, ?, ?, ?, ?)
+        """, (user_id, sell_price, "refund", f"sms_{order_id}", f"Reembolso SMS: {reason}"))
+        # Actualizar orden
+        await db.execute("""
+            UPDATE sms_orders
+            SET refunded_at = ?, status = 'canceled', updated_at = ?
+            WHERE id = ?
+        """, (now, now, order_id))
+        await db.commit()
+    
+    # Crear notificación interna
+    try:
+        await create_notification(
+            user_id=user_id,
+            type="refund",
+            title="Reembolso SMS",
+            message=f"Se han reembolsado ${sell_price:.2f} USDT por cancelación de número virtual ({order['service']} - {order['country']})."
+        )
+    except Exception:
+        pass
+    
+    return True
+
+
+async def get_sms_catalog_overrides(item_type: str = None) -> list[dict]:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        if item_type:
+            async with db.execute("SELECT * FROM sms_catalog_overrides WHERE item_type = ? ORDER BY sort_order ASC, item_key ASC", (item_type,)) as c:
+                return [dict(r) for r in await c.fetchall()]
+        else:
+            async with db.execute("SELECT * FROM sms_catalog_overrides ORDER BY item_type ASC, sort_order ASC") as c:
+                return [dict(r) for r in await c.fetchall()]
+
+async def set_sms_catalog_override(item_type: str, item_key: str, display_name: str = None, icon_url: str = None, banner_url: str = None, is_featured: int = 0, is_hidden: int = 0, sort_order: int = 100, custom_markup: float = None, min_price: float = None):
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("""
+            INSERT INTO sms_catalog_overrides (
+                item_type, item_key, display_name, icon_url, banner_url, is_featured, is_hidden, sort_order, custom_markup, min_price, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(item_type, item_key) DO UPDATE SET
+                display_name = COALESCE(excluded.display_name, display_name),
+                icon_url = COALESCE(excluded.icon_url, icon_url),
+                banner_url = COALESCE(excluded.banner_url, banner_url),
+                is_featured = excluded.is_featured,
+                is_hidden = excluded.is_hidden,
+                sort_order = excluded.sort_order,
+                custom_markup = COALESCE(excluded.custom_markup, custom_markup),
+                min_price = COALESCE(excluded.min_price, min_price),
+                updated_at = excluded.updated_at
+        """, (item_type, item_key, display_name, icon_url, banner_url, is_featured, is_hidden, sort_order, custom_markup, min_price, now))
+        await db.commit()
+
+
+# ═════════════════════════════════════════════════════════════════════════
+#  SOPORTE Y CHATS UNIFICADOS (HELPERS)
+# ═════════════════════════════════════════════════════════════════════════
+
+async def create_support_ticket(user_id: int, category: str, subject: str, description: str, associated_order_id: str = None, associated_order_type: str = None, associated_seller_id: int = None) -> dict:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        now = time.time()
+        
+        # Insert Ticket
+        cursor = await db.execute("""
+            INSERT INTO support_tickets (user_id, category, subject, description, associated_order_id, associated_order_type, associated_seller_id, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)
+        """, (user_id, category, subject, description, associated_order_id, associated_order_type, associated_seller_id, now, now))
+        ticket_id = cursor.lastrowid
+        
+        # Determine room_type based on category and order type
+        room_type = 'support'
+        if category == 'payment_issue':
+            room_type = 'payment_issue'
+        elif category == 'order_issue':
+            if associated_order_type == 'sms':
+                room_type = 'sms_issue'
+            elif associated_order_type == 'manual':
+                room_type = 'order_case'
+            else:
+                room_type = 'support'
+        elif category == 'seller_dispute':
+            room_type = 'order_case'
+
+        # Create Chat Room associated with the ticket
+        cursor2 = await db.execute("""
+            INSERT INTO chat_rooms (ticket_id, customer_id, seller_id, room_type, status, last_message_at, created_at)
+            VALUES (?, ?, ?, ?, 'active', ?, ?)
+        """, (ticket_id, user_id, associated_seller_id, room_type, now, now))
+        room_id = cursor2.lastrowid
+        
+        # Add initial description message as a chat message if present
+        if description:
+            await db.execute("""
+                INSERT INTO chat_messages (room_id, sender_id, sender_role, message_text, created_at)
+                VALUES (?, ?, 'customer', ?, ?)
+            """, (room_id, user_id, description, now))
+            
+        await db.commit()
+        
+        async with db.execute("SELECT * FROM support_tickets WHERE id = ?", (ticket_id,)) as c:
+            ticket = dict(await c.fetchone())
+            ticket["room_id"] = room_id
+            return ticket
+
+async def get_or_create_direct_chat_room(customer_id: int, seller_id: int) -> int:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        # Check if active direct chat room exists (ticket_id is null)
+        async with db.execute("""
+            SELECT id FROM chat_rooms 
+            WHERE ticket_id IS NULL AND customer_id = ? AND seller_id = ? AND status = 'active'
+        """, (customer_id, seller_id)) as c:
+            row = await c.fetchone()
+            if row:
+                return row["id"]
+        
+        # If not exists, create
+        now = time.time()
+        cursor = await db.execute("""
+            INSERT INTO chat_rooms (ticket_id, customer_id, seller_id, room_type, status, last_message_at, created_at)
+            VALUES (NULL, ?, ?, 'seller_direct', 'active', ?, ?)
+        """, (customer_id, seller_id, now, now))
+        await db.commit()
+        return cursor.lastrowid
+
+async def get_chat_room(room_id: int) -> dict | None:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM chat_rooms WHERE id = ?", (room_id,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+async def get_chat_messages(room_id: int, limit: int = 200) -> list[dict]:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT m.*, u.username as sender_username, u.first_name as sender_first_name
+            FROM chat_messages m
+            LEFT JOIN users u ON u.user_id = m.sender_id
+            WHERE m.room_id = ?
+            ORDER BY m.created_at ASC
+            LIMIT ?
+        """, (room_id, limit)) as c:
+            return [dict(r) for r in await c.fetchall()]
+
+async def add_chat_message(room_id: int, sender_id: int, sender_role: str, message_text: str, attachment_url: str = None, attachment_type: str = None) -> dict:
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        # Insert Message
+        cursor = await db.execute("""
+            INSERT INTO chat_messages (room_id, sender_id, sender_role, message_text, attachment_url, attachment_type, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (room_id, sender_id, sender_role, message_text, attachment_url, attachment_type, now))
+        msg_id = cursor.lastrowid
+        
+        # Update last_message_at in room
+        await db.execute("""
+            UPDATE chat_rooms SET last_message_at = ? WHERE id = ?
+        """, (now, room_id))
+        
+        # Mark read for the sender
+        await db.execute("""
+            INSERT INTO chat_room_reads (room_id, user_id, read_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(room_id, user_id) DO UPDATE SET read_at = ?
+        """, (room_id, sender_id, now, now))
+        
+        await db.commit()
+        
+        async with db.execute("SELECT * FROM chat_messages WHERE id = ?", (msg_id,)) as c:
+            return dict(await c.fetchone())
+
+async def mark_room_as_read(room_id: int, user_id: int):
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("""
+            INSERT INTO chat_room_reads (room_id, user_id, read_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(room_id, user_id) DO UPDATE SET read_at = ?
+        """, (room_id, user_id, now, now))
+        await db.commit()
+
+async def get_room_unread_count(room_id: int, user_id: int) -> int:
+    async with aiosqlite.connect(DB) as db:
+        # Get last read time
+        async with db.execute("SELECT read_at FROM chat_room_reads WHERE room_id = ? AND user_id = ?", (room_id, user_id)) as c:
+            row = await c.fetchone()
+            read_at = row[0] if row else 0
+            
+        # Count unread messages (sender_id != user_id)
+        async with db.execute("""
+            SELECT COUNT(*) FROM chat_messages 
+            WHERE room_id = ? AND sender_id != ? AND created_at > ?
+        """, (room_id, user_id, read_at)) as c2:
+            return (await c2.fetchone())[0]
+
+async def get_unified_inbox(user_id: int, role: str) -> list[dict]:
+    items = []
+    
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        
+        # 1. FETCH CHAT ROOMS (Support & Direct Seller Chats)
+        if role == 'admin':
+            query = """
+                SELECT r.*, t.category, t.subject, t.status as ticket_status,
+                       u_cust.username as cust_username, u_cust.first_name as cust_first_name,
+                       u_sell.username as sell_username, u_sell.first_name as sell_first_name,
+                       p.store_name as seller_store_name
+                FROM chat_rooms r
+                LEFT JOIN support_tickets t ON t.id = r.ticket_id
+                LEFT JOIN users u_cust ON u_cust.user_id = r.customer_id
+                LEFT JOIN users u_sell ON u_sell.user_id = r.seller_id
+                LEFT JOIN account_seller_profiles p ON p.user_id = r.seller_id
+                ORDER BY r.last_message_at DESC
+            """
+            params = ()
+        elif role == 'seller':
+            query = """
+                SELECT r.*, t.category, t.subject, t.status as ticket_status,
+                       u_cust.username as cust_username, u_cust.first_name as cust_first_name,
+                       u_sell.username as sell_username, u_sell.first_name as sell_first_name,
+                       p.store_name as seller_store_name
+                FROM chat_rooms r
+                LEFT JOIN support_tickets t ON t.id = r.ticket_id
+                LEFT JOIN users u_cust ON u_cust.user_id = r.customer_id
+                LEFT JOIN users u_sell ON u_sell.user_id = r.seller_id
+                LEFT JOIN account_seller_profiles p ON p.user_id = r.seller_id
+                WHERE r.seller_id = ? OR r.customer_id = ?
+                ORDER BY r.last_message_at DESC
+            """
+            params = (user_id, user_id)
+        else:
+            query = """
+                SELECT r.*, t.category, t.subject, t.status as ticket_status,
+                       u_cust.username as cust_username, u_cust.first_name as cust_first_name,
+                       u_sell.username as sell_username, u_sell.first_name as sell_first_name,
+                       p.store_name as seller_store_name, p.store_image as seller_store_image
+                FROM chat_rooms r
+                LEFT JOIN support_tickets t ON t.id = r.ticket_id
+                LEFT JOIN users u_cust ON u_cust.user_id = r.customer_id
+                LEFT JOIN users u_sell ON u_sell.user_id = r.seller_id
+                LEFT JOIN account_seller_profiles p ON p.user_id = r.seller_id
+                WHERE r.customer_id = ?
+                ORDER BY r.last_message_at DESC
+            """
+            params = (user_id,)
+            
+        async with db.execute(query, params) as c:
+            rooms = [dict(r) for r in await c.fetchall()]
+            
+        for r in rooms:
+            room_id = r["id"]
+            # Get last message
+            async with db.execute("""
+                SELECT message_text, created_at, sender_role FROM chat_messages 
+                WHERE room_id = ? ORDER BY created_at DESC LIMIT 1
+            """, (room_id,)) as c_msg:
+                msg_row = await c_msg.fetchone()
+                last_msg_text = msg_row[0] if msg_row else "Sin mensajes"
+                last_msg_time = msg_row[1] if msg_row else r["created_at"]
+                last_msg_sender = msg_row[2] if msg_row else ""
+                
+            # Get unread count
+            async with db.execute("SELECT read_at FROM chat_room_reads WHERE room_id = ? AND user_id = ?", (room_id, user_id)) as c_read:
+                read_row = await c_read.fetchone()
+                read_at = read_row[0] if read_row else 0
+                
+            async with db.execute("SELECT COUNT(*) FROM chat_messages WHERE room_id = ? AND sender_id != ? AND created_at > ?", (room_id, user_id, read_at)) as c_unread:
+                unread_count = (await c_unread.fetchone())[0]
+                
+            # Title resolution
+            if r["ticket_id"]:
+                title = f"Soporte: {r['subject'] or r['category']}"
+                type_name = "support"
+            else:
+                if role == 'seller' and r['seller_id'] == user_id:
+                    title = f"Cliente: {r['cust_first_name'] or r['cust_username'] or ('ID ' + str(r['customer_id']))}"
+                else:
+                    title = f"Tienda: {r['seller_store_name'] or r['sell_username'] or 'Vendedor'}"
+                type_name = "seller_chat"
+                
+            items.append({
+                "type": type_name,
+                "id": f"room_{room_id}",
+                "room_id": room_id,
+                "ticket_id": r["ticket_id"],
+                "title": title,
+                "status": r["ticket_status"] or "active",
+                "last_message": last_msg_text,
+                "last_message_time": last_msg_time,
+                "last_message_sender": last_msg_sender,
+                "unread_count": unread_count,
+                "image_url": r.get("seller_store_image") or ""
+            })
+            
+        # 2. FETCH MANUAL ORDER CASES
+        if role == 'admin':
+            case_query = """
+                SELECT c.*, u_cust.username as cust_username, u_cust.first_name as cust_first_name,
+                       p.store_name as seller_store_name
+                FROM manual_order_cases c
+                LEFT JOIN users u_cust ON u_cust.user_id = c.customer_id
+                LEFT JOIN account_seller_profiles p ON p.user_id = c.seller_id
+                ORDER BY c.updated_at DESC
+            """
+            case_params = ()
+        elif role == 'seller':
+            case_query = """
+                SELECT c.*, u_cust.username as cust_username, u_cust.first_name as cust_first_name,
+                       p.store_name as seller_store_name
+                FROM manual_order_cases c
+                LEFT JOIN users u_cust ON u_cust.user_id = c.customer_id
+                LEFT JOIN account_seller_profiles p ON p.user_id = c.seller_id
+                WHERE c.seller_id = ?
+                ORDER BY c.updated_at DESC
+            """
+            case_params = (user_id,)
+        else:
+            case_query = """
+                SELECT c.*, p.store_name as seller_store_name, p.store_image as seller_store_image
+                FROM manual_order_cases c
+                LEFT JOIN account_seller_profiles p ON p.user_id = c.seller_id
+                WHERE c.customer_id = ?
+                ORDER BY c.updated_at DESC
+            """
+            case_params = (user_id,)
+            
+        async with db.execute(case_query, case_params) as c_case:
+            cases = [dict(c) for c in await c_case.fetchall()]
+            
+        for c in cases:
+            case_id = c["id"]
+            # Get last message
+            async with db.execute("""
+                SELECT message, created_at, sender_role FROM manual_order_case_messages 
+                WHERE case_id = ? AND is_internal_note = 0 ORDER BY created_at DESC LIMIT 1
+            """, (case_id,)) as c_msg:
+                msg_row = await c_msg.fetchone()
+                last_msg_text = msg_row[0] if msg_row else "Caso abierto"
+                last_msg_time = msg_row[1] if msg_row else c["created_at"]
+                last_msg_sender = msg_row[2] if msg_row else ""
+                
+            # Get unread count
+            async with db.execute("SELECT read_at FROM manual_order_case_reads WHERE case_id = ? AND user_id = ?", (case_id, user_id)) as c_read:
+                read_row = await c_read.fetchone()
+                read_at = read_row[0] if read_row else 0
+                
+            async with db.execute("SELECT COUNT(*) FROM manual_order_case_messages WHERE case_id = ? AND sender_id != ? AND created_at > ? AND is_internal_note = 0", (case_id, user_id, read_at)) as c_unread:
+                unread_count = (await c_unread.fetchone())[0]
+                
+            if role == 'seller':
+                title = f"Disputa Pedido #{c['order_id']} ({c['cust_first_name'] or c['cust_username']})"
+            elif role == 'admin':
+                title = f"Disputa Pedido #{c['order_id']} ({c['cust_username']} vs {c['seller_store_name']})"
+            else:
+                title = f"Disputa Pedido #{c['order_id']} ({c['seller_store_name'] or 'Vendedor'})"
+                
+            items.append({
+                "type": "order_case",
+                "id": f"case_{case_id}",
+                "case_id": case_id,
+                "order_id": c["order_id"],
+                "title": title,
+                "status": c["status"],
+                "last_message": last_msg_text,
+                "last_message_time": last_msg_time,
+                "last_message_sender": last_msg_sender,
+                "unread_count": unread_count,
+                "image_url": c.get("seller_store_image") or ""
+            })
+            
+    # Sort all inbox items by last_message_time descending
+    items.sort(key=lambda x: x["last_message_time"], reverse=True)
+    return items
+
+async def list_all_support_tickets(status: str = None) -> list[dict]:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        if status:
+            async with db.execute("""
+                SELECT t.*, u.username as cust_username, u.first_name as cust_first_name, r.id as room_id
+                FROM support_tickets t
+                LEFT JOIN users u ON u.user_id = t.user_id
+                LEFT JOIN chat_rooms r ON r.ticket_id = t.id
+                WHERE t.status = ?
+                ORDER BY t.updated_at DESC
+            """, (status,)) as c:
+                return [dict(r) for r in await c.fetchall()]
+        else:
+            async with db.execute("""
+                SELECT t.*, u.username as cust_username, u.first_name as cust_first_name, r.id as room_id
+                FROM support_tickets t
+                LEFT JOIN users u ON u.user_id = t.user_id
+                LEFT JOIN chat_rooms r ON r.ticket_id = t.id
+                ORDER BY t.updated_at DESC
+            """) as c:
+                return [dict(r) for r in await c.fetchall()]
+
+async def get_support_ticket(ticket_id: int) -> dict | None:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT t.*, u.username as cust_username, u.first_name as cust_first_name, r.id as room_id
+            FROM support_tickets t
+            LEFT JOIN users u ON u.user_id = t.user_id
+            LEFT JOIN chat_rooms r ON r.ticket_id = t.id
+            WHERE t.id = ?
+        """, (ticket_id,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+async def update_support_ticket_status(ticket_id: int, status: str):
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("""
+            UPDATE support_tickets SET status = ?, updated_at = ? WHERE id = ?
+        """, (status, now, ticket_id))
+        await db.commit()
+
+

@@ -99,6 +99,7 @@ export const api = {
     return request(`/reviews/public${qs.toString() ? `?${qs}` : ''}`)
   },
   uploadIcon: (file) => upload('/admin/upload-icon', file),
+  uploadProfilePhoto: (file) => upload('/profile/photo', file),
   uploadDeliveryFile: (file) => upload('/admin/upload-delivery-file', file),
   me: () => request('/me'),
   publicGames: () => request('/public/games'),
@@ -127,7 +128,8 @@ export const api = {
   reviewManualOrder: (order_id, rating, comment = '') => request(`/manual-orders/${encodeURIComponent(order_id)}/review`, { method: 'POST', body: JSON.stringify({ rating, comment }) }),
   myOrders: () => request('/orders'),
   profile: () => request('/profile'),
-  createDeposit: (amount) => request('/deposits', { method: 'POST', body: JSON.stringify({ amount }) }),
+  updateProfile: (data) => request('/profile', { method: 'PUT', body: JSON.stringify(data) }),
+  createDeposit: (amount, is_checkout = false) => request('/deposits', { method: 'POST', body: JSON.stringify({ amount, is_checkout }) }),
   checkDeposit: (trackId) => request(`/deposits/${encodeURIComponent(trackId)}`),
   // SMS / números virtuales
   smsHealth: () => request('/sms/health'),
@@ -137,6 +139,16 @@ export const api = {
   smsOrderCreate: (data) => request('/sms/order/create', { method: 'POST', body: JSON.stringify(data) }),
   smsOrderStatus: (id) => request(`/sms/order/status?id=${encodeURIComponent(id)}`),
   smsOrderCancel: (id) => request('/sms/order/cancel', { method: 'POST', body: JSON.stringify({ id }) }),
+  smsMyOrders: (limit = 50) => request(`/sms/my-orders?limit=${limit}`),
+  smsAdminProfile: () => request('/admin/sms/profile'),
+  smsAdminOverridesGet: () => request('/admin/sms/overrides'),
+  smsAdminOverridesSet: (data) => request('/admin/sms/overrides', { method: 'POST', body: JSON.stringify(data) }),
+  smsAdminOrders: (limit = 100) => request(`/admin/sms/orders?limit=${limit}`),
+  smsAdminOrderSync: (id) => request(`/admin/sms/orders/${id}/sync`, { method: 'POST' }),
+  smsAdminOrderCancel: (id) => request(`/admin/sms/orders/${id}/cancel`, { method: 'POST' }),
+  smsSettingsGet: () => request('/sms/settings'),
+  smsAdminSettingsGet: () => request('/admin/sms/settings'),
+  smsAdminSettingsSet: (data) => request('/admin/sms/settings', { method: 'POST', body: JSON.stringify(data) }),
   // Auth
   register: (email, password, name) =>
     request('/auth/register', { method: 'POST', body: JSON.stringify({ email, password, name }) }),
@@ -249,6 +261,17 @@ export const api = {
   removeSeller: (user_id) => request(`/admin/sellers/${user_id}`, { method: 'DELETE' }),
   adminReviews: (limit = 100) => request(`/admin/reviews?limit=${limit}`),
   adminAudit: (limit = 50) => request(`/admin/audit?limit=${limit}`),
+  // Soporte y Chats Unificados
+  getInbox: () => request('/inbox'),
+  createSupportTicket: (data) => request('/support/tickets', { method: 'POST', body: JSON.stringify(data) }),
+  getChatMessages: (room_id) => request(`/chats/rooms/${room_id}/messages`),
+  sendChatMessage: (room_id, message_text, attachment_url = null, attachment_type = null) => request(`/chats/rooms/${room_id}/messages`, { method: 'POST', body: JSON.stringify({ message_text, attachment_url, attachment_type }) }),
+  markChatRoomRead: (room_id) => request(`/chats/rooms/${room_id}/read`, { method: 'POST', body: '{}' }),
+  createDirectChat: (seller_id) => request('/chats/rooms/direct', { method: 'POST', body: JSON.stringify({ seller_id }) }),
+  uploadChatFile: (room_id, file) => upload(`/chats/rooms/${room_id}/upload`, file),
+  adminListTickets: (status = '') => request(`/admin/support/tickets${status ? '?status=' + encodeURIComponent(status) : ''}`),
+  adminGetTicket: (ticket_id) => request(`/admin/support/tickets/${ticket_id}`),
+  adminUpdateTicketStatus: (ticket_id, status) => request(`/admin/support/tickets/${ticket_id}/status`, { method: 'POST', body: JSON.stringify({ status }) }),
   // Helpers
   isLoggedIn: () => !!(tg?.initData || getToken()),
   isTelegram: () => !!(tg && tg.platform && tg.platform !== 'unknown'),

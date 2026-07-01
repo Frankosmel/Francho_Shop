@@ -42,6 +42,7 @@ BUFFPIN_CALLBACK_PATH = "/buffpin/callback"
 #  DB & Bootstrap defaults
 # ══════════════════════════════════════
 DB_PATH = os.getenv("DB_PATH", "gamestore.db")
+FIVESIM_API_KEY = os.getenv("FIVESIM_API_KEY", "")
 
 # ══════════════════════════════════════
 #  Mini app Francho Shop (Telegram WebApp)

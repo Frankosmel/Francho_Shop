@@ -33,6 +33,10 @@ import database as db
 from buffpin_client import BuffPinClient, BuffPinError
 from oxapay_client import OxaPayClient, OxaPayError
 from modules import settings, pricing
+try:
+    from webapp.api.fivesim_client import FiveSimClient, FiveSimError
+except ImportError:
+    from fivesim_client import FiveSimClient, FiveSimError
 
 # Import auth: funciona tanto como módulo (webapp.api.main) como script directo
 try:
@@ -46,6 +50,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(
 log = logging.getLogger("franchoshop")
 buffpin = BuffPinClient()
 oxapay = OxaPayClient()
+fivesim = FiveSimClient()
 BOT_INFO_CACHE = {"username": None}
 RECENT_PURCHASE_KEYS = {}
 CATALOG_CACHE = {}
@@ -99,11 +104,71 @@ def parse_recharge_details(raw):
     return details
 
 
+async def background_sms_sync_loop():
+    """Bucle en segundo plano para sincronizar y cancelar/reembolsar automáticamente órdenes SMS expiradas."""
+    log.info("Iniciando bucle de segundo plano para sincronización de SMS...")
+    while True:
+        try:
+            await asyncio.sleep(30)
+            import aiosqlite
+            async with aiosqlite.connect(config.DB_PATH) as conn:
+                conn.row_factory = aiosqlite.Row
+                async with conn.execute(
+                    "SELECT id, fivesim_order_id, sell_price, user_id, created_at, phone, service FROM sms_orders WHERE status='pending'"
+                ) as cur:
+                    pending_orders = await cur.fetchall()
+            
+            now = time.time()
+            for row in pending_orders:
+                order_id = row["id"]
+                fivesim_id = row["fivesim_order_id"]
+                sell_price = row["sell_price"]
+                user_id = row["user_id"]
+                created_at = row["created_at"]
+                
+                # Si lleva más de 20 minutos (1200 segundos), se cancela y reembolsa localmente
+                if (now - created_at) >= 1200:
+                    log.info("Cancelando y reembolsando orden SMS expirada %s (creada hace %d segundos)", fivesim_id, now - created_at)
+                    try:
+                        await fivesim.cancel(fivesim_id)
+                    except Exception as e:
+                        log.warning("No se pudo cancelar en 5sim la orden %s durante limpieza: %s", fivesim_id, e)
+                    
+                    try:
+                        await db.refund_sms_order(order_id, reason="Expiración del tiempo límite (20 minutos)")
+                    except Exception as e:
+                        log.error("Error al reembolsar orden SMS %s en limpieza: %s", fivesim_id, e)
+                else:
+                    # Sincronizar estado con la API de 5sim
+                    try:
+                        res_5sim = await fivesim.check(fivesim_id)
+                        status_5sim = res_5sim.get("status")
+                        
+                        if status_5sim == "FINISHED":
+                            sms_list = res_5sim.get("sms", [])
+                            code = sms_list[-1].get("code") if sms_list else None
+                            if code:
+                                await db.update_sms_order_status(order_id, "completed", code=code)
+                                log.info("Orden SMS %s completada en segundo plano con código: %s", fivesim_id, code)
+                        elif status_5sim in ("CANCELED", "BANNED"):
+                            await db.refund_sms_order(order_id, reason=f"Cancelado por 5sim ({status_5sim})")
+                            log.info("Orden SMS %s cancelada en segundo plano por 5sim", fivesim_id)
+                    except Exception:
+                        pass
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            log.error("Error en bucle de segundo plano de SMS: %s", e)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await db.init_db()
     await db.init_manual_products()
     await settings.init_settings()
+    
+    # Iniciar tarea en segundo plano para sincronizar SMS automáticamente
+    sms_sync_task = asyncio.create_task(background_sms_sync_loop())
 
     # Crear tabla de iconos por juego (configurable desde admin)
     import aiosqlite
@@ -215,6 +280,11 @@ async def lifespan(app: FastAPI):
 
     log.info("✅ Francho Shop API v2 listo | BOT_ROOT=%s", BOT_ROOT)
     yield
+    sms_sync_task.cancel()
+    try:
+        await sms_sync_task
+    except asyncio.CancelledError:
+        pass
     await buffpin.close()
     await oxapay.close()
 
@@ -239,14 +309,17 @@ from fastapi.responses import FileResponse, Response
 @app.get("/api/icons/{filename}")
 async def serve_icon(filename: str):
     """Sirve archivos de iconos desde data/game_icons/."""
+    import mimetypes
     # Sanear filename para evitar path traversal
     clean = filename.replace("/", "").replace("\\", "").replace("..", "")
     filepath = ICONS_DIR / clean
     if not filepath.exists() or not filepath.is_file():
         raise HTTPException(404, "Icono no encontrado")
+    
+    mime_type, _ = mimetypes.guess_type(str(filepath))
     return FileResponse(
         str(filepath),
-        media_type="image/jpeg",
+        media_type=mime_type or "image/jpeg",
         headers={"Cache-Control": "public, max-age=3600"},  # cachear 1h
     )
 
@@ -318,6 +391,37 @@ async def admin_upload_icon(file: UploadFile = File(...), user: dict = Depends(g
     filepath = ICONS_DIR / safe_name
     filepath.write_bytes(raw)
     return {"ok": True, "url": f"/api/icons/{safe_name}"}
+
+
+@app.post("/api/profile/photo")
+async def upload_profile_photo(file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    """Sube o reemplaza la foto de perfil del usuario autenticado."""
+    user_id = user["id"]
+    await db.upsert_user(user_id, user.get("username"), user.get("first_name"))
+
+    content_type = (file.content_type or "").lower()
+    allowed = {
+        "image/jpeg": ".jpg",
+        "image/jpg": ".jpg",
+        "image/png": ".png",
+        "image/webp": ".webp",
+        "image/gif": ".gif",
+    }
+    ext = allowed.get(content_type)
+    if not ext:
+        raise HTTPException(400, "Formato no permitido. Usa JPG, PNG, WEBP o GIF")
+
+    raw = await file.read()
+    if len(raw) > 5 * 1024 * 1024:
+        raise HTTPException(400, "Imagen demasiado grande. Máximo 5 MB")
+
+    safe_name = f"avatar-{user_id}-{int(time.time())}-{uuid.uuid4().hex[:8]}{ext}"
+    filepath = ICONS_DIR / safe_name
+    filepath.write_bytes(raw)
+    photo_url = f"/api/icons/{safe_name}"
+    await db.update_user_photo(user_id, photo_url)
+    await audit_json(user_id, "profile.photo_update", "user", user_id, {"photo_url": photo_url})
+    return {"ok": True, "photo_url": photo_url}
 
 
 # Handler global: cualquier excepción no manejada se loguea Y devuelve JSON con detalle
@@ -1130,68 +1234,389 @@ async def get_effective_pricing_role(user_id: int) -> str:
     return "reseller" if total_deposit >= await get_reseller_min_deposit() else "user"
 
 
+def get_country_iso2(name: str) -> str:
+    mapping = {
+        "afghanistan": "af", "albania": "al", "algeria": "dz", "angola": "ao", "antiguaandbarbuda": "ag",
+        "argentina": "ar", "armenia": "am", "aruba": "aw", "australia": "au", "austria": "at",
+        "azerbaijan": "az", "bahamas": "bs", "bahrain": "bh", "bangladesh": "bd", "barbados": "bb",
+        "belgium": "be", "belize": "bz", "benin": "bj", "bhutane": "bt", "bih": "ba",
+        "bolivia": "bo", "botswana": "bw", "brazil": "br", "bulgaria": "bg", "burkinafaso": "bf",
+        "burundi": "bi", "cambodia": "kh", "cameroon": "cm", "canada": "ca", "capeverde": "cv",
+        "chad": "td", "chile": "cl", "colombia": "co", "comoros": "km", "congo": "cg",
+        "costarica": "cr", "croatia": "hr", "cyprus": "cy", "czech": "cz", "denmark": "dk",
+        "djibouti": "dj", "dominicana": "do", "easttimor": "tl", "ecuador": "ec", "egypt": "eg",
+        "england": "gb", "equatorialguinea": "gq", "estonia": "ee", "ethiopia": "et", "finland": "fi",
+        "france": "fr", "frenchguiana": "gf", "gabon": "ga", "gambia": "gm", "georgia": "ge",
+        "germany": "de", "ghana": "gh", "greece": "gr", "guadeloupe": "gp", "guatemala": "gt",
+        "guinea": "gn", "guineabissau": "gw", "guyana": "gy", "haiti": "ht", "honduras": "hn",
+        "hongkong": "hk", "hungary": "hu", "india": "in", "indonesia": "id", "ireland": "ie",
+        "israel": "il", "italy": "it", "ivorycoast": "ci", "jamaica": "jm", "jordan": "jo",
+        "kazakhstan": "kz", "kenya": "ke", "kuwait": "kw", "kyrgyzstan": "kg", "laos": "la",
+        "latvia": "lv", "lesotho": "ls", "liberia": "lr", "lithuania": "lt", "luxembourg": "lu",
+        "macau": "mo", "madagascar": "mg", "malawi": "mw", "malaysia": "my", "maldives": "mv",
+        "mauritania": "mr", "mauritius": "mu", "mexico": "mx", "moldova": "md", "mongolia": "mn",
+        "montenegro": "me", "morocco": "ma", "mozambique": "mz", "namibia": "na", "nepal": "np",
+        "netherlands": "nl", "newcaledonia": "nc", "nicaragua": "ni", "nigeria": "ng", "northmacedonia": "mk",
+        "norway": "no", "oman": "om", "pakistan": "pk", "panama": "pa", "papuanewguinea": "pg",
+        "paraguay": "py", "peru": "pe", "philippines": "ph", "poland": "pl", "portugal": "pt",
+        "puertorico": "pr", "reunion": "re", "romania": "ro", "rwanda": "rw", "saintkittsandnevis": "kn",
+        "saintlucia": "lc", "saintvincentandgrenadines": "vc", "salvador": "sv", "samoa": "ws", "saudiarabia": "sa",
+        "senegal": "sn", "serbia": "rs", "seychelles": "sc", "sierraleone": "sl", "slovakia": "sk",
+        "slovenia": "si", "solomonislands": "sb", "southafrica": "za", "spain": "es", "srilanka": "lk",
+        "suriname": "sr", "swaziland": "sz", "sweden": "se", "taiwan": "tw", "tajikistan": "tj",
+        "tanzania": "tz", "thailand": "th", "tit": "th", "togo": "tg", "tunisia": "tn",
+        "turkmenistan": "tm", "uganda": "ug", "uruguay": "uy", "usa": "us", "uzbekistan": "uz",
+        "venezuela": "ve", "vietnam": "vn", "zambia": "zm"
+    }
+    return mapping.get(name.lower().replace(" ", "").replace("_", "").replace("-", ""), "")
+
+
 @app.get("/api/sms/health")
 async def sms_health():
-    return await numbers_api_request("GET", "/api/health")
+    from fivesim_client import FIVESIM_API_KEY
+    has_key = bool(fivesim.api_key or FIVESIM_API_KEY)
+    return {"ok": has_key, "service": "5sim direct", "time": int(time.time()), "auth_required": False}
 
 
 @app.get("/api/sms/countries")
-async def sms_countries_proxy(user: dict = Depends(get_current_user)):
-    return await numbers_api_request("GET", "/api/sms/countries")
+async def sms_countries():
+    try:
+        raw_countries = await fivesim.countries()
+        overrides = await db.get_sms_catalog_overrides('country')
+        overrides_map = {o['item_key'].lower(): o for o in overrides}
+        
+        result = []
+        for c in raw_countries:
+            c_key = c.lower()
+            ov = overrides_map.get(c_key) or {}
+            
+            if ov.get('is_hidden'):
+                continue
+            
+            iso = get_country_iso2(c_key)
+            flag_emoji = "".join([chr(127397 + ord(char)) for char in iso]) if iso else ""
+            
+            result.append({
+                "key": c_key,
+                "name": ov.get('display_name') or c.title(),
+                "icon_url": ov.get('icon_url') or "",
+                "flag_emoji": flag_emoji,
+                "iso": iso,
+                "is_featured": bool(ov.get('is_featured', 0)),
+                "sort_order": int(ov.get('sort_order', 100))
+            })
+        
+        # Sort: featured first, then sort_order, then name
+        result.sort(key=lambda x: (not x['is_featured'], x['sort_order'], x['name'].lower()))
+        return {"ok": True, "items": result, "count": len(result)}
+    except Exception as e:
+        raise HTTPException(500, f"Error obteniendo países: {str(e)}")
 
 
 @app.get("/api/sms/services")
-async def sms_services_proxy(country: str, user: dict = Depends(get_current_user)):
+async def sms_services(country: str):
     country = (country or "").strip().lower()
     if not country:
         raise HTTPException(400, "country requerido")
-    return await numbers_api_request("GET", "/api/sms/services", params={"country": country})
+    
+    try:
+        raw_products = await fivesim.products(country, "any")
+        if not isinstance(raw_products, dict):
+            return {"ok": True, "country": country, "items": [], "count": 0}
+            
+        overrides = await db.get_sms_catalog_overrides('service')
+        overrides_map = {o['item_key'].lower(): o for o in overrides}
+        
+        global_markup = await settings.get_float("sms_default_markup", 1.50)
+        global_min_price = await settings.get_float("sms_min_price_usd", 0.75)
+        
+        result = []
+        for name, info in raw_products.items():
+            qty = info.get('Qty', 0)
+            if qty <= 0:
+                continue
+            
+            price = float(info.get('Price', 0))
+            s_key = name.lower()
+            ov = overrides_map.get(s_key) or {}
+            
+            if ov.get('is_hidden'):
+                continue
+                
+            # Calcular margen y precio mínimo
+            markup = float(ov.get('custom_markup') or global_markup)
+            min_p = float(ov.get('min_price') or global_min_price)
+            
+            sell_price = round(max(price * markup, min_p), 2)
+            
+            result.append({
+                "key": s_key,
+                "name": ov.get('display_name') or name.title(),
+                "icon_url": ov.get('icon_url') or "",
+                "qty": qty,
+                "original_price": price,
+                "price": sell_price,
+                "is_featured": bool(ov.get('is_featured', 0)),
+                "sort_order": int(ov.get('sort_order', 100))
+            })
+        
+        # Sort: featured first, then sort_order, then qty desc
+        result.sort(key=lambda x: (not x['is_featured'], x['sort_order'], -x['qty'], x['name'].lower()))
+        return {"ok": True, "country": country, "items": result, "count": len(result)}
+    except Exception as e:
+        raise HTTPException(500, f"Error obteniendo servicios: {str(e)}")
 
 
 @app.get("/api/sms/operators")
-async def sms_operators_proxy(country: str, service: str, user: dict = Depends(get_current_user)):
+async def sms_operators(country: str, service: str):
     country = (country or "").strip().lower()
     service = (service or "").strip().lower()
     if not country or not service:
         raise HTTPException(400, "country y service son requeridos")
-    return await numbers_api_request("GET", "/api/sms/operators", params={"country": country, "service": service})
+        
+    try:
+        data = await fivesim.prices(country, service)
+        if not isinstance(data, dict) or country not in data or service not in data[country]:
+            return {"ok": True, "country": country, "service": service, "items": [], "count": 0}
+            
+        operators_data = data[country][service]
+        overrides = await db.get_sms_catalog_overrides('service')
+        ov = next((o for o in overrides if o['item_key'].lower() == service.lower()), {})
+        
+        global_markup = await settings.get_float("sms_default_markup", 1.50)
+        global_min_price = await settings.get_float("sms_min_price_usd", 0.75)
+        
+        markup = float(ov.get('custom_markup') or global_markup)
+        min_p = float(ov.get('min_price') or global_min_price)
+        
+        result = []
+        for op_name, info in operators_data.items():
+            qty = info.get('count', 0)
+            if qty <= 0:
+                continue
+            cost = float(info.get('cost', 0))
+            rate = info.get('rate', 0)
+            
+            sell_price = round(max(cost * markup, min_p), 2)
+            
+            result.append({
+                "name": op_name,
+                "qty": qty,
+                "cost": cost,
+                "price": sell_price,
+                "rate": rate
+            })
+            
+        # Sort operators by price (cheapest first)
+        result.sort(key=lambda x: (x['price'], -x['qty']))
+        return {"ok": True, "country": country, "service": service, "items": result, "count": len(result)}
+    except Exception as e:
+        raise HTTPException(500, f"Error obteniendo operadores: {str(e)}")
 
 
 @app.post("/api/sms/order/create")
-async def sms_order_create_proxy(payload: dict, user: dict = Depends(get_current_user)):
-    body = {
-        "user_id": int(user["id"]),
-        "country": str((payload or {}).get("country") or "").strip().lower(),
-        "service": str((payload or {}).get("service") or "").strip().lower(),
-        "operator": str((payload or {}).get("operator") or "any").strip().lower(),
-    }
-    if not body["country"] or not body["service"]:
+async def sms_order_create(payload: dict, user: dict = Depends(get_current_user)):
+    user_id = int(user["id"])
+    country = str((payload or {}).get("country") or "").strip().lower()
+    service = str((payload or {}).get("service") or "").strip().lower()
+    operator = str((payload or {}).get("operator") or "any").strip().lower()
+    
+    if not country or not service:
         raise HTTPException(400, "country y service son requeridos")
-    return await numbers_api_request("POST", "/api/sms/order/create", json_body=body)
+        
+    # Obtener balance del usuario
+    balance = await db.get_balance(user_id)
+    
+    # Cargar precios para el operador seleccionado
+    try:
+        data = await fivesim.prices(country, service)
+        if not isinstance(data, dict) or country not in data or service not in data[country]:
+            raise HTTPException(400, "No hay stock disponible para esta combinación")
+        
+        operators_data = data[country][service]
+    except Exception as e:
+        raise HTTPException(400, f"Error validando stock: {str(e)}")
+        
+    # Encontrar el operador y su costo esperado
+    target_operator = None
+    expected_cost = 9999.0
+    
+    if operator == "any":
+        # Buscar el operador más barato con stock > 0
+        for op_name, info in operators_data.items():
+            op_qty = info.get('count', 0)
+            op_cost = float(info.get('cost', 0))
+            if op_qty > 0 and op_cost < expected_cost:
+                expected_cost = op_cost
+                target_operator = op_name
+    else:
+        # Validar el operador específico
+        if operator in operators_data and operators_data[operator].get('count', 0) > 0:
+            expected_cost = float(operators_data[operator].get('cost', 0))
+            target_operator = operator
+            
+    if not target_operator:
+        raise HTTPException(400, "No hay números disponibles con stock para este operador")
+        
+    # Calcular precio de venta esperado
+    overrides = await db.get_sms_catalog_overrides('service')
+    ov = next((o for o in overrides if o['item_key'].lower() == service.lower()), {})
+    
+    global_markup = await settings.get_float("sms_default_markup", 1.50)
+    global_min_price = await settings.get_float("sms_min_price_usd", 0.75)
+    
+    markup = float(ov.get('custom_markup') or global_markup)
+    min_p = float(ov.get('min_price') or global_min_price)
+    
+    expected_sell_price = round(max(expected_cost * markup, min_p), 2)
+    
+    if balance < expected_sell_price:
+        raise HTTPException(400, f"Saldo insuficiente. Necesitas ${expected_sell_price:.2f} USDT y tu saldo es ${balance:.2f} USDT")
+        
+    # Realizar la compra en 5sim
+    try:
+        res_api = await fivesim.buy_activation(country, target_operator, service)
+    except Exception as e:
+        raise HTTPException(400, f"Error al comprar en 5sim: {str(e)}")
+        
+    fivesim_order_id = res_api.get("id")
+    phone = res_api.get("phone")
+    actual_cost = float(res_api.get("price", expected_cost))
+    
+    if not fivesim_order_id or not phone:
+        raise HTTPException(400, f"Respuesta inválida de 5sim: {res_api}")
+        
+    # Calcular precio final
+    final_sell_price = round(max(actual_cost * markup, min_p), 2)
+    
+    # Debitar balance
+    success = await db.spend_balance(user_id, final_sell_price, ref_id=f"sms_{fivesim_order_id}", note=f"Número virtual {service} ({country})")
+    if not success:
+        # Cancelar en 5sim si falla el cobro interno
+        try:
+            await fivesim.cancel(fivesim_order_id)
+        except Exception:
+            pass
+        raise HTTPException(500, "Error procesando el cobro interno de tu saldo")
+        
+    # Registrar orden en BD
+    try:
+        order_local_id = await db.create_sms_order(
+            user_id=user_id,
+            fivesim_order_id=str(fivesim_order_id),
+            phone=phone,
+            country=country,
+            service=service,
+            operator=target_operator,
+            cost_price=actual_cost,
+            sell_price=final_sell_price,
+            raw_response=json.dumps(res_api)
+        )
+    except Exception as e:
+        log.critical("Error al registrar orden SMS %s en BD local: %s", fivesim_order_id, e)
+        order_local_id = None
+        
+    return {
+        "ok": True,
+        "id": order_local_id,
+        "id_5sim": fivesim_order_id,
+        "phone": phone,
+        "price": final_sell_price,
+        "service": service,
+        "country": country,
+        "operator": target_operator,
+        "status": "pending",
+        "created_at": time.time()
+    }
 
 
 @app.get("/api/sms/order/status")
-async def sms_order_status_proxy(id: str | None = None, order_id: str | None = None, id_5sim: str | None = None, user: dict = Depends(get_current_user)):
+async def sms_order_status(id: str | None = None, order_id: str | None = None, id_5sim: str | None = None, user: dict = Depends(get_current_user)):
     lookup = id or order_id or id_5sim
     if not lookup:
         raise HTTPException(400, "id requerido")
-    result = await numbers_api_request("GET", "/api/sms/order/status", params={"id": lookup})
-    order = (result or {}).get("order") or {}
-    if order and int(order.get("user_id") or 0) != int(user["id"]):
-        raise HTTPException(403, "No puedes ver esta orden")
-    return result
+        
+    order = await db.get_sms_order_by_fivesim_id(str(lookup))
+    if not order:
+        try:
+            order = await db.get_sms_order(int(lookup))
+        except ValueError:
+            pass
+            
+    if not order:
+        raise HTTPException(404, "Orden no encontrada")
+        
+    if int(order["user_id"]) != int(user["id"]):
+        raise HTTPException(403, "No tienes permiso para ver esta orden")
+        
+    if order["status"] == "pending":
+        try:
+            res_5sim = await fivesim.check(order["fivesim_order_id"])
+            status_5sim = res_5sim.get("status")
+            
+            if status_5sim == "RECEIVED":
+                sms_list = res_5sim.get("sms", [])
+                code = sms_list[-1].get("code") if sms_list else None
+                if code:
+                    await db.update_sms_order_status(order["id"], "completed", code=code)
+                    try:
+                        await fivesim.finish(order["fivesim_order_id"])
+                    except Exception:
+                        pass
+                    order = await db.get_sms_order(order["id"])
+            elif status_5sim in ("CANCELED", "TIMEOUT", "BANNED"):
+                await db.refund_sms_order(order["id"], reason=f"Cancelado por 5sim ({status_5sim})")
+                order = await db.get_sms_order(order["id"])
+        except Exception as e:
+            log.error("Error al sincronizar orden SMS %s: %s", order["fivesim_order_id"], e)
+            
+    return {"ok": True, "order": order}
 
 
 @app.post("/api/sms/order/cancel")
-async def sms_order_cancel_proxy(payload: dict, user: dict = Depends(get_current_user)):
+async def sms_order_cancel(payload: dict, user: dict = Depends(get_current_user)):
     lookup = (payload or {}).get("id") or (payload or {}).get("order_id") or (payload or {}).get("id_5sim")
     if not lookup:
         raise HTTPException(400, "id requerido")
-    status_result = await numbers_api_request("GET", "/api/sms/order/status", params={"id": lookup})
-    order = (status_result or {}).get("order") or {}
-    if order and int(order.get("user_id") or 0) != int(user["id"]):
+        
+    order = await db.get_sms_order_by_fivesim_id(str(lookup))
+    if not order:
+        try:
+            order = await db.get_sms_order(int(lookup))
+        except ValueError:
+            pass
+            
+    if not order:
+        raise HTTPException(404, "Orden no encontrada")
+        
+    if int(order["user_id"]) != int(user["id"]):
         raise HTTPException(403, "No puedes cancelar esta orden")
-    return await numbers_api_request("POST", "/api/sms/order/cancel", json_body={"id": lookup})
+        
+    if order["status"] != "pending":
+        raise HTTPException(400, f"La orden no se puede cancelar porque está en estado '{order['status']}'")
+        
+    try:
+        await fivesim.cancel(order["fivesim_order_id"])
+        await db.refund_sms_order(order["id"], reason="Cancelada por el usuario")
+        updated_order = await db.get_sms_order(order["id"])
+        return {"ok": True, "message": "Orden cancelada y reembolsada", "order": updated_order}
+    except Exception as e:
+        try:
+            res_5sim = await fivesim.check(order["fivesim_order_id"])
+            status_5sim = res_5sim.get("status")
+            if status_5sim in ("CANCELED", "TIMEOUT", "BANNED"):
+                await db.refund_sms_order(order["id"], reason=f"Cancelación confirmada ({status_5sim})")
+                updated_order = await db.get_sms_order(order["id"])
+                return {"ok": True, "message": "Orden cancelada y reembolsada", "order": updated_order}
+        except Exception:
+            pass
+        raise HTTPException(400, f"No se pudo cancelar el número: {str(e)}")
+
+
+@app.get("/api/sms/my-orders")
+async def sms_my_orders(limit: int = 50, user: dict = Depends(get_current_user)):
+    orders_list = await db.get_user_sms_orders(int(user["id"]), limit=limit)
+    return {"ok": True, "items": orders_list, "count": len(orders_list)}
 
 
 async def ensure_manual_manager(user_id: int) -> str:
@@ -1500,6 +1925,7 @@ class OrderRequest(BaseModel):
 
 class DepositCreateRequest(BaseModel):
     amount: float = Field(gt=0)
+    is_checkout: bool = False
 
 
 class ReferralApplyRequest(BaseModel):
@@ -2003,7 +2429,7 @@ async def create_web_deposit(req: DepositCreateRequest, user: dict = Depends(get
         raise HTTPException(403, "Cuenta suspendida")
     min_dep = await settings.get_float("min_deposit")
     amount = round(float(req.amount), 2)
-    if amount < min_dep:
+    if not req.is_checkout and amount < min_dep:
         raise HTTPException(400, f"Mínimo {min_dep:.2f} USDT")
     if amount > 10000:
         raise HTTPException(400, "Máximo 10000 USDT")
@@ -2088,7 +2514,10 @@ async def me(user: dict = Depends(get_current_user)):
     total_deposit = float(full.get("total_deposit", 0) or 0)
     return {
         "user_id": user_id,
-        "name": user.get("first_name", "Usuario"),
+        "name": full.get("display_name") or full.get("first_name") or user.get("first_name", "Usuario"),
+        "display_name": full.get("display_name") or "",
+        "telegram_username": full.get("username") or user.get("username") or "",
+        "photo_url": full.get("photo_url") or "",
         "balance": float(await db.get_balance(user_id)),
         "role": role,
         "pricing_role": effective_role,
@@ -2423,6 +2852,173 @@ async def admin_reject_seller_withdrawal(withdrawal_id: int, req: SellerWithdraw
         raise HTTPException(404, "Retiro no encontrado")
     await audit_json(user["id"], "seller.withdrawal_reject", "seller_withdrawal", withdrawal_id, {"reason": req.note})
     return {"ok": True, "withdrawal": withdrawal}
+
+
+class SmsCatalogOverrideReq(BaseModel):
+    item_type: str
+    item_key: str
+    display_name: str | None = None
+    icon_url: str | None = None
+    is_featured: int | None = 0
+    is_hidden: int | None = 0
+    sort_order: int | None = 100
+    custom_markup: float | None = None
+    min_price: float | None = None
+
+
+class SmsSettingsUpdate(BaseModel):
+    sms_default_markup: str
+    sms_min_price_usd: str
+    sms_catalog_image_url: str
+    sms_terms_and_conditions: str
+
+
+@app.get("/api/sms/settings")
+async def public_sms_settings():
+    img_url = await settings.get("sms_catalog_image_url", "https://images.unsplash.com/photo-1562408590-e32931084e23?auto=format&fit=crop&w=600&q=75")
+    terms = await settings.get("sms_terms_and_conditions", "")
+    return {"ok": True, "sms_catalog_image_url": img_url, "sms_terms_and_conditions": terms}
+
+
+@app.get("/api/admin/sms/settings")
+async def admin_sms_settings(user: dict = Depends(get_current_user)):
+    if user["id"] not in config.ADMIN_IDS:
+        raise HTTPException(403, "Solo admin")
+    return {
+        "ok": True,
+        "sms_default_markup": await settings.get("sms_default_markup", "1.50"),
+        "sms_min_price_usd": await settings.get("sms_min_price_usd", "0.75"),
+        "sms_catalog_image_url": await settings.get("sms_catalog_image_url", "https://images.unsplash.com/photo-1562408590-e32931084e23?auto=format&fit=crop&w=600&q=75"),
+        "sms_terms_and_conditions": await settings.get("sms_terms_and_conditions", "")
+    }
+
+
+@app.post("/api/admin/sms/settings")
+async def admin_update_sms_settings(req: SmsSettingsUpdate, user: dict = Depends(get_current_user)):
+    if user["id"] not in config.ADMIN_IDS:
+        raise HTTPException(403, "Solo admin")
+    await settings.set_value("sms_default_markup", req.sms_default_markup, user["id"])
+    await settings.set_value("sms_min_price_usd", req.sms_min_price_usd, user["id"])
+    await settings.set_value("sms_catalog_image_url", req.sms_catalog_image_url, user["id"])
+    await settings.set_value("sms_terms_and_conditions", req.sms_terms_and_conditions, user["id"])
+    return {"ok": True, "message": "Ajustes de SMS guardados"}
+
+
+@app.get("/api/admin/sms/profile")
+async def admin_sms_profile(user: dict = Depends(get_current_user)):
+    if user["id"] not in config.ADMIN_IDS:
+        raise HTTPException(403, "Solo admin")
+    try:
+        profile = await fivesim._request("GET", "/user/profile", auth=True)
+        return {"ok": True, "profile": profile}
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+@app.get("/api/admin/sms/overrides")
+async def admin_sms_overrides(user: dict = Depends(get_current_user)):
+    if user["id"] not in config.ADMIN_IDS:
+        raise HTTPException(403, "Solo admin")
+    countries = await db.get_sms_catalog_overrides("country")
+    services = await db.get_sms_catalog_overrides("service")
+    return {"ok": True, "countries": countries, "services": services}
+
+
+@app.post("/api/admin/sms/overrides")
+async def admin_set_sms_override(req: SmsCatalogOverrideReq, user: dict = Depends(get_current_user)):
+    if user["id"] not in config.ADMIN_IDS:
+        raise HTTPException(403, "Solo admin")
+    if req.item_type not in ("country", "service"):
+        raise HTTPException(400, "item_type debe ser 'country' o 'service'")
+    
+    await db.set_sms_catalog_override(
+        item_type=req.item_type,
+        item_key=req.item_key.lower().strip(),
+        display_name=req.display_name,
+        icon_url=req.icon_url,
+        is_featured=req.is_featured if req.is_featured is not None else 0,
+        is_hidden=req.is_hidden if req.is_hidden is not None else 0,
+        sort_order=req.sort_order if req.sort_order is not None else 100,
+        custom_markup=req.custom_markup,
+        min_price=req.min_price
+    )
+    return {"ok": True, "message": "Anulación de catálogo guardada con éxito"}
+
+
+@app.get("/api/admin/sms/orders")
+async def admin_sms_orders(limit: int = 100, user: dict = Depends(get_current_user)):
+    if user["id"] not in config.ADMIN_IDS:
+        raise HTTPException(403, "Solo admin")
+    
+    import aiosqlite
+    async with aiosqlite.connect(config.DB_PATH) as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute("""
+            SELECT o.*, u.username, u.first_name
+            FROM sms_orders o
+            LEFT JOIN users u ON u.user_id = o.user_id
+            ORDER BY o.created_at DESC
+            LIMIT ?
+        """, (limit,)) as c:
+            items = [dict(r) for r in await c.fetchall()]
+            
+    return {"ok": True, "items": items, "count": len(items)}
+
+
+@app.post("/api/admin/sms/orders/{order_id}/sync")
+async def admin_sms_order_sync(order_id: int, user: dict = Depends(get_current_user)):
+    if user["id"] not in config.ADMIN_IDS:
+        raise HTTPException(403, "Solo admin")
+        
+    order = await db.get_sms_order(order_id)
+    if not order:
+        raise HTTPException(404, "Orden no encontrada")
+        
+    try:
+        res_5sim = await fivesim.check(order["fivesim_order_id"])
+        status_5sim = res_5sim.get("status")
+        
+        if status_5sim == "RECEIVED":
+            sms_list = res_5sim.get("sms", [])
+            code = sms_list[-1].get("code") if sms_list else None
+            if code:
+                await db.update_sms_order_status(order["id"], "completed", code=code)
+                try:
+                    await fivesim.finish(order["fivesim_order_id"])
+                except Exception:
+                    pass
+        elif status_5sim in ("CANCELED", "TIMEOUT", "BANNED"):
+            await db.refund_sms_order(order["id"], reason=f"Cancelado por 5sim ({status_5sim})")
+    except Exception as e:
+        raise HTTPException(400, f"Error al sincronizar con 5sim: {str(e)}")
+        
+    updated = await db.get_sms_order(order_id)
+    return {"ok": True, "order": updated}
+
+
+@app.post("/api/admin/sms/orders/{order_id}/cancel")
+async def admin_sms_order_cancel(order_id: int, user: dict = Depends(get_current_user)):
+    if user["id"] not in config.ADMIN_IDS:
+        raise HTTPException(403, "Solo admin")
+        
+    order = await db.get_sms_order(order_id)
+    if not order:
+        raise HTTPException(404, "Orden no encontrada")
+        
+    if order["status"] != "pending":
+        raise HTTPException(400, f"La orden no se puede cancelar porque está en estado '{order['status']}'")
+        
+    try:
+        await fivesim.cancel(order["fivesim_order_id"])
+    except Exception as e:
+        log.warning("Admin forzó cancelación de SMS %s pero 5sim falló: %s", order["fivesim_order_id"], e)
+        
+    success = await db.refund_sms_order(order["id"], reason="Cancelada manualmente por administrador")
+    if not success:
+        raise HTTPException(400, "No se pudo realizar el reembolso (posiblemente ya fue reembolsada)")
+        
+    updated = await db.get_sms_order(order_id)
+    return {"ok": True, "message": "Orden cancelada y saldo reembolsado manualmente", "order": updated}
 
 
 @app.get("/api/admin/reseller-settings")
@@ -3101,15 +3697,15 @@ async def my_orders(user: dict = Depends(get_current_user)):
     reviews = await db.get_reviews_for_user(user["id"])
     STATUS = {0: "pending", 1: "processing", 2: "completed", 3: "partial", 4: "failed"}
 
-    product_map = {}
+    pids = list({int(o.get("product_id") or 0) for o in orders if int(o.get("product_id") or 0)})
+    try:
+        product_map = await db.get_cached_products_by_ids(pids)
+    except Exception:
+        product_map = {}
+
     game_names = set()
     for o in orders:
         pid = int(o.get("product_id") or 0)
-        if pid and pid not in product_map:
-            try:
-                product_map[pid] = await db.get_cached_product(pid)
-            except Exception:
-                product_map[pid] = None
         product_ref = product_map.get(pid) or o.get("product_name") or ""
         game_names.add(detect_game(product_ref))
 
@@ -3205,6 +3801,11 @@ async def review_manual_order(order_id: int, req: OrderReviewRequest, user: dict
 #  PERFIL — preparado para Telegram + futura auth web
 # ════════════════════════════════════════
 
+class ProfileUpdateRequest(BaseModel):
+    display_name: str | None = None
+    email: str | None = None
+
+
 @app.get("/api/profile")
 async def profile(user: dict = Depends(get_current_user)):
     """
@@ -3244,7 +3845,11 @@ async def profile(user: dict = Depends(get_current_user)):
         # Identidad
         "user_id": user_id,
         "username": u.get("username"),
-        "name": u.get("first_name") or user.get("first_name", "Usuario"),
+        "telegram_username": u.get("username") or user.get("username") or "",
+        "display_name": u.get("display_name") or "",
+        "name": u.get("display_name") or u.get("first_name") or user.get("first_name", "Usuario"),
+        "telegram_name": u.get("first_name") or user.get("first_name", ""),
+        "photo_url": u.get("photo_url") or "",
         "telegram_id": user_id,
         "auth_method": u.get("auth_method", "telegram"),
 
@@ -3281,6 +3886,42 @@ async def profile(user: dict = Depends(get_current_user)):
 
         # Estado
         "is_banned": bool(u.get("is_banned", 0)),
+    }
+
+
+@app.put("/api/profile")
+async def update_profile(req: ProfileUpdateRequest, user: dict = Depends(get_current_user)):
+    user_id = user["id"]
+    await db.upsert_user(user_id, user.get("username"), user.get("first_name"))
+
+    display_name = req.display_name.strip() if req.display_name is not None else None
+    email = req.email.strip().lower() if req.email is not None else None
+
+    if display_name is not None:
+        if len(display_name) < 2:
+            raise HTTPException(400, "El nombre visible debe tener al menos 2 caracteres")
+        if len(display_name) > 60:
+            raise HTTPException(400, "El nombre visible no puede pasar de 60 caracteres")
+
+    if email is not None and email:
+        if len(email) > 120 or not re.match(r"^[^\s@]+@[^\s@]+\.[^\s@]+$", email):
+            raise HTTPException(400, "Email inválido")
+
+    try:
+        await db.update_user_profile(user_id, display_name=display_name, email=email)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
+    updated = await db.get_user(user_id) or {}
+    await audit_json(user_id, "profile.update", "user", user_id, {"display_name": display_name, "email_changed": email is not None})
+    return {
+        "ok": True,
+        "profile": {
+            "display_name": updated.get("display_name") or "",
+            "name": updated.get("display_name") or updated.get("first_name") or user.get("first_name", "Usuario"),
+            "email": updated.get("email"),
+            "email_verified": bool(updated.get("email_verified")),
+        }
     }
 
 
@@ -5107,6 +5748,305 @@ async def customer_case_upload(order_id: int, background_tasks: BackgroundTasks,
     except Exception as ne:
         log.warning("Error creating customer upload notification: %s", ne)
     return await customer_manual_order_case(order_id, user)
+
+
+# ═════════════════════════════════════════════════════════════════════════
+#  SOPORTE Y CHATS UNIFICADOS (REQUEST MODELS & ENDPOINTS)
+# ═════════════════════════════════════════════════════════════════════════
+
+class SupportTicketCreateRequest(BaseModel):
+    category: str
+    subject: str
+    description: str
+    associated_order_id: str | None = None
+    associated_order_type: str | None = None
+    associated_seller_id: int | None = None
+
+class ChatMessageCreateRequest(BaseModel):
+    message_text: str
+    attachment_url: str | None = None
+    attachment_type: str | None = None
+
+class DirectChatRoomCreateRequest(BaseModel):
+    seller_id: int
+
+async def notify_chat_message_telegram(room_id: int, sender_id: int, text: str):
+    import aiohttp
+    try:
+        room = await db.get_chat_room(room_id)
+        if not room:
+            return
+        
+        # Get sender details
+        async with aiosqlite.connect(config.DB_PATH) as conn:
+            conn.row_factory = aiosqlite.Row
+            async with conn.execute("SELECT first_name, username FROM users WHERE user_id = ?", (sender_id,)) as c:
+                sender = await c.fetchone()
+                sender_name = sender["first_name"] or sender["username"] or f"ID {sender_id}" if sender else f"ID {sender_id}"
+
+        # Target selection:
+        target_ids = []
+        is_support = room["ticket_id"] is not None
+        
+        if sender_id == room["customer_id"]:
+            # Customer sent it
+            if is_support:
+                # Support: notify admins
+                target_ids = list(config.ADMIN_IDS)
+            else:
+                # Direct chat: notify seller
+                if room["seller_id"]:
+                    target_ids = [room["seller_id"]]
+        else:
+            # Seller or Admin sent it: notify customer
+            target_ids = [room["customer_id"]]
+            
+        if not target_ids:
+            return
+            
+        # Compile message text
+        if is_support:
+            title_text = "🆘 <b>Nuevo mensaje en Soporte</b>"
+            # Get ticket details
+            async with aiosqlite.connect(config.DB_PATH) as conn:
+                conn.row_factory = aiosqlite.Row
+                async with conn.execute("SELECT category, subject FROM support_tickets WHERE id = ?", (room["ticket_id"],)) as c:
+                    t = await c.fetchone()
+                    category = t["category"] if t else ""
+                    subject = t["subject"] if t else ""
+            header = f"<b>Caso:</b> #{room['ticket_id']} - {subject or category}\n"
+        else:
+            title_text = "💬 <b>Nuevo mensaje de chat</b>"
+            header = f"<b>Remitente:</b> {sender_name}\n"
+            
+        message_text = (
+            f"{title_text}\n"
+            f"{header}"
+            f"<b>Mensaje:</b> <i>{text}</i>"
+        )
+        
+        # Send via Telegram API
+        async with aiohttp.ClientSession() as session:
+            for chat_id in target_ids:
+                webapp_url = getattr(config, "WEBAPP_URL", "")
+                reply_markup = None
+                if webapp_url:
+                    target_url = webapp_url.rstrip("/") + f"?chat_room_id={room_id}"
+                    reply_markup = {
+                        "inline_keyboard": [[
+                            {"text": "💬 Abrir chat", "web_app": {"url": target_url}}
+                        ]]
+                    }
+                
+                payload = {
+                    "chat_id": chat_id,
+                    "text": message_text,
+                    "parse_mode": "HTML"
+                }
+                if reply_markup:
+                    payload["reply_markup"] = reply_markup
+                    
+                try:
+                    await session.post(
+                        f"https://api.telegram.org/bot{config.BOT_TOKEN}/sendMessage",
+                        json=payload,
+                        timeout=5
+                    )
+                except Exception as e:
+                    log.warning("Error sending telegram notification to %s: %s", chat_id, e)
+    except Exception as e:
+        log.warning("Error in notify_chat_message_telegram: %s", e)
+
+
+def assert_can_access_chat_room(room: dict, user_id: int, role: str):
+    if user_id != room["customer_id"] and user_id != room["seller_id"] and role != "admin":
+        raise HTTPException(403, "No tienes acceso a esta sala de chat")
+
+
+@app.post("/api/support/tickets")
+async def api_create_support_ticket(req: SupportTicketCreateRequest, background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
+    user_id = user["id"]
+    ticket = await db.create_support_ticket(
+        user_id=user_id,
+        category=req.category,
+        subject=req.subject,
+        description=req.description,
+        associated_order_id=req.associated_order_id,
+        associated_order_type=req.associated_order_type,
+        associated_seller_id=req.associated_seller_id
+    )
+    
+    # Notify administrators
+    background_tasks.add_task(
+        notify_chat_message_telegram, 
+        room_id=ticket["room_id"], 
+        sender_id=user_id, 
+        text=f"[Nuevo Caso] Asunto: {req.subject}. Mensaje inicial: {req.description}"
+    )
+    return {"ok": True, "ticket": ticket}
+
+
+@app.get("/api/inbox")
+async def api_get_inbox(user: dict = Depends(get_current_user)):
+    user_id = user["id"]
+    role = await get_user_role(user_id)
+    items = await db.get_unified_inbox(user_id, role)
+    return {"ok": True, "items": items}
+
+
+@app.get("/api/chats/rooms/{room_id}/messages")
+async def api_get_chat_messages(room_id: int, user: dict = Depends(get_current_user)):
+    user_id = user["id"]
+    role = await get_user_role(user_id)
+    
+    # Check permissions
+    room = await db.get_chat_room(room_id)
+    if not room:
+        raise HTTPException(404, "Sala de chat no encontrada")
+        
+    assert_can_access_chat_room(room, user_id, role)
+        
+    # Mark room as read
+    await db.mark_room_as_read(room_id, user_id)
+    messages = await db.get_chat_messages(room_id)
+    return {"ok": True, "messages": messages, "room": room}
+
+
+@app.post("/api/chats/rooms/{room_id}/messages")
+async def api_add_chat_message(room_id: int, req: ChatMessageCreateRequest, background_tasks: BackgroundTasks, user: dict = Depends(get_current_user)):
+    user_id = user["id"]
+    role = await get_user_role(user_id)
+    
+    room = await db.get_chat_room(room_id)
+    if not room:
+        raise HTTPException(404, "Sala de chat no encontrada")
+        
+    assert_can_access_chat_room(room, user_id, role)
+        
+    # Determine sender role
+    if user_id == room["customer_id"]:
+        sender_role = "customer"
+    elif user_id == room["seller_id"]:
+        sender_role = "seller"
+    else:
+        sender_role = "admin"
+        
+    msg = await db.add_chat_message(
+        room_id=room_id, 
+        sender_id=user_id, 
+        sender_role=sender_role, 
+        message_text=req.message_text,
+        attachment_url=req.attachment_url,
+        attachment_type=req.attachment_type
+    )
+    
+    # Notify other party via Telegram
+    notify_text = req.message_text
+    if req.attachment_url:
+        notify_text = f"📎 Adjunto: {req.attachment_url}\n{notify_text}"
+    background_tasks.add_task(notify_chat_message_telegram, room_id, user_id, notify_text)
+    return {"ok": True, "message": msg}
+
+
+@app.post("/api/chats/rooms/{room_id}/read")
+async def api_mark_chat_room_read(room_id: int, user: dict = Depends(get_current_user)):
+    user_id = user["id"]
+    role = await get_user_role(user_id)
+    room = await db.get_chat_room(room_id)
+    if not room:
+        raise HTTPException(404, "Sala de chat no encontrada")
+    assert_can_access_chat_room(room, user_id, role)
+    await db.mark_room_as_read(room_id, user_id)
+    return {"ok": True}
+
+
+@app.post("/api/chats/rooms/direct")
+async def api_get_or_create_direct_chat(req: DirectChatRoomCreateRequest, user: dict = Depends(get_current_user)):
+    customer_id = user["id"]
+    if customer_id == req.seller_id:
+        raise HTTPException(400, "No puedes chatear contigo mismo")
+        
+    # Validate that seller exists and is active
+    async with aiosqlite.connect(config.DB_PATH) as db_conn:
+        db_conn.row_factory = aiosqlite.Row
+        async with db_conn.execute("SELECT * FROM internal_sellers WHERE user_id=? AND is_active=1", (req.seller_id,)) as c:
+            seller = await c.fetchone()
+        if not seller:
+            raise HTTPException(400, "El vendedor no está activo o no existe")
+            
+    room_id = await db.get_or_create_direct_chat_room(customer_id, req.seller_id)
+    return {"ok": True, "room_id": room_id}
+
+
+@app.post("/api/chats/rooms/{room_id}/upload")
+async def api_chat_room_upload(room_id: int, file: UploadFile = File(...), user: dict = Depends(get_current_user)):
+    user_id = user["id"]
+    role = await get_user_role(user_id)
+    room = await db.get_chat_room(room_id)
+    if not room:
+        raise HTTPException(404, "Sala de chat no encontrada")
+    assert_can_access_chat_room(room, user_id, role)
+        
+    content_type = (file.content_type or "application/octet-stream").lower()
+    allowed_ext = {
+        "image/jpeg": ".jpg", "image/jpg": ".jpg", "image/png": ".png",
+        "image/webp": ".webp", "image/gif": ".gif",
+        "text/plain": ".txt", "application/pdf": ".pdf",
+        "application/zip": ".zip", "application/x-zip-compressed": ".zip",
+        "application/rar": ".rar", "application/x-rar-compressed": ".rar", "application/vnd.rar": ".rar",
+    }
+    original = file.filename or "archivo"
+    suffix = Path(original).suffix.lower()
+    ext = allowed_ext.get(content_type) or (suffix if suffix in {".txt", ".pdf", ".jpg", ".jpeg", ".png", ".webp", ".gif", ".zip", ".rar"} else "")
+    if not ext:
+        raise HTTPException(400, "Formato no permitido. Usa imágenes, PDF, TXT, ZIP o RAR")
+        
+    raw = await file.read()
+    if len(raw) > 25 * 1024 * 1024:
+        raise HTTPException(400, "Archivo demasiado grande. Máximo 25 MB")
+        
+    safe_name = f"chat-{room_id}-{int(time.time())}-{uuid.uuid4().hex[:10]}{ext}"
+    (DELIVERY_DIR / safe_name).write_bytes(raw)
+    file_url = f"/api/delivery-files/{safe_name}"
+    
+    attach_type = "image" if content_type.startswith("image/") else "file"
+    return {"ok": True, "url": file_url, "filename": original, "type": attach_type}
+
+
+class SupportTicketStatusUpdateRequest(BaseModel):
+    status: str
+
+
+@app.get("/api/admin/support/tickets")
+async def admin_list_support_tickets(status: str = None, user: dict = Depends(get_current_user)):
+    role = await get_user_role(user["id"])
+    if role != "admin":
+        raise HTTPException(403, "No autorizado")
+    tickets = await db.list_all_support_tickets(status)
+    return {"ok": True, "tickets": tickets}
+
+
+@app.get("/api/admin/support/tickets/{ticket_id}")
+async def admin_get_support_ticket(ticket_id: int, user: dict = Depends(get_current_user)):
+    role = await get_user_role(user["id"])
+    if role != "admin":
+        raise HTTPException(403, "No autorizado")
+    ticket = await db.get_support_ticket(ticket_id)
+    if not ticket:
+        raise HTTPException(404, "Ticket no encontrado")
+    return {"ok": True, "ticket": ticket}
+
+
+@app.post("/api/admin/support/tickets/{ticket_id}/status")
+async def admin_update_support_ticket_status(ticket_id: int, req: SupportTicketStatusUpdateRequest, user: dict = Depends(get_current_user)):
+    role = await get_user_role(user["id"])
+    if role != "admin":
+        raise HTTPException(403, "No autorizado")
+    ticket = await db.get_support_ticket(ticket_id)
+    if not ticket:
+        raise HTTPException(404, "Ticket no encontrado")
+    await db.update_support_ticket_status(ticket_id, req.status)
+    return {"ok": True}
 
 
 @app.get("/api/admin/account-seller-sales")

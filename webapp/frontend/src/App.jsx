@@ -84,7 +84,7 @@ const DEPOSIT_PRESETS = [5, 10, 25, 50, 100, 250]
 const NAV_STATE_KEY = 'fs_last_nav_v1'
 const WHATSAPP_SUPPORT_URL = 'https://wa.me/5363785631'
 const WHATSAPP_CHANNEL_URL = 'https://whatsapp.com/channel/0029VaRW8KgGehETCBaAnN2K'
-const SAFE_NAV_SCREENS = new Set(['home', 'regions', 'products', 'detail', 'profile', 'orders', 'help', 'terms', 'faq', 'contact', 'partner-help', 'seller-store', 'guides', 'guide-detail', 'case', 'panel'])
+const SAFE_NAV_SCREENS = new Set(['home', 'regions', 'products', 'detail', 'profile', 'orders', 'help', 'terms', 'faq', 'contact', 'partner-help', 'seller-store', 'guides', 'guide-detail', 'case', 'panel', 'sms'])
 const PREMIUM_STICKERS = [
   { code: ':fs_fire:', label: 'Popular', icon: Flame, color: 'text-orange-400' },
   { code: ':fs_diamond:', label: 'Premium', icon: Gem, color: 'text-cyan-300' },
@@ -991,7 +991,7 @@ function AppInner() {
 
   return (
     <div className={screen === 'panel' ? "h-screen bg-bg overflow-hidden flex flex-col" : "min-h-screen bg-bg pb-24"}>
-      {screen !== 'home' && screen !== 'panel' && (
+      {screen !== 'home' && screen !== 'panel' && screen !== 'sms' && (
         <Header me={me} onBack={goBack}
                 onProfile={() => isGuest ? requireLogin() : setScreen('profile')}
                 onTopUp={() => isGuest ? requireLogin() : setShowTopUp(true)}
@@ -1042,6 +1042,14 @@ function AppInner() {
       )}
       {screen === 'result' && orderResult && (
         <ResultScreen result={orderResult} onHome={() => { setScreen('home'); setOrderResult(null) }} />
+      )}
+      {screen === 'sms' && (
+        <SmsNumbersScreen
+          me={me}
+          onBack={() => setScreen('home')}
+          onLoginRequired={requireLogin}
+          onBought={() => { api.me().then(setMe).catch(() => {}); setScreen('orders') }}
+        />
       )}
       {screen === 'profile' && (
         <ProfileScreen
@@ -1255,7 +1263,7 @@ function AppInner() {
         </div>
       )}
 
-      {screen !== 'case' && screen !== 'panel' && (
+      {screen !== 'case' && screen !== 'panel' && screen !== 'sms' && (
         <BottomNav active={screen} me={me} onNav={(target) => {
         if (target === 'home') {
           goHome()
@@ -1275,7 +1283,7 @@ function AppInner() {
 
       {/* Fallback: si el screen no matchea ningún componente, mostrar home */}
       {!['home', 'regions', 'products', 'detail', 'confirm', 'result',
-         'profile', 'orders', 'help', 'terms', 'faq', 'contact', 'guides', 'guide-detail', 'seller-store', 'partner-help', 'admin', 'admin-edit', 'case', 'panel'].includes(screen) && (
+         'profile', 'orders', 'help', 'terms', 'faq', 'contact', 'guides', 'guide-detail', 'seller-store', 'partner-help', 'admin', 'admin-edit', 'case', 'panel', 'sms'].includes(screen) && (
         <div className="p-8 text-center">
           <p className="text-white/60 mb-4">Estado no reconocido: {screen}</p>
           <button onClick={() => setScreen('home')} className="btn-primary max-w-xs mx-auto">
@@ -1912,12 +1920,241 @@ function HomeReviewsPanel({ onNav }) {
       <div className="mt-4 rounded-xl border border-dashed border-green-500/20 bg-green-500/5 p-3 text-center">
         <p className="text-xs text-white/60 mb-2.5">¿Has comprado con nosotros y quieres valorar tu experiencia?</p>
         <button
-          onClick={() => onNav?.('profile')}
+          onClick={() => onNav?.('orders')}
           className="w-full rounded-lg bg-green-500/25 border border-green-400/30 px-3 py-2 text-xs font-bold text-green-400 active:scale-[0.98] transition-all"
         >
           Dejar una valoración sobre mi compra
         </button>
       </div>
+    </div>
+  )
+}
+
+
+const smsCountryIconUrl = (country = {}) => {
+  if (country.icon_url) return country.icon_url
+  const iso = String(country.iso || '').toLowerCase()
+  return iso ? `https://flagcdn.com/w80/${iso}.png` : ''
+}
+
+const smsServiceIconSlug = (name = '') => {
+  const raw = String(name || '').toLowerCase()
+  const aliases = [
+    ['whatsapp', 'whatsapp'], ['telegram', 'telegram'], ['google', 'google'], ['gmail', 'gmail'],
+    ['facebook', 'facebook'], ['instagram', 'instagram'], ['tiktok', 'tiktok'], ['twitter', 'x'],
+    ['discord', 'discord'], ['paypal', 'paypal'], ['amazon', 'amazon'], ['microsoft', 'microsoft'],
+    ['apple', 'apple'], ['uber', 'uber'], ['netflix', 'netflix'], ['spotify', 'spotify'],
+    ['steam', 'steam'], ['openai', 'openai'], ['snapchat', 'snapchat'], ['linkedin', 'linkedin'],
+  ]
+  const found = aliases.find(([needle]) => raw.includes(needle))
+  if (found) return found[1]
+  return raw.replace(/[^a-z0-9]+/g, '')
+}
+
+const smsServiceIconUrl = (service = {}) => {
+  if (service.icon_url) return service.icon_url
+  const slug = smsServiceIconSlug(service.name || service.key)
+  return slug ? `https://cdn.simpleicons.org/${slug}/ffffff` : ''
+}
+
+function SmsIcon({ src, fallback, className = '', fit = 'cover' }) {
+  const [bad, setBad] = useState(false)
+  const value = storeAssetUrl(src || '')
+  if (value && !bad) return <img src={value} alt="" className={`h-full w-full ${fit === 'contain' ? 'object-contain p-1.5' : 'object-cover'} ${className}`} onError={() => setBad(true)} />
+  return <span className={`flex h-full w-full items-center justify-center ${className}`}>{fallback || <Smartphone className="h-6 w-6 text-cyan-200" />}</span>
+}
+
+function SmsCatalogCard({ onSelect }) {
+  const [settings, setSettings] = useState(null)
+  useEffect(() => { api.smsSettingsGet().then(setSettings).catch(() => {}) }, [])
+  const imageUrl = settings?.sms_catalog_image_url
+  return (
+    <button onClick={onSelect} className="group block w-full min-w-0 overflow-hidden rounded-lg border border-white/10 bg-card text-left transition active:scale-95 hover:border-accent/50">
+      <span className="block aspect-square bg-[#101820]">
+        {imageUrl ? <OptimizedImage src={storeAssetUrl(imageUrl)} alt="Números virtuales" className="h-full w-full object-cover transition group-hover:scale-[1.03]" /> : <span className="block flex h-full w-full items-center justify-center bg-white/5"><Smartphone className="h-10 w-10 text-white/55" /></span>}
+      </span>
+      <span className="block p-1.5">
+        <span className="block line-clamp-2 min-h-[28px] break-words text-[11px] font-bold leading-tight">Números Virtuales SMS</span>
+        <span className="block mt-1 min-w-0">
+          <span className="block truncate text-xs font-black text-accent">Comprar con saldo</span>
+          <span className="mt-0.5 inline-block max-w-full truncate rounded bg-white/8 px-1 py-0.5 text-[8px] text-white/45">Verificación SMS</span>
+          <span className="mt-1 grid grid-cols-2 gap-1 text-[8px]">
+            <span className="rounded bg-black/20 px-1 py-0.5 text-green-300">Compras: Nuevo</span>
+            <span className="rounded bg-black/20 px-1 py-0.5 text-yellow-300">Valoración: --</span>
+          </span>
+        </span>
+      </span>
+    </button>
+  )
+}
+
+function SmsNumbersScreen({ me, onBack, onLoginRequired, onBought }) {
+  const [settings, setSettings] = useState(null)
+  const [countries, setCountries] = useState([])
+  const [services, setServices] = useState([])
+  const [operators, setOperators] = useState([])
+  const [country, setCountry] = useState('')
+  const [service, setService] = useState('')
+  const [operator, setOperator] = useState('any')
+  const [activePicker, setActivePicker] = useState('country')
+  const [loading, setLoading] = useState(true)
+  const [loadingStep, setLoadingStep] = useState(false)
+  const [buying, setBuying] = useState(false)
+  const [err, setErr] = useState(null)
+  const [order, setOrder] = useState(null)
+  const [countryQuery, setCountryQuery] = useState('')
+  const [serviceQuery, setServiceQuery] = useState('')
+  const [operatorsOpen, setOperatorsOpen] = useState(false)
+
+  useEffect(() => {
+    setLoading(true); setErr(null)
+    Promise.all([api.smsSettingsGet().catch(() => null), api.smsCountries()])
+      .then(([cfg, data]) => {
+        setSettings(cfg)
+        setCountries(data.items || [])
+        setActivePicker('country')
+      })
+      .catch(e => setErr(`Error al cargar países: ${e.message}`))
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => {
+    if (!country) return
+    setLoadingStep(true); setErr(null); setServices([]); setOperators([]); setService(''); setOperator('any'); setServiceQuery('')
+    api.smsServices(country).then(data => {
+      setServices(data.items || [])
+      setActivePicker('service')
+    }).catch(e => setErr(`Error al cargar aplicaciones: ${e.message}`)).finally(() => setLoadingStep(false))
+  }, [country])
+
+  useEffect(() => {
+    if (!country || !service) return
+    setLoadingStep(true); setErr(null); setOperators([]); setOperator('any')
+    api.smsOperators(country, service).then(data => setOperators(data.items || []))
+      .catch(e => setErr(`Error al cargar operadores: ${e.message}`)).finally(() => setLoadingStep(false))
+  }, [country, service])
+
+  const selectedCountry = countries.find(x => x.key === country)
+  const selectedService = services.find(x => x.key === service)
+  const selectedOperator = operator === 'any' ? null : operators.find(x => x.name === operator)
+  const bestOperator = operators[0]
+  const price = Number(selectedOperator?.price || bestOperator?.price || selectedService?.price || 0)
+  const stock = Number((operator === 'any' ? operators.reduce((sum, op) => sum + Number(op.qty || 0), 0) : selectedOperator?.qty) || selectedService?.qty || 0)
+  const filteredCountries = countries.filter(c => !countryQuery || `${c.name} ${c.key}`.toLowerCase().includes(countryQuery.toLowerCase()))
+  const filteredServices = services.filter(x => !serviceQuery || `${x.name} ${x.key}`.toLowerCase().includes(serviceQuery.toLowerCase()))
+
+  async function buy() {
+    if (me?.is_guest) { onLoginRequired?.(); return }
+    if (!country || !service) return
+    setBuying(true); setErr(null)
+    try {
+      const data = await api.smsOrderCreate({ country, service, operator })
+      setOrder(data)
+      onBought?.(data)
+    } catch (e) {
+      setErr(e.message)
+    }
+    setBuying(false)
+  }
+
+  return (
+    <div className="min-h-screen bg-bg pb-28">
+      <button onClick={onBack} className="fixed left-3 top-3 z-50 flex h-10 w-10 items-center justify-center rounded-xl border border-white/15 bg-bg/80 shadow-lg shadow-black/30 backdrop-blur active:scale-95" aria-label="Volver">
+        <ArrowLeft className="h-4 w-4" />
+      </button>
+
+      <main className="mx-auto max-w-lg px-3 pt-3">
+        {loading ? <CoolLoading label="Cargando catálogo SMS..." /> : (
+          <>
+            <section className="mb-3 overflow-hidden rounded-xl border border-white/10 bg-card">
+              <div className="relative h-28 bg-[#101820]">
+                {settings?.sms_catalog_image_url ? <OptimizedImage src={storeAssetUrl(settings.sms_catalog_image_url)} alt="" className="absolute inset-0 h-full w-full object-cover" /> : <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/20 via-bg to-emerald-500/10" />}
+                <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/45 to-black/10" />
+                <div className="relative flex h-full items-end p-3">
+                  <div className="min-w-0">
+                    <p className="text-[10px] font-black uppercase text-cyan-200">Activaciones SMS</p>
+                    <h3 className="mt-0.5 text-base font-black leading-tight">Números virtuales para verificaciones</h3>
+                    <p className="mt-1 max-w-[260px] text-[11px] leading-snug text-white/65">El código llega al pedido. Reembolso solo si el SMS no llega y se puede cancelar.</p>
+                  </div>
+                </div>
+              </div>
+            </section>
+            <section className="mb-3 grid grid-cols-2 gap-2">
+              <button onClick={() => setActivePicker('country')} className={`flex min-w-0 items-center gap-2 rounded-xl border px-2.5 py-2 text-left active:scale-[0.99] ${activePicker === 'country' ? 'border-accent bg-accent/10' : 'border-white/10 bg-card'}`}>
+                <span className="flex h-8 w-8 flex-shrink-0 overflow-hidden rounded-lg bg-black/20 text-base"><SmsIcon src={smsCountryIconUrl(selectedCountry)} fallback={<span>{selectedCountry?.flag_emoji || '🌐'}</span>} /></span>
+                <span className="min-w-0"><span className="block text-[10px] uppercase text-white/35">País</span><span className="block truncate text-xs font-black">{selectedCountry?.name || 'Escoger país'}</span></span>
+              </button>
+              <button onClick={() => country && setActivePicker('service')} disabled={!country} className={`flex min-w-0 items-center gap-2 rounded-xl border px-2.5 py-2 text-left active:scale-[0.99] disabled:opacity-50 ${activePicker === 'service' ? 'border-accent bg-accent/10' : 'border-white/10 bg-card'}`}>
+                <span className="flex h-8 w-8 flex-shrink-0 overflow-hidden rounded-lg bg-black/20"><SmsIcon src={smsServiceIconUrl(selectedService || {})} fallback={<Smartphone className="h-4 w-4 text-cyan-200" />} fit="contain" /></span>
+                <span className="min-w-0"><span className="block text-[10px] uppercase text-white/35">App</span><span className="block truncate text-xs font-black">{selectedService?.name || 'Escoger app'}</span></span>
+              </button>
+            </section>
+            {loadingStep && <div className="mb-3 flex justify-center"><Loader2 className="h-4 w-4 animate-spin text-accent" /></div>}
+            {activePicker === 'country' && (
+              <section className="rounded-xl border border-white/10 bg-card">
+                <div className="border-b border-white/10 p-3">
+                  <div className="mb-2 flex items-center justify-between"><p className="text-sm font-black">Escoger país</p><span className="text-[10px] text-white/40">{filteredCountries.length}</span></div>
+                  <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" /><input value={countryQuery} onChange={e => setCountryQuery(e.target.value)} placeholder="Buscar país" className="w-full rounded-lg border border-white/10 bg-bg py-2.5 pl-9 pr-3 text-sm outline-none focus:border-accent" /></div>
+                </div>
+                <div className="grid max-h-[calc(100vh-250px)] grid-cols-2 gap-2 overflow-y-auto p-3 sm:grid-cols-3">
+                  {filteredCountries.map(c => <button key={c.key} onClick={() => { setCountry(c.key); setCountryQuery('') }} className={`min-w-0 rounded-xl border p-2 text-left active:scale-[0.99] ${country === c.key ? 'border-accent bg-accent/12' : 'border-white/10 bg-bg/70 hover:border-white/20'}`}><span className="flex items-center gap-2"><span className="flex h-9 w-9 flex-shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/20 text-lg"><SmsIcon src={smsCountryIconUrl(c)} fallback={<span>{c.flag_emoji || '🌐'}</span>} /></span><span className="min-w-0"><span className="block truncate text-xs font-black">{c.name}</span><span className="block text-[10px] uppercase text-white/35">{c.key}</span></span></span></button>)}
+                </div>
+              </section>
+            )}
+
+            {activePicker === 'service' && (
+              <section className="rounded-xl border border-white/10 bg-card">
+                <div className="border-b border-white/10 p-3">
+                  <div className="mb-2 flex items-center justify-between"><div><p className="text-sm font-black">Escoger app</p><p className="text-[11px] text-white/45">{selectedCountry?.name || ''}</p></div><span className="text-[10px] text-white/40">{filteredServices.length}</span></div>
+                  <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" /><input value={serviceQuery} onChange={e => setServiceQuery(e.target.value)} placeholder="Buscar app" className="w-full rounded-lg border border-white/10 bg-bg py-2.5 pl-9 pr-3 text-sm outline-none focus:border-accent" /></div>
+                </div>
+                <div className="max-h-[calc(100vh-250px)] overflow-y-auto p-3">
+                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {filteredServices.map(x => <button key={x.key} onClick={() => { setService(x.key); setServiceQuery(''); setActivePicker(null) }} className={`rounded-xl border p-2.5 text-left active:scale-[0.99] ${service === x.key ? 'border-accent bg-accent/12' : 'border-white/10 bg-bg/70 hover:border-white/20'}`}><span className="flex items-center gap-3"><span className="flex h-10 w-10 flex-shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black/20"><SmsIcon src={smsServiceIconUrl(x)} fallback={<span className="text-sm font-black text-cyan-200">{(x.name || x.key || '?')[0]?.toUpperCase()}</span>} fit="contain" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-black">{x.name}</span><span className="block text-[11px] text-white/40">{x.qty} disponibles</span></span><span className="text-sm font-black text-accent">${Number(x.price || 0).toFixed(2)}</span></span></button>)}
+                  </div>
+                  {!loadingStep && services.length === 0 && <p className="rounded-lg bg-bg p-4 text-center text-xs text-white/45">No hay apps disponibles para este país.</p>}
+                </div>
+              </section>
+            )}
+
+            {!activePicker && (
+              <section className="rounded-xl border border-white/10 bg-card p-3">
+                <button onClick={() => setOperatorsOpen(true)} disabled={!service || operators.length === 0} className="flex w-full items-center justify-between gap-3 rounded-lg bg-bg/70 px-3 py-3 text-left active:scale-[0.99] disabled:opacity-50">
+                  <span className="min-w-0">
+                    <span className="block text-[10px] font-bold uppercase text-white/35">Operador</span>
+                    <span className="block truncate text-sm font-black">{operator === 'any' ? 'Automático' : operator}</span>
+                    <span className="block truncate text-[11px] text-white/45">{operators.length || 0} opciones disponibles</span>
+                  </span>
+                  <ChevronDown className="h-5 w-5 flex-shrink-0 text-accent" />
+                </button>
+              </section>
+            )}
+
+            {err && <p className="mt-3 rounded-lg border border-red-500/25 bg-red-500/10 p-3 text-xs font-semibold text-red-300">{err}</p>}
+            {order && <div className="mt-3 rounded-xl border border-green-500/25 bg-green-500/10 p-3 text-xs text-green-100"><p className="font-black text-green-300">Número reservado</p><p className="mt-1 font-mono text-sm">{order.phone}</p><p className="mt-1 text-green-100/70">Consulta el código en Mis pedidos.</p></div>}
+          </>
+        )}
+      </main>
+
+      <div className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-lg border-t border-white/10 bg-bg/95 p-3 pb-[calc(env(safe-area-inset-bottom)+12px)] shadow-2xl shadow-black/50 backdrop-blur">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div className="min-w-0"><p className="truncate text-xs font-bold text-white/80">{selectedService?.name || 'Selecciona app'}</p><p className="text-[10px] text-white/40">Stock {stock} · {operator === 'any' ? 'Operador automático' : operator}</p></div>
+          <p className="text-xl font-black text-accent">${price.toFixed(2)}</p>
+        </div>
+        <button onClick={buy} disabled={buying || !country || !service || price <= 0} className="w-full rounded-xl bg-accent py-3 text-sm font-black text-bg active:scale-95 disabled:opacity-50">{buying ? 'Comprando...' : 'Comprar número'}</button>
+      </div>
+
+      {operatorsOpen && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={() => setOperatorsOpen(false)}>
+          <div className="max-h-[66vh] w-full max-w-md overflow-hidden rounded-t-2xl border border-white/10 bg-card shadow-2xl sm:rounded-2xl" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between border-b border-white/10 p-4"><h3 className="text-base font-black">Seleccionar operador</h3><button onClick={() => setOperatorsOpen(false)} className="rounded-lg bg-white/8 p-2"><X className="h-4 w-4" /></button></div>
+            <div className="max-h-[52vh] space-y-2 overflow-y-auto p-3">
+              <button onClick={() => { setOperator('any'); setOperatorsOpen(false) }} className={`w-full rounded-xl border p-3 text-left ${operator === 'any' ? 'border-accent bg-accent/12 text-accent' : 'border-white/10 bg-bg text-white/70'}`}><span className="block font-black">Automático</span><span className="text-xs text-white/45">Mejor precio disponible · ${Number(bestOperator?.price || selectedService?.price || 0).toFixed(2)}</span></button>
+              {operators.map(op => <button key={op.name} onClick={() => { setOperator(op.name); setOperatorsOpen(false) }} className={`w-full rounded-xl border p-3 text-left ${operator === op.name ? 'border-accent bg-accent/12 text-accent' : 'border-white/10 bg-bg text-white/70'}`}><span className="block truncate font-black capitalize">{op.name}</span><span className="text-xs text-white/45">{op.qty} disponibles · ${Number(op.price || 0).toFixed(2)}</span></button>)}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -2006,6 +2243,8 @@ function HomeScreen({ me, onSelectGame, onNav, onLoginRequired, onOpenNotificati
     setMenuOpen(false)
   }
 
+  const showSmsCatalog = !search.trim() && (activeFilter === 'all' || activeFilter === 'digital-service')
+
   return (
     <div className="px-2.5 py-4 md:p-6">
       <div className="sticky top-0 z-30 -mx-4 mb-3 border-b border-white/5 bg-bg/95 px-4 py-2 backdrop-blur">
@@ -2090,16 +2329,17 @@ function HomeScreen({ me, onSelectGame, onNav, onLoginRequired, onOpenNotificati
         </div>
       )}
 
-      {filteredGames.length === 0 && filteredManual.length === 0 ? (
+      {filteredGames.length === 0 && filteredManual.length === 0 && !showSmsCatalog ? (
         <p className="py-8 text-center text-white/50">Sin resultados para "{search || activeFilterData.label}"</p>
       ) : activeFilter !== 'all' ? (
         <CatalogGridView
           title={activeFilterData.title}
           icon={activeFilterData.icon}
-          count={filteredGames.length + filteredManual.length}
+          count={filteredGames.length + filteredManual.length + (showSmsCatalog ? 1 : 0)}
           onBack={() => { setActiveFilter('all'); setSearch('') }}
         >
           {filteredGames.map((g) => <GameCard key={g.name} game={g} onSelect={() => onSelectGame(g)} />)}
+          {showSmsCatalog && <SmsCatalogCard onSelect={() => onNav?.('sms')} />}
           {filteredManual.map((p) => <ManualCatalogCard key={p.id} product={p} onSelect={() => setBuyingManual(p)} />)}
         </CatalogGridView>
       ) : (
@@ -2108,6 +2348,7 @@ function HomeScreen({ me, onSelectGame, onNav, onLoginRequired, onOpenNotificati
             const items = filteredGames.filter(g => g.catalogType === section.id)
             return items.length > 0 ? <CatalogSection key={section.id} title={section.title} icon={section.icon} count={items.length} onViewAll={() => setFilter(section.id)}>{items.map((g) => <GameCard key={g.name} game={g} onSelect={() => onSelectGame(g)} />)}</CatalogSection> : null
           })}
+          {showSmsCatalog && <CatalogSection title="Números virtuales" icon={Smartphone} count={1} onViewAll={() => setFilter('digital-service')}><SmsCatalogCard onSelect={() => onNav?.('sms')} /></CatalogSection>}
           {manualGameAccounts.length > 0 && <GameAccountsIntro count={manualGameAccounts.length} onViewAll={() => setFilter('game-accounts')}>{manualGameAccounts.map((p) => <ManualCatalogCard key={p.id} product={p} onSelect={() => setBuyingManual(p)} />)}</GameAccountsIntro>}
           {manualOther.length > 0 && <CatalogSection title="Servicios y cuentas" icon={Wrench} count={manualOther.length} onViewAll={() => setFilter('manual')}>{manualOther.map((p) => <ManualCatalogCard key={p.id} product={p} onSelect={() => setBuyingManual(p)} />)}</CatalogSection>}
         </>
@@ -7579,6 +7820,12 @@ function ProfileScreen({ onOrders, onHome, onAdmin, onPartnerHelp }) {
   const [profile, setProfile] = useState(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(null)
+  const [editProfile, setEditProfile] = useState(false)
+  const [profileName, setProfileName] = useState('')
+  const [profileEmail, setProfileEmail] = useState('')
+  const [profileMsg, setProfileMsg] = useState(null)
+  const [profileSaving, setProfileSaving] = useState(false)
+  const [photoUploading, setPhotoUploading] = useState(false)
   const [linkCode, setLinkCode] = useState(null)
   const [changePwd, setChangePwd] = useState(false)
   const [pwdCurrent, setPwdCurrent] = useState('')
@@ -7591,7 +7838,12 @@ function ProfileScreen({ onOrders, onHome, onAdmin, onPartnerHelp }) {
 
   useEffect(() => {
     api.profile()
-      .then(p => { setProfile(p); setLoading(false) })
+      .then(p => {
+        setProfile(p)
+        setProfileName(p.display_name || p.name || '')
+        setProfileEmail(p.email || '')
+        setLoading(false)
+      })
       .catch(e => { setErr(e.message); setLoading(false) })
   }, [])
 
@@ -7606,6 +7858,19 @@ function ProfileScreen({ onOrders, onHome, onAdmin, onPartnerHelp }) {
   const isTg = api.isTelegram()
   const hasEmail = !!profile.email
   const hasTelegram = profile.telegram_id > 0
+  const roleMeta = {
+    admin: { label: profile.role_label || 'Admin', Icon: Crown, ring: 'ring-yellow-400/80 border-yellow-300/60', badge: 'border-yellow-400/25 bg-yellow-400/10 text-yellow-200', avatarBadge: 'border-yellow-300 bg-bg text-yellow-300 shadow-yellow-400/25', icon: 'text-yellow-300' },
+    seller: { label: profile.role_label || 'Vendedor', Icon: Store, ring: 'ring-cyan-300/80 border-cyan-300/60', badge: 'border-cyan-300/25 bg-cyan-300/10 text-cyan-100', avatarBadge: 'border-cyan-300 bg-bg text-cyan-200 shadow-cyan-300/25', icon: 'text-cyan-200' },
+    account_seller: { label: profile.role_label || 'Vendedor de cuentas', Icon: BriefcaseBusiness, ring: 'ring-fuchsia-300/80 border-fuchsia-300/60', badge: 'border-fuchsia-300/25 bg-fuchsia-300/10 text-fuchsia-100', avatarBadge: 'border-fuchsia-300 bg-bg text-fuchsia-200 shadow-fuchsia-300/25', icon: 'text-fuchsia-200' },
+    reseller: { label: profile.role_label || 'Revendedor', Icon: Sparkles, ring: 'ring-emerald-300/80 border-emerald-300/60', badge: 'border-emerald-300/25 bg-emerald-300/10 text-emerald-100', avatarBadge: 'border-emerald-300 bg-bg text-emerald-200 shadow-emerald-300/25', icon: 'text-emerald-200' },
+    guest: { label: profile.role_label || 'Visitante', Icon: User, ring: 'ring-white/25 border-white/20', badge: 'border-white/10 bg-white/5 text-white/60', avatarBadge: 'border-white/35 bg-bg text-white/70 shadow-white/10', icon: 'text-white/50' },
+    user: { label: profile.role_label || 'Cliente', Icon: ShieldCheck, ring: 'ring-accent/70 border-accent/50', badge: 'border-accent/20 bg-accent/10 text-accent', avatarBadge: 'border-accent bg-bg text-accent shadow-accent/25', icon: 'text-accent' }
+  }
+  const activeRole = roleMeta[profile.role] || roleMeta.user
+  const RoleIcon = activeRole.Icon
+  const activeRoleLabel = stripEmoji(activeRole.label)
+  const profileMsgIsError = profileMsg && /^(No se pudo|Error|Mínimo|Invalid|Fallo)/i.test(profileMsg)
+  const displayName = profile.display_name || profile.name || 'Usuario'
 
   async function handleLinkTelegram() {
     try {
@@ -7629,56 +7894,170 @@ function ProfileScreen({ onOrders, onHome, onAdmin, onPartnerHelp }) {
     setPwdLoading(false)
   }
 
+  async function handleSaveProfile() {
+    setProfileSaving(true)
+    setProfileMsg(null)
+    try {
+      const data = await api.updateProfile({ display_name: profileName, email: profileEmail })
+      const updated = data.profile || {}
+      setProfile(prev => ({
+        ...prev,
+        ...updated,
+        display_name: updated.display_name ?? prev.display_name,
+        name: updated.name || prev.name,
+        email: updated.email ?? prev.email,
+        email_verified: updated.email_verified ?? prev.email_verified
+      }))
+      setProfileMsg('Datos del perfil actualizados correctamente')
+      setEditProfile(false)
+    } catch (e) { setProfileMsg(`No se pudo guardar el perfil: ${e.message}`) }
+    setProfileSaving(false)
+  }
+
+  async function handleProfilePhoto(file) {
+    if (!file) return
+    setPhotoUploading(true)
+    setProfileMsg(null)
+    try {
+      const data = await api.uploadProfilePhoto(file)
+      setProfile(prev => ({ ...prev, photo_url: data.photo_url }))
+      setProfileMsg('Imagen de perfil actualizada correctamente')
+    } catch (e) { setProfileMsg(`No se pudo actualizar la imagen: ${e.message}`) }
+    setPhotoUploading(false)
+  }
+
   return (
     <div className="px-2.5 py-4 md:p-6">
-      {/* Avatar y nombre */}
-      <div className="card bg-gradient-to-br from-accent/20 to-accent2/20 p-6 mb-4 text-center border-accent/20">
-        <div className="w-20 h-20 rounded-full bg-gradient-to-br from-accent to-accent2 flex items-center justify-center mx-auto mb-3 text-3xl font-bold">
-          {(profile.name || '?')[0]?.toUpperCase()}
+      {/* Perfil principal */}
+      <div className="card relative mb-4 overflow-hidden border-white/10 bg-card p-4 shadow-lg shadow-black/20">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/70 to-transparent" />
+        <div className="pointer-events-none absolute -right-10 -top-16 h-36 w-36 rounded-full bg-accent/10 blur-3xl" />
+        <div className="relative flex items-start gap-4">
+          <div className="relative h-24 w-24 flex-shrink-0">
+            <div className={`h-24 w-24 overflow-hidden rounded-full border-2 bg-black/25 ring-2 ${activeRole.ring}`}>
+              {profile.photo_url ? (
+                <img src={storeAssetUrl(profile.photo_url)} alt="" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-3xl font-black text-white">
+                  {displayName[0]?.toUpperCase() || '?'}
+                </div>
+              )}
+            </div>
+            <span className={`absolute -bottom-1 -right-1 z-10 flex h-8 w-8 items-center justify-center rounded-full border-2 shadow-lg ${activeRole.avatarBadge}`}>
+              <RoleIcon className="h-4 w-4" />
+            </span>
+          </div>
+
+          <div className="min-w-0 flex-1 text-left">
+            <div className="flex min-h-24 flex-col">
+              <div className="min-w-0">
+                <h2 className="truncate text-xl font-black leading-tight">{displayName}</h2>
+                {profile.username && <p className="truncate text-sm text-white/50">@{profile.username}</p>}
+                <div className={`mt-2 inline-flex max-w-full items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold ${activeRole.badge}`}>
+                  <RoleIcon className={`h-3.5 w-3.5 flex-shrink-0 ${activeRole.icon}`} />
+                  <span className="truncate">{activeRoleLabel}</span>
+                </div>
+                <p className="mt-2 text-xs text-white/35">Miembro desde {memberDate}</p>
+              </div>
+
+              <button onClick={() => {
+                setProfileName(profile.display_name || profile.name || '')
+                setProfileEmail(profile.email || '')
+                setEditProfile(v => !v)
+              }} className="mt-auto ml-auto inline-flex items-center justify-center gap-2 rounded-lg border border-white/10 bg-white/8 px-3 py-2 text-xs font-bold text-white/80 hover:bg-white/12 active:scale-95">
+                <Edit3 className="h-4 w-4" />
+                Editar perfil
+              </button>
+            </div>
+          </div>
         </div>
-        <h2 className="text-xl font-bold">{profile.name}</h2>
-        {profile.username && <p className="text-sm text-white/50">@{profile.username}</p>}
-        <p className="text-xs text-white/40 mt-1">{profile.role_label}</p>
-        <p className="text-xs text-white/30 mt-2">Miembro desde {memberDate}</p>
+
+        {editProfile && (
+          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={() => setEditProfile(false)}>
+            <div className="w-full max-w-md rounded-t-2xl border border-white/10 bg-card p-4 text-left shadow-2xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="mb-4 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-base font-black">Editar perfil</h3>
+                  <p className="text-xs text-white/45">Actualiza tu nombre, email e imagen.</p>
+                </div>
+                <button onClick={() => setEditProfile(false)} className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5 text-white/60 active:scale-95"><X className="h-4 w-4" /></button>
+              </div>
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-3">
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-white">Imagen de perfil</p>
+                <p className="truncate text-[11px] text-white/40">JPG, PNG, WEBP o GIF</p>
+              </div>
+              <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-accent/15 px-3 py-2 text-xs font-bold text-accent active:scale-95">
+                {photoUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Edit3 className="h-4 w-4" />}
+                Cambiar
+                <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" disabled={photoUploading} onChange={(e) => { handleProfilePhoto(e.target.files?.[0]); e.target.value = '' }} />
+              </label>
+            </div>
+            <div>
+              <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-white/45">Nombre visible</label>
+              <input value={profileName} onChange={e => setProfileName(e.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-bg px-3 py-2.5 text-sm text-white outline-none focus:border-accent"
+                placeholder="Tu nombre para mostrar" maxLength={60} />
+            </div>
+            <div>
+              <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-white/45">Email</label>
+              <input type="email" value={profileEmail} onChange={e => setProfileEmail(e.target.value)}
+                className="w-full rounded-xl border border-white/10 bg-bg px-3 py-2.5 text-sm text-white outline-none focus:border-accent"
+                placeholder="correo@ejemplo.com" maxLength={120} />
+              <p className="mt-1 text-[10px] text-white/35">Si cambias el email, quedará pendiente de verificación.</p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button onClick={() => setEditProfile(false)}
+                className="rounded-xl border border-white/10 bg-white/5 py-2.5 text-xs font-bold text-white/60 active:scale-95">
+                Cancelar
+              </button>
+              <button onClick={handleSaveProfile} disabled={profileSaving}
+                className="rounded-xl bg-accent py-2.5 text-xs font-black text-bg active:scale-95 disabled:opacity-50">
+                {profileSaving ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Guardar'}
+              </button>
+            </div>
+            </div>
+          </div>
+        )}
+        {profileMsg && <p className={`mt-3 rounded-lg border px-3 py-2 text-xs font-semibold ${profileMsgIsError ? 'border-red-500/25 bg-red-500/10 text-red-300' : 'border-green-500/25 bg-green-500/10 text-green-300'}`}>{profileMsg}</p>}
       </div>
 
-      {/* Saldo */}
-      <div className="card p-4 mb-4">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <p className="text-xs text-white/50 mb-1">Saldo disponible</p>
-            <p className="text-3xl font-bold text-accent">${profile.balance.toFixed(2)} <span className="text-sm text-white/40">USDT</span></p>
+      {/* Saldo y resumen */}
+      <div className="card mb-4 overflow-hidden border-white/10 p-0">
+        <div className="flex items-start justify-between gap-3 border-b border-white/10 bg-black/15 p-4">
+          <div className="min-w-0">
+            <p className="text-[10px] font-bold uppercase tracking-wider text-white/45">Saldo disponible</p>
+            <p className="mt-1 text-3xl font-black leading-none text-accent">${profile.balance.toFixed(2)} <span className="text-sm font-bold text-white/35">USDT</span></p>
           </div>
           <button onClick={() => setShowTopUp(true)}
-            className="rounded-lg bg-accent/20 px-3 py-2 text-xs font-bold text-accent active:scale-95">
-            <span className="inline-flex items-center justify-center gap-1"><Send className="h-3.5 w-3.5" aria-hidden="true" />Recargar</span>
+            className="inline-flex flex-shrink-0 items-center justify-center gap-1.5 rounded-lg bg-accent px-3 py-2 text-xs font-black text-bg active:scale-95">
+            <Send className="h-3.5 w-3.5" aria-hidden="true" />
+            Recargar
           </button>
         </div>
-        <p className="mt-3 text-xs text-white/45">Puedes recargar desde la web con OxaPay. La página de pago permite elegir red y moneda disponible.</p>
+
+        <div className="grid grid-cols-2 divide-x divide-y divide-white/10 border-white/10 sm:grid-cols-4 sm:divide-y-0">
+          <div className="p-3">
+            <p className="text-[10px] font-bold uppercase text-white/35">Depósitos</p>
+            <p className="mt-1 text-base font-black text-white">${profile.stats.total_deposited.toFixed(2)}</p>
+          </div>
+          <div className="p-3">
+            <p className="text-[10px] font-bold uppercase text-white/35">Gastado</p>
+            <p className="mt-1 text-base font-black text-white">${profile.stats.total_spent.toFixed(2)}</p>
+          </div>
+          <div className="p-3">
+            <p className="text-[10px] font-bold uppercase text-white/35">Pedidos</p>
+            <p className="mt-1 text-base font-black text-white">{profile.stats.total_orders}</p>
+            <p className="mt-0.5 text-[10px] font-semibold text-green-300">{profile.stats.completed_orders} completados</p>
+          </div>
+          <div className="p-3">
+            <p className="text-[10px] font-bold uppercase text-white/35">Fallidos</p>
+            <p className="mt-1 text-base font-black text-white">{profile.stats.failed_orders}</p>
+          </div>
+        </div>
       </div>
 
       {showTopUp && <TopUpModal onClose={() => setShowTopUp(false)} onPaid={(balance) => { setProfile(prev => ({ ...prev, balance })); setShowTopUp(false) }} />}
-
-      {/* Stats */}
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="card p-3">
-          <p className="text-xs text-white/50">Pedidos</p>
-          <p className="text-xl font-bold">{profile.stats.total_orders}</p>
-          <p className="text-[10px] text-green-400 mt-1">{profile.stats.completed_orders} completados</p>
-        </div>
-        <div className="card p-3">
-          <p className="text-xs text-white/50">Gastado</p>
-          <p className="text-xl font-bold">${profile.stats.total_spent.toFixed(2)}</p>
-        </div>
-        <div className="card p-3">
-          <p className="text-xs text-white/50">Depósitos</p>
-          <p className="text-xl font-bold">${profile.stats.total_deposited.toFixed(2)}</p>
-        </div>
-        <div className="card p-3">
-          <p className="text-xs text-white/50">Fallidas</p>
-          <p className="text-xl font-bold">{profile.stats.failed_orders}</p>
-        </div>
-      </div>
 
       {/* Pedidos */}
       <button onClick={onOrders} className="card p-4 w-full flex items-center justify-between mb-3 active:scale-95">
@@ -7738,69 +8117,73 @@ function ProfileScreen({ onOrders, onHome, onAdmin, onPartnerHelp }) {
         <button onClick={() => copyText(`${window.location.origin}${window.location.pathname}?ref=${profile.referral_code || profile.user_id}`)} className="mt-3 w-full rounded-lg bg-green-500/15 px-3 py-2 text-sm font-bold text-green-300"><span className="inline-flex items-center justify-center gap-1"><LinkIcon className="h-4 w-4" />Copiar enlace de referido</span></button>
       </div>
 
-      {/* ═══ SECCIÓN: CUENTAS VINCULADAS ═══ */}
-      <h3 className="text-sm font-bold uppercase text-white/60 mb-3 mt-6 flex items-center gap-2"><LinkIcon className="h-4 w-4" />Cuentas vinculadas</h3>
-
-      {/* Telegram */}
+      {/* ═══ SECCIÓN: CUENTAS VINCULADAS (Expandible) ═══ */}
       <div className="card p-4 mb-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Smartphone className="h-6 w-6 text-accent" />
-            <div>
-              <p className="font-semibold text-sm">Telegram</p>
-              {hasTelegram ? (
-                <p className="text-xs text-green-400"><span className="inline-flex items-center gap-1"><CircleCheck className="h-3.5 w-3.5" />Vinculado · ID: {profile.telegram_id}</span></p>
-              ) : (
-                <p className="text-xs text-yellow-400"><span className="inline-flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" />No vinculado</span></p>
-              )}
-            </div>
-          </div>
-        </div>
-        {!hasTelegram && !linkCode && (
-          <button onClick={handleLinkTelegram}
-            className="mt-3 w-full py-2 rounded-lg bg-accent/20 text-accent text-sm font-semibold active:scale-95">
-            <span className="inline-flex items-center justify-center gap-1"><LinkIcon className="h-4 w-4" />Vincular con Telegram</span>
-          </button>
-        )}
+        <button onClick={() => setLinkCode(linkCode ? null : {})}
+          className="w-full flex items-center justify-between">
+          <span className="block flex items-center gap-3">
+            <LinkIcon className="h-6 w-6 text-accent" />
+            <span className="block text-left">
+              <span className="block font-semibold text-sm">Cuentas vinculadas</span>
+              <span className="block text-xs text-white/50">
+                {hasTelegram && hasEmail ? 'Telegram y Email vinculados' : hasTelegram ? 'Telegram vinculado' : hasEmail ? 'Email vinculado' : 'Sin vinculaciones'}
+              </span>
+            </span>
+          </span>
+          <ChevronDown className={`h-4 w-4 text-white/30 transition-transform ${linkCode ? 'rotate-180' : ''}`} aria-hidden="true" />
+        </button>
         {linkCode && (
-          <div className="mt-3 p-3 bg-black/30 rounded-lg text-center">
-            {linkCode.code ? (
-              <>
-                <p className="text-xs text-white/60 mb-2">Envía <code>/vincular</code> al bot y luego este código:</p>
-                <p className="text-3xl font-mono font-bold text-accent tracking-widest">{linkCode.code}</p>
-                <p className="text-[10px] text-white/40 mt-2">Caduca en 10 minutos</p>
-              </>
-            ) : (
-              <p className="text-sm text-white/70">{linkCode.msg}</p>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Email */}
-      <div className="card p-4 mb-3">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Mail className="h-6 w-6 text-accent" />
-            <div>
-              <p className="font-semibold text-sm">Email</p>
-              {hasEmail ? (
-                <>
-                  <p className="text-xs text-green-400"><span className="inline-flex items-center gap-1"><CircleCheck className="h-3.5 w-3.5" />{profile.email}</span></p>
-                  {profile.email_verified === false && (
-                    <p className="text-[10px] text-yellow-400"><span className="inline-flex items-center gap-1"><AlertTriangle className="h-3 w-3" />No verificado</span></p>
-                  )}
-                </>
+          <div className="mt-4 pt-4 border-t border-white/10 space-y-4 text-left">
+            {/* Telegram sub-section */}
+            <div className="p-3.5 rounded-lg bg-black/20 border border-white/5 space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-white flex items-center gap-1.5"><Smartphone className="h-3.5 w-3.5 text-accent" />Telegram</span>
+                {hasTelegram ? (
+                  <span className="text-[10px] text-green-400 font-semibold bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded-full">● Vinculado</span>
+                ) : (
+                  <span className="text-[10px] text-yellow-400 font-semibold bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-full">○ No vinculado</span>
+                )}
+              </div>
+              {hasTelegram ? (
+                <p className="text-[11px] text-white/60">ID Vinculado: <code className="font-mono text-accent">{profile.telegram_id}</code></p>
               ) : (
-                <p className="text-xs text-yellow-400"><span className="inline-flex items-center gap-1"><AlertTriangle className="h-3.5 w-3.5" />No configurado</span></p>
+                <div className="space-y-2">
+                  <button onClick={handleLinkTelegram}
+                    className="w-full py-1.5 rounded-lg bg-accent/10 border border-accent/20 hover:bg-accent/15 active:scale-95 text-accent text-xs font-bold transition">
+                    Vincular ahora
+                  </button>
+                  {linkCode.code && (
+                    <div className="p-3 bg-black/35 rounded-lg text-center mt-2 border border-white/5">
+                      <p className="text-[10px] text-white/60 mb-2">Envía <code>/vincular</code> al bot y luego este código:</p>
+                      <p className="text-2xl font-mono font-bold text-accent tracking-widest">{linkCode.code}</p>
+                      <p className="text-[9px] text-white/40 mt-1">Caduca en 10 minutos</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Email sub-section */}
+            <div className="p-3.5 rounded-lg bg-black/20 border border-white/5 space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold text-white flex items-center gap-1.5"><Mail className="h-3.5 w-3.5 text-accent" />Email</span>
+                {hasEmail ? (
+                  <span className="text-[10px] text-green-400 font-semibold bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded-full">● Vinculado</span>
+                ) : (
+                  <span className="text-[10px] text-yellow-400 font-semibold bg-yellow-500/10 border border-yellow-500/20 px-2 py-0.5 rounded-full">○ No configurado</span>
+                )}
+              </div>
+              {hasEmail ? (
+                <p className="text-[11px] text-white/60 truncate" title={profile.email}>{profile.email}</p>
+              ) : (
+                isTg && (
+                  <p className="text-[10px] text-white/40">
+                    Envía <code>/email</code> al bot de Telegram para vincular tu correo electrónico.
+                  </p>
+                )
               )}
             </div>
           </div>
-        </div>
-        {!hasEmail && isTg && (
-          <p className="text-xs text-white/40 mt-3">
-            Envía <code>/email</code> al bot para vincular tu email y poder acceder desde la web.
-          </p>
         )}
       </div>
 
@@ -7846,17 +8229,24 @@ function ProfileScreen({ onOrders, onHome, onAdmin, onPartnerHelp }) {
         )}
       </div>
 
-      {/* Sesión */}
-      <div className="card p-3 text-center">
-        <p className="text-xs text-white/40">
-          <span className="inline-flex items-center justify-center gap-1"><LockKeyhole className="h-3.5 w-3.5" />Sesión vía</span> <b className="text-white/60">{isTg ? 'Telegram' : 'Email'}</b>
-        </p>
-        {!isTg && (
-          <button onClick={async () => { await api.logout(); location.reload() }}
-            className="mt-3 text-xs text-red-400 underline">
-            <span className="inline-flex items-center justify-center gap-1"><LogOut className="h-4 w-4" />Cerrar sesión</span>
-          </button>
-        )}
+      {/* Sesión Activa / Cerrar Sesión */}
+      <div className="card p-4 mb-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <LockKeyhole className="h-6 w-6 text-accent" />
+            <div className="text-left">
+              <p className="font-semibold text-sm">Sesión activa</p>
+              <p className="text-xs text-white/50">Vía <b className="text-white/70">{isTg ? 'Telegram' : 'Email'}</b></p>
+            </div>
+          </div>
+          {!isTg && (
+            <button onClick={async () => { await api.logout(); location.reload() }}
+              className="rounded-lg bg-red-500/10 border border-red-500/25 px-3 py-1.5 text-xs font-bold text-red-400 hover:bg-red-500/15 active:scale-95 transition-all flex items-center gap-1.5">
+              <LogOut className="h-3.5 w-3.5" />
+              Cerrar sesión
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
@@ -8538,12 +8928,15 @@ function OrdersScreen({ onOpenCase }) {
     Promise.all([
       api.myOrders().catch(() => []),
       api.myManualOrders().catch(() => []),
-    ]).then(([regular, manual]) => {
+      api.smsMyOrders(50).catch(() => ({ items: [] })),
+    ]).then(([regular, manual, smsData]) => {
       // Marcar tipo y unificar
       const r = (regular || []).map(o => ({ ...o, type: 'auto' }))
       const m = (manual || []).map(o => ({ ...o, type: 'manual' }))
+      const smsItems = Array.isArray(smsData) ? smsData : (smsData?.items || [])
+      const sms = smsItems.map(o => ({ ...o, type: 'sms', product: `Número virtual ${o.service || ''}`.trim(), price: o.sell_price || o.price || 0, option_name: o.phone || '', icon_url: '', seller_store_name: 'Francho Shop', status: o.status === 'completed' ? 'completed' : o.status === 'refunded' || o.status === 'canceled' ? 'failed' : 'pending' }))
       // Ordenar por fecha (más recientes primero)
-      const all = [...r, ...m].sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+      const all = [...r, ...m, ...sms].sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
       setOrders(all)
       setLoading(false)
     }).catch(e => { setErr(e.message); setLoading(false) })
@@ -8581,11 +8974,11 @@ function OrdersScreen({ onOpenCase }) {
                 <div className="border-b border-white/10 bg-gradient-to-r from-accent/15 to-accent2/10 p-3 sm:p-4">
                   <div className="flex items-start gap-3">
                     <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl border border-white/10 bg-bg/70">
-                      {productImage ? <OptimizedImage src={productImage} alt={o.product || 'Producto'} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center">{o.type === 'manual' ? <Wrench className="h-6 w-6 text-accent" /> : <ShoppingCart className="h-6 w-6 text-accent" />}</div>}
+                      {productImage ? <OptimizedImage src={productImage} alt={o.product || 'Producto'} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center">{o.type === 'sms' ? <Smartphone className="h-6 w-6 text-accent" /> : o.type === 'manual' ? <Wrench className="h-6 w-6 text-accent" /> : <ShoppingCart className="h-6 w-6 text-accent" />}</div>}
                     </div>
                     <div className="min-w-0 flex-1 text-left">
                       <div className="mb-1 flex flex-wrap items-center gap-2">
-                        <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-white/65">{o.type === 'manual' ? 'Manual' : 'Recarga automática'}</span>
+                        <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-white/65">{o.type === 'sms' ? 'Número virtual' : o.type === 'manual' ? 'Manual' : 'Recarga automática'}</span>
                         <span className={info.color + ' inline-flex items-center gap-1 text-[11px] font-bold'}><StatusIcon status={info.status} className="h-3.5 w-3.5" />{info.label}</span>
                       </div>
                       <p className="text-sm font-black leading-tight">{o.product || 'Producto'}</p>
@@ -8604,6 +8997,9 @@ function OrdersScreen({ onOpenCase }) {
                     <p><span className="text-white/35">Orden:</span> <code>{o.id}</code></p>
                     <p><span className="text-white/35">Creada:</span> {date}</p>
                     {rechargeDetails.map((item, index) => <p key={index}><span className="text-white/35">{item.label}:</span> {item.value}</p>)}
+                    {o.type === 'sms' && o.phone && <p><span className="text-white/35">Número:</span> <code>{o.phone}</code></p>}
+                    {o.type === 'sms' && o.sms_code && <p><span className="text-white/35">Código SMS:</span> <code>{o.sms_code}</code></p>}
+                    {o.type === 'sms' && !o.sms_code && <p><span className="text-white/35">SMS:</span> Pendiente de llegada</p>}
                   </div>
                   {o.customer_data && Object.keys(o.customer_data).length > 0 && (
                     <div className="mb-3 rounded-lg bg-black/20 p-2 text-xs text-white/65">
@@ -8650,7 +9046,7 @@ function OrdersScreen({ onOpenCase }) {
                     </div>
                   </div>
                 )}
-                <OrderReviewBox order={o} onReviewed={markReviewed} />
+                {o.type !== 'sms' && <OrderReviewBox order={o} onReviewed={markReviewed} />}
               </div>
             </div>
             )
@@ -8661,6 +9057,220 @@ function OrdersScreen({ onOpenCase }) {
   )
 }
 
+
+
+function AdminSmsPanel() {
+  const [settingsData, setSettingsData] = useState(null)
+  const [countries, setCountries] = useState([])
+  const [services, setServices] = useState([])
+  const [overrides, setOverrides] = useState({ countries: [], services: [] })
+  const [selectedCountry, setSelectedCountry] = useState('')
+  const [selectedType, setSelectedType] = useState('service')
+  const [selectedKey, setSelectedKey] = useState('')
+  const [form, setForm] = useState({ display_name: '', icon_url: '', is_featured: 0, is_hidden: 0, sort_order: 100, custom_markup: '', min_price: '' })
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState(null)
+  const [err, setErr] = useState(null)
+  const [query, setQuery] = useState('')
+
+  const overrideMap = useMemo(() => {
+    const map = {}
+    ;[...(overrides.countries || []), ...(overrides.services || [])].forEach(o => { map[`${o.item_type}:${String(o.item_key).toLowerCase()}`] = o })
+    return map
+  }, [overrides])
+
+  const selectedList = selectedType === 'country' ? countries : services
+  const selectedItem = selectedList.find(x => x.key === selectedKey)
+  const filteredItems = selectedList.filter(x => !query || `${x.name} ${x.key}`.toLowerCase().includes(query.toLowerCase())).slice(0, 80)
+
+  async function loadAll() {
+    setLoading(true); setErr(null)
+    try {
+      const [cfg, ov, countryData] = await Promise.all([
+        api.smsAdminSettingsGet(),
+        api.smsAdminOverridesGet(),
+        api.smsCountries(),
+      ])
+      setSettingsData(cfg)
+      setOverrides(ov)
+      const countryItems = countryData.items || []
+      setCountries(countryItems)
+      const firstCountry = selectedCountry || countryItems[0]?.key || ''
+      setSelectedCountry(firstCountry)
+      if (firstCountry) {
+        const serviceData = await api.smsServices(firstCountry).catch(() => ({ items: [] }))
+        setServices(serviceData.items || [])
+      }
+      if (!selectedKey && countryItems[0]) {
+        setSelectedType('country')
+        setSelectedKey(countryItems[0].key)
+      }
+    } catch (e) {
+      setErr(e.message)
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => { loadAll() }, [])
+
+  useEffect(() => {
+    if (!selectedCountry) return
+    api.smsServices(selectedCountry).then(data => setServices(data.items || [])).catch(() => setServices([]))
+  }, [selectedCountry])
+
+  useEffect(() => {
+    if (!selectedKey) return
+    const ov = overrideMap[`${selectedType}:${selectedKey}`] || {}
+    const base = selectedItem || {}
+    setForm({
+      display_name: ov.display_name || base.name || '',
+      icon_url: ov.icon_url || base.icon_url || '',
+      is_featured: Number(ov.is_featured || 0),
+      is_hidden: Number(ov.is_hidden || 0),
+      sort_order: Number(ov.sort_order ?? 100),
+      custom_markup: ov.custom_markup ?? '',
+      min_price: ov.min_price ?? '',
+    })
+  }, [selectedType, selectedKey, overrideMap, selectedItem?.key])
+
+  async function saveSettings() {
+    setSaving(true); setMsg(null); setErr(null)
+    try {
+      await api.smsAdminSettingsSet({
+        sms_default_markup: String(settingsData.sms_default_markup || '1.50'),
+        sms_min_price_usd: String(settingsData.sms_min_price_usd || '0.75'),
+        sms_catalog_image_url: String(settingsData.sms_catalog_image_url || ''),
+        sms_terms_and_conditions: String(settingsData.sms_terms_and_conditions || ''),
+      })
+      setMsg('Configuración global guardada')
+    } catch (e) { setErr(e.message) }
+    setSaving(false)
+  }
+
+  async function saveOverride() {
+    if (!selectedKey) return
+    setSaving(true); setMsg(null); setErr(null)
+    try {
+      await api.smsAdminOverridesSet({
+        item_type: selectedType,
+        item_key: selectedKey,
+        display_name: form.display_name || null,
+        icon_url: form.icon_url || null,
+        is_featured: Number(form.is_featured ? 1 : 0),
+        is_hidden: Number(form.is_hidden ? 1 : 0),
+        sort_order: Number(form.sort_order || 100),
+        custom_markup: form.custom_markup === '' ? null : Number(form.custom_markup),
+        min_price: form.min_price === '' ? null : Number(form.min_price),
+      })
+      setMsg('País/app guardado')
+      const ov = await api.smsAdminOverridesGet()
+      setOverrides(ov)
+    } catch (e) { setErr(e.message) }
+    setSaving(false)
+  }
+
+  async function uploadImage(target, file) {
+    if (!file) return
+    setSaving(true); setMsg(null); setErr(null)
+    try {
+      const compressed = await compressImageForUpload(file)
+      const res = await api.uploadIcon(compressed)
+      if (target === 'catalog') setSettingsData(v => ({ ...v, sms_catalog_image_url: res.url }))
+      else setForm(v => ({ ...v, icon_url: res.url }))
+      setMsg('Imagen subida. Guarda para aplicar el cambio.')
+    } catch (e) { setErr(e.message) }
+    setSaving(false)
+  }
+
+  if (loading) return <CoolLoading label="Cargando panel SMS..." />
+
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 xl:grid-cols-[360px_1fr]">
+        <section className="rounded-xl border border-white/10 bg-card p-4">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-black">Configuración global</h2>
+              <p className="text-xs text-white/45">Ganancia, mínimo e imagen principal.</p>
+            </div>
+            <button onClick={saveSettings} disabled={saving} className="rounded-lg bg-accent px-3 py-2 text-xs font-black text-bg disabled:opacity-50"><Save className="inline h-3.5 w-3.5" /> Guardar</button>
+          </div>
+          <div className="space-y-3">
+            <label className="block"><span className="mb-1 block text-[10px] font-bold uppercase text-white/40">Multiplicador global</span><input value={settingsData?.sms_default_markup || ''} onChange={e => setSettingsData(v => ({ ...v, sms_default_markup: e.target.value }))} className="w-full rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm outline-none focus:border-accent" placeholder="1.50" /></label>
+            <label className="block"><span className="mb-1 block text-[10px] font-bold uppercase text-white/40">Mínimo de venta USDT</span><input value={settingsData?.sms_min_price_usd || ''} onChange={e => setSettingsData(v => ({ ...v, sms_min_price_usd: e.target.value }))} className="w-full rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm outline-none focus:border-accent" placeholder="0.75" /></label>
+            <div className="rounded-xl border border-white/10 bg-bg/70 p-3">
+              <div className="mb-2 aspect-video overflow-hidden rounded-lg bg-black/25">
+                {settingsData?.sms_catalog_image_url ? <OptimizedImage src={storeAssetUrl(settingsData.sms_catalog_image_url)} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-white/35"><Smartphone className="h-8 w-8" /></div>}
+              </div>
+              <input value={settingsData?.sms_catalog_image_url || ''} onChange={e => setSettingsData(v => ({ ...v, sms_catalog_image_url: e.target.value }))} className="mb-2 w-full rounded-lg border border-white/10 bg-card px-3 py-2 text-xs outline-none focus:border-accent" placeholder="URL de imagen" />
+              <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-white/8 px-3 py-2 text-xs font-bold text-white/70 active:scale-95">
+                <Edit3 className="h-4 w-4" /> Subir imagen
+                <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={e => { uploadImage('catalog', e.target.files?.[0]); e.target.value = '' }} />
+              </label>
+            </div>
+            <textarea value={settingsData?.sms_terms_and_conditions || ''} onChange={e => setSettingsData(v => ({ ...v, sms_terms_and_conditions: e.target.value }))} rows={4} className="w-full rounded-lg border border-white/10 bg-bg px-3 py-2 text-xs outline-none focus:border-accent" placeholder="Condiciones cortas del servicio SMS" />
+          </div>
+        </section>
+
+        <section className="rounded-xl border border-white/10 bg-card p-4">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-black">Catálogo y ganancias</h2>
+              <p className="text-xs text-white/45">Cambia nombres, iconos, mínimos y margen por país o app.</p>
+            </div>
+            <div className="flex rounded-lg border border-white/10 bg-bg p-1">
+              <button onClick={() => { setSelectedType('country'); setSelectedKey(countries[0]?.key || '') }} className={`rounded-md px-3 py-1.5 text-xs font-bold ${selectedType === 'country' ? 'bg-accent text-bg' : 'text-white/55'}`}>Países</button>
+              <button onClick={() => { setSelectedType('service'); setSelectedKey(services[0]?.key || '') }} className={`rounded-md px-3 py-1.5 text-xs font-bold ${selectedType === 'service' ? 'bg-accent text-bg' : 'text-white/55'}`}>Apps</button>
+            </div>
+          </div>
+
+          <div className="mb-3 grid gap-3 md:grid-cols-[1fr_220px]">
+            <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar país o app" className="w-full rounded-lg border border-white/10 bg-bg py-2.5 pl-9 pr-3 text-sm outline-none focus:border-accent" /></div>
+            {selectedType === 'service' && <CustomSelect value={selectedCountry} onChange={setSelectedCountry} placeholder="País para listar apps" options={countries.map(c => ({ value: c.key, label: `${c.flag_emoji ? c.flag_emoji + ' ' : ''}${c.name}` }))} />}
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="grid max-h-[520px] grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3">
+              {filteredItems.map(item => {
+                const ov = overrideMap[`${selectedType}:${item.key}`] || {}
+                const selected = item.key === selectedKey
+                return (
+                  <button key={item.key} onClick={() => setSelectedKey(item.key)} className={`rounded-xl border p-3 text-left active:scale-[0.99] ${selected ? 'border-accent bg-accent/12' : 'border-white/10 bg-bg/70 hover:border-white/20'}`}>
+                    <span className="flex items-center gap-3">
+                      <span className="flex h-10 w-10 flex-shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/20 text-lg"><SmsIcon src={ov.icon_url || (selectedType === 'country' ? smsCountryIconUrl(item) : smsServiceIconUrl(item))} fallback={selectedType === 'country' ? <span>{item.flag_emoji || '🌐'}</span> : <span className="text-sm font-black text-cyan-200">{(item.name || item.key || '?')[0]?.toUpperCase()}</span>} fit={selectedType === 'country' ? 'cover' : 'contain'} /></span>
+                      <span className="min-w-0 flex-1"><span className="block truncate text-xs font-black">{ov.display_name || item.name}</span><span className="block truncate text-[10px] text-white/35">{item.key}</span></span>
+                      {ov.is_hidden ? <Ban className="h-4 w-4 text-red-300" /> : ov.is_featured ? <Sparkles className="h-4 w-4 text-yellow-300" /> : null}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-bg/70 p-4">
+              <div className="mb-3 flex items-center gap-3">
+                <span className="flex h-12 w-12 overflow-hidden rounded-xl border border-white/10 bg-black/25 text-lg"><SmsIcon src={form.icon_url || (selectedType === 'country' ? smsCountryIconUrl(selectedItem) : smsServiceIconUrl(selectedItem || {}))} fallback={selectedType === 'country' ? <span>{selectedItem?.flag_emoji || '🌐'}</span> : <span className="text-base font-black text-cyan-200">{(selectedItem?.name || selectedItem?.key || '?')[0]?.toUpperCase()}</span>} fit={selectedType === 'country' ? 'cover' : 'contain'} /></span>
+                <div className="min-w-0"><p className="truncate text-sm font-black">{selectedItem?.name || 'Selecciona item'}</p><p className="truncate text-xs text-white/40">{selectedType} · {selectedKey}</p></div>
+              </div>
+              <div className="space-y-3">
+                <label className="block"><span className="mb-1 block text-[10px] font-bold uppercase text-white/40">Nombre visible</span><input value={form.display_name} onChange={e => setForm(v => ({ ...v, display_name: e.target.value }))} className="w-full rounded-lg border border-white/10 bg-card px-3 py-2 text-sm outline-none focus:border-accent" /></label>
+                <label className="block"><span className="mb-1 block text-[10px] font-bold uppercase text-white/40">Icono / imagen</span><input value={form.icon_url} onChange={e => setForm(v => ({ ...v, icon_url: e.target.value }))} className="w-full rounded-lg border border-white/10 bg-card px-3 py-2 text-xs outline-none focus:border-accent" /></label>
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-white/8 px-3 py-2 text-xs font-bold text-white/70 active:scale-95"><Edit3 className="h-4 w-4" /> Subir icono<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={e => { uploadImage('override', e.target.files?.[0]); e.target.value = '' }} /></label>
+                <div className="grid grid-cols-2 gap-2"><label className="block"><span className="mb-1 block text-[10px] font-bold uppercase text-white/40">Multiplicador propio</span><input value={form.custom_markup} onChange={e => setForm(v => ({ ...v, custom_markup: e.target.value }))} className="w-full rounded-lg border border-white/10 bg-card px-3 py-2 text-sm outline-none focus:border-accent" placeholder={settingsData?.sms_default_markup || '1.50'} /></label><label className="block"><span className="mb-1 block text-[10px] font-bold uppercase text-white/40">Mínimo propio</span><input value={form.min_price} onChange={e => setForm(v => ({ ...v, min_price: e.target.value }))} className="w-full rounded-lg border border-white/10 bg-card px-3 py-2 text-sm outline-none focus:border-accent" placeholder={settingsData?.sms_min_price_usd || '0.75'} /></label></div>
+                <label className="block"><span className="mb-1 block text-[10px] font-bold uppercase text-white/40">Orden</span><input type="number" value={form.sort_order} onChange={e => setForm(v => ({ ...v, sort_order: e.target.value }))} className="w-full rounded-lg border border-white/10 bg-card px-3 py-2 text-sm outline-none focus:border-accent" /></label>
+                <div className="grid grid-cols-2 gap-2"><label className="flex items-center gap-2 rounded-lg bg-card p-3 text-xs font-bold"><input type="checkbox" checked={!!form.is_featured} onChange={e => setForm(v => ({ ...v, is_featured: e.target.checked ? 1 : 0 }))} /> Destacado</label><label className="flex items-center gap-2 rounded-lg bg-card p-3 text-xs font-bold"><input type="checkbox" checked={!!form.is_hidden} onChange={e => setForm(v => ({ ...v, is_hidden: e.target.checked ? 1 : 0 }))} /> Oculto</label></div>
+                <div className="rounded-lg border border-cyan-300/20 bg-cyan-300/10 p-3 text-[11px] leading-relaxed text-cyan-100/85">Ejemplo: si 5sim cuesta $0.23 y el mínimo es $0.75, el cliente ve $0.75. Si el costo multiplicado por la ganancia supera el mínimo, se usa ese precio.</div>
+                <button onClick={saveOverride} disabled={saving || !selectedKey} className="w-full rounded-xl bg-accent py-3 text-sm font-black text-bg disabled:opacity-50"><Save className="inline h-4 w-4" /> Guardar país/app</button>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+      {msg && <p className="rounded-lg border border-green-500/25 bg-green-500/10 p-3 text-sm font-semibold text-green-300">{msg}</p>}
+      {err && <p className="rounded-lg border border-red-500/25 bg-red-500/10 p-3 text-sm font-semibold text-red-300">{err}</p>}
+    </div>
+  )
+}
 
 // ══════════════════════════════════════
 //  PANEL PRIVADO (FASE 1 & FASE 2)
@@ -8724,6 +9334,7 @@ function PanelScreen({ me, onLogout, onHome, onOpenCase, onEditProduct }) {
         { id: 'orders', label: 'Pedidos', icon: ClipboardList },
         { id: 'recharges', label: 'Mis recargas', icon: Smartphone },
         { id: 'pricing', label: 'Ganancias', icon: DollarSign },
+        { id: 'sms', label: 'Números SMS', icon: Smartphone },
         { id: 'sellers', label: 'Vendedores', icon: BriefcaseBusiness },
         { id: 'withdrawals', label: 'Retiros', icon: WalletCards },
         { id: 'users', label: 'Clientes', icon: User },
@@ -8912,7 +9523,8 @@ function PanelScreen({ me, onLogout, onHome, onOpenCase, onEditProduct }) {
 
         {/* Content body */}
         <main className="flex-1 overflow-y-auto px-2.5 py-3 md:px-6 md:py-6">
-          {activeRole === 'admin' && (
+          {activeRole === 'admin' && activeTab === 'sms' && <AdminSmsPanel />}
+          {activeRole === 'admin' && activeTab !== 'sms' && (
             <AdminProductsScreen
               externalTab={activeTab}
               onTabChange={setActiveTab}

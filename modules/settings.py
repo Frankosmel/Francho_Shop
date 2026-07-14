@@ -52,6 +52,9 @@ DEFAULTS = {
 
     # Referidos
     "referral_commission": str(config.DEFAULT_REFERRAL_PCT),
+    "referral_product_rewards_enabled": "1",
+    "referral_default_reward_usdt": "0.25",
+    "referral_attribution_ttl_days": "7",
 
     # Modos
     "maintenance_mode": "0",
@@ -84,6 +87,11 @@ DEFAULTS = {
     # Branding
     "brand_name": "GameStore",
 
+    # Asistente IA / soporte híbrido
+    "ai_chat_enabled": "1",
+    "ai_chat_model": "gemini-2.0-flash-lite",
+    "gemini_api_key": "",
+
     # SMS / Números Virtuales
     "sms_default_markup": "1.50",
     "sms_min_price_usd": "0.75",
@@ -95,6 +103,27 @@ DEFAULTS = {
         "4. Una vez que llega el código de verificación, la orden se considera completada y no admite reembolsos.\n"
         "5. No nos hacemos responsables por el bloqueo o suspensión posterior de tus cuentas por parte de las aplicaciones externas."
     ),
+
+    # FZR Cards / Telegram Stars & Premium (oculto hasta activarlo)
+    "fzr_api_key": "",
+    "fzr_telegram_enabled": "0",
+    "fzr_telegram_markup": "1.20",
+    "fzr_telegram_reseller_markup": "",
+    "fzr_telegram_min_price_usd": "0",
+    "fzr_capcut_enabled": "1",
+    "fzr_capcut_markup": "1.20",
+    "fzr_capcut_reseller_markup": "",
+    "fzr_capcut_min_price_usd": "0",
+    "fzr_telegram_image_url": "https://images.unsplash.com/photo-1611605698335-8b1569810432?auto=format&fit=crop&w=900&q=75",
+    "fzr_capcut_image_url": "",
+    "fzr_telegram_display_name": "Telegram",
+    "fzr_capcut_display_name": "CapCut",
+    "fzr_telegram_description": "Compra Telegram Premium o Estrellas usando tu saldo de Francho Shop. Solo escribe el usuario correcto de Telegram y confirma el plan.",
+    "fzr_capcut_description": "Compra CapCut Standard o Pro por User ID. La recarga se entrega directamente a la cuenta indicada.",
+    "fzr_telegram_instructions": "Escribe el usuario de Telegram sin errores. El producto se entrega al usuario indicado y no se puede revertir si el @usuario fue escrito incorrectamente.",
+    "fzr_capcut_instructions": "Pega correctamente tu User ID de CapCut antes de confirmar. No podemos corregir entregas enviadas a un ID equivocado.",
+    "fzr_telegram_sort_order": "100",
+    "fzr_capcut_sort_order": "100",
 }
 
 

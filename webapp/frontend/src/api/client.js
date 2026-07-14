@@ -124,8 +124,17 @@ export const api = {
     return request('/order', { method: 'POST', body: JSON.stringify(seller_id ? { ...data, seller_id } : data) })
   },
   applyReferral: (referrer_id) => request('/referrals/apply', { method: 'POST', body: JSON.stringify({ referrer_id }) }),
+  referralProductLink: (product_id) => request('/referral/product-link', { method: 'POST', body: JSON.stringify({ product_id }) }),
+  referralTrack: (ref, product_id = null) => request('/referral/track', { method: 'POST', body: JSON.stringify({ ref, product_id }) }),
+  referralMyEarnings: () => request('/referral/my-earnings'),
+  adminReferralCampaigns: () => request('/admin/referral-campaigns'),
+  saveReferralCampaign: (data) => request('/admin/referral-campaigns', { method: 'POST', body: JSON.stringify(data) }),
+  adminReferralCommissions: (status = '', limit = 100) => request(`/admin/referral-commissions?limit=${limit}${status ? `&status=${encodeURIComponent(status)}` : ''}`),
+  cancelReferralCommission: (id, reason = '') => request(`/admin/referral-commissions/${id}/cancel`, { method: 'POST', body: JSON.stringify({ reason }) }),
+  reverseReferralCommission: (id, reason = '') => request(`/admin/referral-commissions/${id}/reverse`, { method: 'POST', body: JSON.stringify({ reason }) }),
   reviewOrder: (order_id, rating, comment = '') => request(`/orders/${encodeURIComponent(order_id)}/review`, { method: 'POST', body: JSON.stringify({ rating, comment }) }),
   reviewManualOrder: (order_id, rating, comment = '') => request(`/manual-orders/${encodeURIComponent(order_id)}/review`, { method: 'POST', body: JSON.stringify({ rating, comment }) }),
+  legacyReview: (data) => request('/reviews/legacy', { method: 'POST', body: JSON.stringify(data) }),
   myOrders: () => request('/orders'),
   profile: () => request('/profile'),
   updateProfile: (data) => request('/profile', { method: 'PUT', body: JSON.stringify(data) }),
@@ -149,6 +158,27 @@ export const api = {
   smsSettingsGet: () => request('/sms/settings'),
   smsAdminSettingsGet: () => request('/admin/sms/settings'),
   smsAdminSettingsSet: (data) => request('/admin/sms/settings', { method: 'POST', body: JSON.stringify(data) }),
+  // SMM / seguidores y likes
+  smmSettingsGet: () => request('/smm/settings'),
+  smmServices: () => request('/smm/services'),
+  smmOrderCreate: (data) => request('/smm/order/create', { method: 'POST', body: JSON.stringify(data) }),
+  smmMyOrders: (limit = 50) => request(`/smm/my-orders?limit=${limit}`),
+  smmAdminSettingsGet: () => request('/admin/smm/settings'),
+  smmAdminSettingsSet: (data) => request('/admin/smm/settings', { method: 'POST', body: JSON.stringify(data) }),
+  smmAdminSync: () => request('/admin/smm/sync', { method: 'POST' }),
+  smmAdminServices: () => request('/admin/smm/services'),
+  smmAdminServiceUpdate: (id, data) => request(`/admin/smm/services/${encodeURIComponent(id)}`, { method: 'POST', body: JSON.stringify(data) }),
+  smmAdminOrders: (limit = 100) => request(`/admin/smm/orders?limit=${limit}`),
+  smmAdminOrderSync: (id) => request(`/admin/smm/orders/${id}/sync`, { method: 'POST' }),
+  // FZR / Telegram y CapCut
+  fzrTelegramCatalog: () => request('/fzr/telegram/catalog'),
+  fzrTelegramOrder: (data) => request('/fzr/telegram/order', { method: 'POST', body: JSON.stringify(data) }),
+  fzrCapcutCatalog: () => request('/fzr/capcut/catalog'),
+  fzrCapcutOrder: (data) => request('/fzr/capcut/order', { method: 'POST', body: JSON.stringify(data) }),
+  fzrMyOrders: (limit = 50) => request(`/fzr/my-orders?limit=${limit}`),
+  fzrAdminSettingsGet: () => request('/admin/fzr/settings'),
+  fzrAdminSettingsSet: (data) => request('/admin/fzr/settings', { method: 'POST', body: JSON.stringify(data) }),
+  fzrAdminOrders: (limit = 100) => request(`/admin/fzr/orders?limit=${limit}`),
   // Auth
   register: (email, password, name) =>
     request('/auth/register', { method: 'POST', body: JSON.stringify({ email, password, name }) }),
@@ -169,8 +199,8 @@ export const api = {
     request('/auth/change-password', { method: 'POST', body: JSON.stringify({ current_password, new_password }) }),
   // Manual products
   manualProducts: () => request('/manual-products'),
-  buyManualProduct: (product_id, option_id = null, customer_data = {}) =>
-    request('/manual-orders', { method: 'POST', body: JSON.stringify({ product_id, option_id, customer_data }) }),
+  buyManualProduct: (product_id, option_id = null, customer_data = {}, referral_code = null) =>
+    request('/manual-orders', { method: 'POST', body: JSON.stringify({ product_id, option_id, customer_data, referral_code }) }),
   myManualOrders: () => request('/my-manual-orders'),
   manualOrderCase: (order_id) => request(`/manual-orders/${encodeURIComponent(order_id)}/case`),
   markCaseRead: (order_id) => request(`/manual-orders/${encodeURIComponent(order_id)}/case/read`, { method: 'POST', body: '{}' }),
@@ -201,6 +231,7 @@ export const api = {
     return request(`/admin/manual-order-cases${qs.toString() ? `?${qs}` : ''}`)
   },
   sendAdminManualCaseMessage: (order_id, message, is_internal_note = false) => request(`/admin/manual-orders/${order_id}/case/messages`, { method: 'POST', body: JSON.stringify({ message, is_internal_note }) }),
+  requestAdminManualCaseReview: (order_id) => request(`/admin/manual-orders/${order_id}/case/request-review`, { method: 'POST', body: '{}' }),
   uploadAdminCaseFile: (order_id, file) => upload(`/admin/manual-orders/${encodeURIComponent(order_id)}/case/upload`, file),
   updateAdminManualCaseStatus: (order_id, status, message = '') => request(`/admin/manual-orders/${order_id}/case/status`, { method: 'POST', body: JSON.stringify({ status, message }) }),
   refundManualOrder: (order_id, reason = '') => request(`/admin/manual-orders/${order_id}/refund`, { method: 'POST', body: JSON.stringify({ reason }) }),
@@ -261,6 +292,10 @@ export const api = {
   removeSeller: (user_id) => request(`/admin/sellers/${user_id}`, { method: 'DELETE' }),
   adminReviews: (limit = 100) => request(`/admin/reviews?limit=${limit}`),
   adminAudit: (limit = 50) => request(`/admin/audit?limit=${limit}`),
+  // Asistente IA / soporte híbrido
+  aiChatSession: () => request('/ai-chat/session'),
+  aiChatMessage: (message) => request('/ai-chat/message', { method: 'POST', body: JSON.stringify({ message }) }),
+  aiChatHandoff: (message = '') => request('/ai-chat/handoff', { method: 'POST', body: JSON.stringify({ message }) }),
   // Soporte y Chats Unificados
   getInbox: () => request('/inbox'),
   createSupportTicket: (data) => request('/support/tickets', { method: 'POST', body: JSON.stringify(data) }),

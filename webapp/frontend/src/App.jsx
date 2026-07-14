@@ -84,7 +84,47 @@ const DEPOSIT_PRESETS = [5, 10, 25, 50, 100, 250]
 const NAV_STATE_KEY = 'fs_last_nav_v1'
 const WHATSAPP_SUPPORT_URL = 'https://wa.me/5363785631'
 const WHATSAPP_CHANNEL_URL = 'https://whatsapp.com/channel/0029VaRW8KgGehETCBaAnN2K'
-const SAFE_NAV_SCREENS = new Set(['home', 'regions', 'products', 'detail', 'profile', 'orders', 'help', 'terms', 'faq', 'contact', 'partner-help', 'seller-store', 'guides', 'guide-detail', 'case', 'panel', 'sms'])
+const SAFE_NAV_SCREENS = new Set(['home', 'regions', 'products', 'detail', 'profile', 'orders', 'help', 'terms', 'faq', 'contact', 'partner-help', 'seller-store', 'guides', 'guide-detail', 'case', 'sms', 'smm', 'telegram', 'capcut'])
+const PRIVATE_NAV_SCREENS = new Set(['panel', 'admin', 'admin-edit'])
+const CATALOG_ROUTE_PARAMS = ['product', 'manual_product', 'game', 'region', 'case', 'seguimiento', 'screen', 'sms_country', 'sms_service', 'sms_operator', 'fzr_type']
+
+function multiplierToPercent(value) {
+  if (value === '' || value === null || value === undefined) return ''
+  const n = Number(value)
+  if (!Number.isFinite(n)) return ''
+  return String(Number(((n - 1) * 100).toFixed(2)))
+}
+
+function percentToMultiplier(value) {
+  if (value === '' || value === null || value === undefined) return ''
+  const n = Number(String(value).replace(',', '.'))
+  if (!Number.isFinite(n)) return ''
+  return String((1 + n / 100).toFixed(4))
+}
+
+function catalogHistoryState(screen, currentGame = null, currentRegion = null, currentProduct = null) {
+  return {
+    screen,
+    currentGame: currentGame || null,
+    currentRegion: currentRegion || null,
+    currentProduct: currentProduct?.id ? { id: currentProduct.id } : null,
+  }
+}
+function clearCatalogRouteParams() {
+  try {
+    const params = new URLSearchParams(window.location.search)
+    let changed = false
+    CATALOG_ROUTE_PARAMS.forEach((key) => {
+      if (params.has(key)) {
+        params.delete(key)
+        changed = true
+      }
+    })
+    if (!changed) return
+    const nextSearch = params.toString() ? `?${params.toString()}` : ''
+    window.history.replaceState(window.history.state || {}, '', window.location.pathname + nextSearch)
+  } catch {}
+}
 const PREMIUM_STICKERS = [
   { code: ':fs_fire:', label: 'Popular', icon: Flame, color: 'text-orange-400' },
   { code: ':fs_diamond:', label: 'Premium', icon: Gem, color: 'text-cyan-300' },
@@ -120,6 +160,16 @@ const storeAssetUrl = (value = '') => String(value || '').replace(/^https?:\/\/\
 const copyText = async (text) => {
   try { await navigator.clipboard.writeText(text); return true }
   catch { window.prompt('Copia este enlace', text); return false }
+}
+const REFERRAL_STORAGE_PREFIX = 'fs_product_ref_'
+const referralKeyForProduct = (productId) => REFERRAL_STORAGE_PREFIX + String(productId || '')
+const rememberProductReferral = (productId, code) => {
+  try {
+    if (productId && code) localStorage.setItem(referralKeyForProduct(productId), String(code).slice(0, 64))
+  } catch {}
+}
+const getProductReferral = (productId) => {
+  try { return localStorage.getItem(referralKeyForProduct(productId)) || '' } catch { return '' }
 }
 
 const SEO_DEFAULT = {
@@ -210,11 +260,15 @@ function applySeoMeta({ title, description }) {
 const readSavedNav = () => {
   try {
     const saved = JSON.parse(localStorage.getItem(NAV_STATE_KEY) || 'null')
-    if (!saved || !SAFE_NAV_SCREENS.has(saved.screen)) return null
+    if (!saved || PRIVATE_NAV_SCREENS.has(saved.screen) || !SAFE_NAV_SCREENS.has(saved.screen)) {
+      try { localStorage.removeItem(NAV_STATE_KEY) } catch {}
+      return null
+    }
     if (saved.savedAt && Date.now() - saved.savedAt > 7 * 24 * 60 * 60 * 1000) return null
-    if (['regions', 'products', 'detail'].includes(saved.screen) && !saved.currentGame?.name) return null
-    if (['products', 'detail'].includes(saved.screen) && !saved.currentRegion) return null
-    if (saved.screen === 'detail' && !saved.currentProduct?.id) return null
+    if (['regions', 'products', 'detail', 'confirm', 'result'].includes(saved.screen)) {
+      try { localStorage.removeItem(NAV_STATE_KEY) } catch {}
+      return null
+    }
     return saved
   } catch { return null }
 }
@@ -364,34 +418,40 @@ class ErrorBoundary extends Component {
   }
 }
 
-export default function App() {
+export default function App({ adminPortal = false } = {}) {
   return (
     <ErrorBoundary>
-      <AppInner />
+      <AppInner adminPortal={adminPortal} />
     </ErrorBoundary>
   )
 }
 
-function AppInner() {
+function AppInner({ adminPortal = false }) {
   const [me, setMe] = useState(null)
-  const [screen, setScreen] = useState('home')
+  const [screen, setScreen] = useState(adminPortal ? 'panel' : 'home')
   const [error, setError] = useState(null)
   const [loading, setLoading] = useState(true)
   const [currentGame, setCurrentGame] = useState(null)
   const [currentRegion, setCurrentRegion] = useState(null)
   const [currentProduct, setCurrentProduct] = useState(null)
+  const [panelReturnRole, setPanelReturnRole] = useState(null)
+  const [panelReturnTab, setPanelReturnTab] = useState(null)
   const [orderResult, setOrderResult] = useState(null)
   const [regionsCount, setRegionsCount] = useState({})
   const [authScreen, setAuthScreen] = useState(null) // login, register, forgot, verify, reset
   const [showTopUp, setShowTopUp] = useState(false)
   const [sellerStoreSlug, setSellerStoreSlug] = useState('')
   const [guideSlug, setGuideSlug] = useState('')
+  const [shareEarnings, setShareEarnings] = useState(null)
   const [showExitToast, setShowExitToast] = useState(false)
   const lastBackPress = useRef(0)
   const isPopStateNavigation = useRef(false)
   const hasInitializedHistory = useRef(false)
+  const replaceNextHistory = useRef(false)
   const [caseOrderId, setCaseOrderId] = useState(null)
   const [caseIsAdmin, setCaseIsAdmin] = useState(false)
+  const [caseReviewOnOpen, setCaseReviewOnOpen] = useState(false)
+  const isPrivatePortal = adminPortal || window.location.pathname.startsWith('/panel') || window.location.pathname.startsWith('/admin')
   
   // Estados de Notificaciones (Fase 1)
   const [notifications, setNotifications] = useState([])
@@ -552,11 +612,12 @@ function AppInner() {
     }
 
     if (notif.url) {
-      if (notif.url.includes('/seguimiento') || notif.url.includes('/case')) {
-        const orderId = notif.related_order_id || notif.url.match(/\/pedido\/(\d+)/)?.[1]
+      if (notif.url.includes('/seguimiento') || notif.url.includes('/case') || notif.url.includes('?case=')) {
+        const orderId = notif.related_order_id || notif.url.match(/\/pedido\/(\d+)/)?.[1] || notif.url.match(/[?&]case=(\d+)/)?.[1]
         if (orderId) {
           setCaseOrderId(Number(orderId))
           setCaseIsAdmin(notif.url.includes('admin=true'))
+          setCaseReviewOnOpen(notif.url.includes('review=1'))
           setScreen('case')
         }
       } else if (notif.url.includes('/perfil')) {
@@ -603,6 +664,10 @@ function AppInner() {
   const goHome = () => {
     setScreen('home')
     setOrderResult(null)
+    setCurrentGame(null)
+    setCurrentRegion(null)
+    setCurrentProduct(null)
+    clearCatalogRouteParams()
     if (window.location.pathname.startsWith('/guias')) window.history.pushState({}, '', '/')
   }
 
@@ -635,12 +700,11 @@ function AppInner() {
     api.me()
       .then((data) => {
         setMe(data)
-        if (window.location.pathname.startsWith('/panel')) {
+        if (isPrivatePortal) {
           if (['admin', 'seller', 'reseller'].includes(data?.role)) {
             setScreen('panel')
           } else {
-            window.history.replaceState({ screen: 'home' }, '', '/')
-            setScreen('home')
+            setError('No tienes permisos para entrar al panel privado.')
           }
           setLoading(false)
           return
@@ -665,7 +729,10 @@ function AppInner() {
         const productId = params.get('product')
         const gameParam = params.get('game')
         const caseParam = params.get('case') || params.get('seguimiento')
-        if (productId && Number(productId)) {
+        const screenParam = params.get('screen')
+        if (['sms', 'smm', 'telegram', 'capcut'].includes(screenParam)) {
+          setScreen(screenParam)
+        } else if (productId && Number(productId)) {
           setCurrentRegion(params.get('region') || '__standard__')
           setCurrentProduct({ id: Number(productId) })
           setScreen('detail')
@@ -678,6 +745,7 @@ function AppInner() {
         } else if (caseParam && Number(caseParam)) {
           setCaseOrderId(Number(caseParam))
           setCaseIsAdmin(params.get('admin') === 'true')
+          setCaseReviewOnOpen(params.get('review') === '1')
           setScreen('case')
         } else {
           const saved = readSavedNav()
@@ -687,13 +755,14 @@ function AppInner() {
             setCurrentProduct(saved.currentProduct || null)
             setCaseOrderId(saved.caseOrderId || null)
             setCaseIsAdmin(saved.caseIsAdmin || false)
+            setCaseReviewOnOpen(false)
             setScreen(saved.screen || 'home')
           }
         }
         setLoading(false)
       })
       .catch((err) => {
-        if (window.location.pathname.startsWith('/panel')) {
+        if (isPrivatePortal) {
           api.clearSession()
           setMe(GUEST_USER)
           setAuthScreen('login')
@@ -726,7 +795,10 @@ function AppInner() {
           const productId = params.get('product')
           const gameParam2 = params.get('game')
           const caseParam2 = params.get('case') || params.get('seguimiento')
-          if (productId && Number(productId)) {
+          const screenParam2 = params.get('screen')
+          if (['sms', 'smm', 'telegram', 'capcut'].includes(screenParam2)) {
+            setScreen(screenParam2)
+          } else if (productId && Number(productId)) {
             setCurrentRegion(params.get('region') || '__standard__')
             setCurrentProduct({ id: Number(productId) })
             setScreen('detail')
@@ -737,6 +809,7 @@ function AppInner() {
           } else if (caseParam2 && Number(caseParam2)) {
             setCaseOrderId(Number(caseParam2))
             setCaseIsAdmin(params.get('admin') === 'true')
+            setCaseReviewOnOpen(params.get('review') === '1')
             setScreen('case')
           }
           setMe(GUEST_USER)
@@ -759,7 +832,10 @@ function AppInner() {
           const productId = params.get('product')
           const gameParam3 = params.get('game')
           const caseParam3 = params.get('case') || params.get('seguimiento')
-          if (productId && Number(productId)) {
+          const screenParam3 = params.get('screen')
+          if (['sms', 'smm', 'telegram', 'capcut'].includes(screenParam3)) {
+            setScreen(screenParam3)
+          } else if (productId && Number(productId)) {
             setCurrentRegion(params.get('region') || '__standard__')
             setCurrentProduct({ id: Number(productId) })
             setScreen('detail')
@@ -770,6 +846,7 @@ function AppInner() {
           } else if (caseParam3 && Number(caseParam3)) {
             setCaseOrderId(Number(caseParam3))
             setCaseIsAdmin(params.get('admin') === 'true')
+            setCaseReviewOnOpen(params.get('review') === '1')
             setScreen('case')
           }
           setMe(GUEST_USER)
@@ -779,28 +856,38 @@ function AppInner() {
   }, [])
 
   useEffect(() => {
-    if (currentGame && currentGame.name && !currentGame.icon_url) {
-      (me?.is_guest ? api.publicGames() : api.games())
-        .then((list) => {
-          if (Array.isArray(list)) {
-            const found = list.find(g => g.name === currentGame.name)
-            if (found) {
-              setCurrentGame(found)
-            }
-          }
+    const gameName = currentGame?.name
+    if (!gameName || currentGame?.icon_url) return
+    let cancelled = false
+    ;(me?.is_guest ? api.publicGames() : api.games())
+      .then((list) => {
+        if (cancelled || !Array.isArray(list)) return
+        const found = list.find(g => g.name === gameName)
+        if (!found) return
+        setCurrentGame(prev => {
+          if (!prev || prev.name !== gameName || prev.icon_url) return prev
+          return found
         })
-        .catch(() => {})
-    }
-  }, [currentGame, me?.is_guest])
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [currentGame?.name, currentGame?.icon_url, me?.is_guest])
 
   useEffect(() => {
     if (loading) return
     // Cleanups on screen transition
-    if (screen !== 'detail' && screen !== 'confirm' && screen !== 'result') {
-      const params = new URLSearchParams(window.location.search)
-      if (params.has('product')) {
+    const params = new URLSearchParams(window.location.search)
+    const hasManualDeepLink = screen === 'home' && params.has('manual_product')
+    const hasSmsDeepLink = screen === 'sms' && params.get('screen') === 'sms'
+    const hasSmmDeepLink = screen === 'smm' && params.get('screen') === 'smm'
+    const hasFzrDeepLink = ['telegram', 'capcut'].includes(screen) && ['telegram', 'capcut'].includes(params.get('screen'))
+    if (!['products', 'detail', 'confirm', 'result', 'case', 'sms', 'smm', 'telegram', 'capcut'].includes(screen) && !hasManualDeepLink) {
+      clearCatalogRouteParams()
+    } else if (screen !== 'detail' && screen !== 'confirm' && screen !== 'result' && !hasManualDeepLink && !hasSmsDeepLink && !hasSmmDeepLink && !hasFzrDeepLink) {
+      if (params.has('product') || params.has('manual_product')) {
         const newParams = new URLSearchParams(params)
         newParams.delete('product')
+        newParams.delete('manual_product')
         newParams.delete('region')
         const newSearch = newParams.toString() ? '?' + newParams.toString() : ''
         try { window.history.replaceState(window.history.state, '', window.location.pathname + newSearch) } catch {}
@@ -819,15 +906,15 @@ function AppInner() {
     if (screen === 'detail') {
       window.history.replaceState({ screen: 'exit_sentinel' }, '', window.location.pathname + window.location.search)
       window.history.pushState({ screen: 'home' }, '', window.location.pathname + window.location.search)
-      window.history.pushState({ screen: 'detail' }, '', window.location.pathname + window.location.search)
+      window.history.pushState(catalogHistoryState('detail', currentGame, currentRegion, currentProduct), '', window.location.pathname + window.location.search)
     } else if (screen === 'products') {
       window.history.replaceState({ screen: 'exit_sentinel' }, '', window.location.pathname + window.location.search)
       window.history.pushState({ screen: 'home' }, '', window.location.pathname + window.location.search)
-      window.history.pushState({ screen: 'products' }, '', window.location.pathname + window.location.search)
+      window.history.pushState(catalogHistoryState('products', currentGame, currentRegion, currentProduct), '', window.location.pathname + window.location.search)
     } else if (screen === 'case') {
       window.history.replaceState({ screen: 'exit_sentinel' }, '', window.location.pathname + window.location.search)
       window.history.pushState({ screen: 'home' }, '', window.location.pathname + window.location.search)
-      window.history.pushState({ screen: 'case' }, '', window.location.pathname + window.location.search)
+      window.history.pushState({ screen: 'case', caseOrderId, caseIsAdmin }, '', window.location.pathname + window.location.search)
     } else {
       window.history.replaceState({ screen: 'exit_sentinel' }, '', window.location.pathname + window.location.search)
       window.history.pushState({ screen: 'home' }, '', window.location.pathname + window.location.search)
@@ -861,6 +948,9 @@ function AppInner() {
         }
       } else if (state?.screen) {
         isPopStateNavigation.current = true
+        if (state.currentGame !== undefined) setCurrentGame(state.currentGame || null)
+        if (state.currentRegion !== undefined) setCurrentRegion(state.currentRegion || null)
+        if (state.currentProduct !== undefined) setCurrentProduct(state.currentProduct || null)
         setScreen(state.screen)
       } else {
         isPopStateNavigation.current = true
@@ -882,25 +972,32 @@ function AppInner() {
       window.history.pushState({ screen: 'home' }, '', window.location.pathname + window.location.search)
     } else {
       if (window.history.state?.screen !== screen) {
-        window.history.pushState({ screen }, '', window.location.pathname + window.location.search)
+        if (replaceNextHistory.current) {
+          window.history.replaceState(catalogHistoryState(screen, currentGame, currentRegion, currentProduct), '', window.location.pathname + window.location.search)
+          replaceNextHistory.current = false
+        } else {
+          window.history.pushState(catalogHistoryState(screen, currentGame, currentRegion, currentProduct), '', window.location.pathname + window.location.search)
+        }
       }
     }
   }, [loading, authScreen, screen])
 
   useEffect(() => {
-    if (loading || authScreen || !SAFE_NAV_SCREENS.has(screen)) return
+    if (loading || authScreen || isPrivatePortal || PRIVATE_NAV_SCREENS.has(screen) || !SAFE_NAV_SCREENS.has(screen)) return
     if (screen === 'seller-store') return
+    const isCatalogScreen = ['regions', 'products', 'detail', 'confirm', 'result'].includes(screen)
     const state = {
       screen,
-      currentGame: currentGame || null,
-      currentRegion: currentRegion || null,
-      currentProduct: currentProduct?.id ? { id: currentProduct.id } : null,
+      currentGame: isCatalogScreen ? (currentGame || null) : null,
+      currentRegion: isCatalogScreen ? (currentRegion || null) : null,
+      currentProduct: isCatalogScreen && currentProduct?.id ? { id: currentProduct.id } : null,
       caseOrderId: caseOrderId || null,
       caseIsAdmin: caseIsAdmin || false,
+      caseReviewOnOpen: false,
       savedAt: Date.now(),
     }
     try { localStorage.setItem(NAV_STATE_KEY, JSON.stringify(state)) } catch {}
-  }, [loading, authScreen, screen, currentGame, currentRegion, currentProduct])
+  }, [loading, authScreen, isPrivatePortal, screen, currentGame, currentRegion, currentProduct])
 
   useEffect(() => {
     if (loading || authScreen) return
@@ -944,12 +1041,12 @@ function AppInner() {
     const onLoginSuccess = (userData) => {
       setMe(userData)
       setAuthScreen(null)
-      if (window.location.pathname.startsWith('/panel')) {
+      if (isPrivatePortal) {
         if (['admin', 'seller', 'reseller'].includes(userData?.role)) {
+          window.history.replaceState({ screen: 'panel' }, '', adminPortal ? '/admin.html' : '/panel')
           setScreen('panel')
         } else {
-          window.history.replaceState({ screen: 'home' }, '', '/')
-          setScreen('home')
+          setError('No tienes permisos para entrar al panel privado.')
         }
       }
     }
@@ -957,6 +1054,7 @@ function AppInner() {
       <div className="min-h-screen bg-bg">
         {authScreen === 'login' && (
           <LoginScreen
+            privatePortal={isPrivatePortal}
             onSuccess={onLoginSuccess}
             onRegister={() => setAuthScreen('register')}
             onForgot={() => setAuthScreen('forgot')}
@@ -990,26 +1088,33 @@ function AppInner() {
   const isGuest = !!me.is_guest
 
   return (
-    <div className={screen === 'panel' ? "h-screen bg-bg overflow-hidden flex flex-col" : "min-h-screen bg-bg pb-24"}>
-      {screen !== 'home' && screen !== 'panel' && screen !== 'sms' && (
+    <div className={(screen === 'panel' || screen === 'sms' || screen === 'smm' || screen === 'telegram' || screen === 'capcut' || screen === 'home') ? "h-screen bg-bg overflow-hidden flex flex-col" : "min-h-screen bg-bg pb-24"}>
+      {screen !== 'home' && screen !== 'panel' && screen !== 'sms' && screen !== 'smm' && screen !== 'telegram' && screen !== 'capcut' && (
         <Header me={me} onBack={goBack}
                 onProfile={() => isGuest ? requireLogin() : setScreen('profile')}
                 onTopUp={() => isGuest ? requireLogin() : setShowTopUp(true)}
                 onOpenNotifications={() => isGuest ? requireLogin() : setShowNotifsDropdown(true)}
                 unreadNotifsCount={unreadNotifsCount} />
       )}
-      {screen === 'home' && <HomeScreen me={me} onLoginRequired={requireLogin} onSelectGame={(g) => { setCurrentGame(g); setScreen('regions') }} onNav={(target) => target === 'guides' ? openGuide('') : setScreen(target)} onOpenNotifications={() => isGuest ? requireLogin() : setShowNotifsDropdown(true)} unreadNotifsCount={unreadNotifsCount} />}
+      {screen === 'home' && <HomeScreen me={me} onLoginRequired={requireLogin} onSelectGame={(g) => { clearCatalogRouteParams(); setCurrentGame(g); setCurrentRegion(null); setCurrentProduct(null); setScreen('regions') }} onNav={(target) => target === 'guides' ? openGuide('') : setScreen(target)} onOpenNotifications={() => isGuest ? requireLogin() : setShowNotifsDropdown(true)} unreadNotifsCount={unreadNotifsCount} />}
       {screen === 'regions' && currentGame && (
         <RegionsScreen
+          key={currentGame.name}
           me={me}
           game={currentGame.name}
           gameData={currentGame}
           onCountKnown={(count) => setRegionsCount(prev => ({ ...prev, [currentGame.name]: count }))}
-          onSelectRegion={(r) => { setCurrentRegion(r); setScreen('products') }}
+          onSelectRegion={(r) => {
+            setCurrentRegion(r)
+            if (regionsCount[currentGame?.name] === 1 || r === 'Global') {
+              replaceNextHistory.current = true
+            }
+            setScreen('products')
+          }}
         />
       )}
       {screen === 'products' && currentGame && currentRegion && (
-        <ProductsScreen game={currentGame.name} gameData={currentGame} region={currentRegion} me={me} onLoginRequired={requireLogin}
+        <ProductsScreen key={`${currentGame.name}:${currentRegion}`} game={currentGame.name} gameData={currentGame} region={currentRegion} me={me} onLoginRequired={requireLogin}
           onSelectProduct={(p) => {
             // Si trae _orderResult (compra exitosa) saltar a result
             if (p._orderResult) {
@@ -1031,7 +1136,7 @@ function AppInner() {
           }} />
       )}
       {screen === 'case' && caseOrderId && (
-        <OrderCaseChatScreen orderId={caseOrderId} admin={caseIsAdmin} me={me} onBack={goBack} />
+        <OrderCaseChatScreen orderId={caseOrderId} admin={caseIsAdmin} me={me} openReviewOnLoad={caseReviewOnOpen} onReviewAutoOpened={() => setCaseReviewOnOpen(false)} onBack={goBack} />
       )}
       {screen === 'confirm' && currentProduct?.detail && (
         <ConfirmScreen product={currentProduct} region={currentRegion} me={me}
@@ -1045,6 +1150,30 @@ function AppInner() {
       )}
       {screen === 'sms' && (
         <SmsNumbersScreen
+          me={me}
+          onBack={() => setScreen('home')}
+          onLoginRequired={requireLogin}
+          onBought={() => { api.me().then(setMe).catch(() => {}); setScreen('orders') }}
+        />
+      )}
+      {screen === 'smm' && (
+        <SmmServicesScreen
+          me={me}
+          onBack={() => setScreen('home')}
+          onLoginRequired={requireLogin}
+          onBought={() => { api.me().then(setMe).catch(() => {}); setScreen('orders') }}
+        />
+      )}
+      {screen === 'telegram' && (
+        <FzrTelegramScreen
+          me={me}
+          onBack={() => setScreen('home')}
+          onLoginRequired={requireLogin}
+          onBought={() => { api.me().then(setMe).catch(() => {}); setScreen('orders') }}
+        />
+      )}
+      {screen === 'capcut' && (
+        <FzrCapCutScreen
           me={me}
           onBack={() => setScreen('home')}
           onLoginRequired={requireLogin}
@@ -1073,7 +1202,7 @@ function AppInner() {
       )}
       {screen === 'admin' && (
         <AdminProductsScreen
-          onEdit={(p) => { setCurrentProduct(p); setScreen('admin-edit') }}
+          onEdit={(p) => { setCurrentProduct(p); setPanelReturnRole('admin'); setPanelReturnTab('products'); setScreen('admin-edit') }}
           onOpenCase={(orderId, isAdmin) => {
             setCaseOrderId(orderId)
             setCaseIsAdmin(isAdmin)
@@ -1086,14 +1215,16 @@ function AppInner() {
           product={currentProduct}
           me={me}
           onSaved={() => {
-            if (window.location.pathname.startsWith('/panel')) {
+            if (isPrivatePortal) {
+              setPanelReturnTab('products')
               setScreen('panel')
             } else {
               setScreen('admin')
             }
           }}
           onCancel={() => {
-            if (window.location.pathname.startsWith('/panel')) {
+            if (isPrivatePortal) {
+              setPanelReturnTab('products')
               setScreen('panel')
             } else {
               setScreen('admin')
@@ -1113,23 +1244,33 @@ function AppInner() {
       {screen === 'panel' && (
         <PanelScreen
           me={me}
+          setMe={setMe}
+          initialRole={panelReturnRole}
+          initialTab={panelReturnTab}
+          portalMode={isPrivatePortal}
           onLogout={() => {
             api.clearSession()
             setMe(GUEST_USER)
-            window.history.replaceState({ screen: 'home' }, '', '/')
-            setScreen('home')
+            if (isPrivatePortal) {
+              window.history.replaceState({ screen: 'panel' }, '', adminPortal ? '/admin.html' : '/panel')
+              setAuthScreen('login')
+            } else {
+              window.history.replaceState({ screen: 'home' }, '', '/')
+              setScreen('home')
+            }
           }}
           onHome={() => {
-            window.history.pushState({ screen: 'home' }, '', '/')
-            setScreen('home')
+            window.location.href = '/'
           }}
           onOpenCase={(orderId, isAdmin) => {
             setCaseOrderId(orderId)
             setCaseIsAdmin(isAdmin)
             setScreen('case')
           }}
-          onEditProduct={(p) => {
+          onEditProduct={(p, role = null) => {
             setCurrentProduct(p)
+            setPanelReturnRole(role)
+            setPanelReturnTab('products')
             setScreen('admin-edit')
           }}
         />
@@ -1263,7 +1404,11 @@ function AppInner() {
         </div>
       )}
 
-      {screen !== 'case' && screen !== 'panel' && screen !== 'sms' && (
+      {me?.role === 'admin' && !isPrivatePortal && screen !== 'case' && screen !== 'panel' && screen !== 'sms' && screen !== 'smm' && screen !== 'telegram' && screen !== 'capcut' && (
+        <AiSupportWidget me={me} onLoginRequired={requireLogin} />
+      )}
+
+      {screen !== 'case' && screen !== 'panel' && screen !== 'sms' && screen !== 'smm' && screen !== 'telegram' && screen !== 'capcut' && (
         <BottomNav active={screen} me={me} onNav={(target) => {
         if (target === 'home') {
           goHome()
@@ -1283,7 +1428,7 @@ function AppInner() {
 
       {/* Fallback: si el screen no matchea ningún componente, mostrar home */}
       {!['home', 'regions', 'products', 'detail', 'confirm', 'result',
-         'profile', 'orders', 'help', 'terms', 'faq', 'contact', 'guides', 'guide-detail', 'seller-store', 'partner-help', 'admin', 'admin-edit', 'case', 'panel', 'sms'].includes(screen) && (
+         'profile', 'orders', 'help', 'terms', 'faq', 'contact', 'guides', 'guide-detail', 'seller-store', 'partner-help', 'admin', 'admin-edit', 'case', 'panel', 'sms', 'smm', 'telegram', 'capcut'].includes(screen) && (
         <div className="p-8 text-center">
           <p className="text-white/60 mb-4">Estado no reconocido: {screen}</p>
           <button onClick={() => setScreen('home')} className="btn-primary max-w-xs mx-auto">
@@ -1325,7 +1470,7 @@ function BottomNav({ active, me, onNav }) {
     { id: 'orders', label: 'Pedidos', icon: '▤' },
     { id: 'profile', label: 'Perfil', icon: '◉' },
   ]
-  if (['admin', 'seller'].includes(me?.role)) items.push({ id: 'admin', label: me?.role === 'admin' ? 'Admin' : 'Vender', icon: '⚙' })
+  if (me?.role === 'admin') items.push({ id: 'admin', label: 'Admin', icon: '⚙' })
   return (
     <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-white/10 bg-bg/95 px-3 pb-[calc(env(safe-area-inset-bottom)+10px)] pt-2 backdrop-blur">
       <div className="mx-auto grid max-w-md gap-2" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
@@ -1345,6 +1490,154 @@ function BottomNav({ active, me, onNav }) {
         })}
       </div>
     </nav>
+  )
+}
+
+function AiSupportWidget({ me, onLoginRequired }) {
+  const [open, setOpen] = useState(false)
+  const [messages, setMessages] = useState([])
+  const [input, setInput] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [err, setErr] = useState('')
+  const [supportRoomId, setSupportRoomId] = useState(null)
+  const [supportTicketId, setSupportTicketId] = useState(null)
+  const [humanMessages, setHumanMessages] = useState([])
+  const isGuest = !!me?.is_guest
+
+  async function loadSession() {
+    if (isGuest) return
+    setLoading(true); setErr('')
+    try {
+      const data = await api.aiChatSession()
+      setMessages(data.messages || [])
+      const roomId = data.session?.handoff_room_id
+      if (roomId) {
+        setSupportRoomId(roomId)
+        setSupportTicketId(data.session?.handoff_ticket_id || null)
+        const chat = await api.getChatMessages(roomId).catch(() => null)
+        if (chat) setHumanMessages(chat.messages || [])
+      }
+    } catch (e) { setErr(e.message) }
+    setLoading(false)
+  }
+
+  useEffect(() => { if (open) loadSession() }, [open, me?.user_id])
+
+  async function sendAiMessage() {
+    const text = input.trim()
+    if (!text || loading) return
+    if (isGuest) { onLoginRequired?.(); return }
+    setInput(''); setErr(''); setLoading(true)
+    const tempUser = { id: `u-${Date.now()}`, sender_role: 'customer', message_text: text }
+    setMessages(prev => [...prev, tempUser])
+    try {
+      const res = await api.aiChatMessage(text)
+      setMessages(prev => [...prev, res.message])
+    } catch (e) {
+      setErr(e.message)
+      setInput(text)
+    }
+    setLoading(false)
+  }
+
+  async function startHumanSupport() {
+    if (isGuest) { onLoginRequired?.(); return }
+    setLoading(true); setErr('')
+    try {
+      const res = await api.aiChatHandoff(input.trim() || 'Necesito soporte humano')
+      setSupportRoomId(res.room_id)
+      setSupportTicketId(res.ticket_id)
+      const chat = await api.getChatMessages(res.room_id).catch(() => null)
+      if (chat) setHumanMessages(chat.messages || [])
+      await loadSession()
+    } catch (e) { setErr(e.message) }
+    setLoading(false)
+  }
+
+  async function sendHumanMessage() {
+    const text = input.trim()
+    if (!text || !supportRoomId || loading) return
+    setInput(''); setErr(''); setLoading(true)
+    try {
+      await api.sendChatMessage(supportRoomId, text)
+      const chat = await api.getChatMessages(supportRoomId)
+      setHumanMessages(chat.messages || [])
+    } catch (e) {
+      setErr(e.message)
+      setInput(text)
+    }
+    setLoading(false)
+  }
+
+  const activeHuman = !!supportRoomId
+  const shownMessages = activeHuman ? humanMessages : messages
+
+  return (
+    <>
+      {!open && (
+        <button
+          onClick={() => isGuest ? onLoginRequired?.() : setOpen(true)}
+          className="fixed bottom-[92px] right-4 z-30 flex h-13 w-13 items-center justify-center rounded-2xl border border-accent/35 bg-accent text-bg shadow-xl shadow-black/35 active:scale-95"
+          title="Asistente de soporte"
+        >
+          <Headphones className="h-6 w-6" />
+        </button>
+      )}
+      {open && (
+        <div className="fixed inset-x-3 bottom-[86px] z-40 mx-auto flex max-h-[72vh] max-w-md flex-col overflow-hidden rounded-2xl border border-white/10 bg-bg shadow-2xl shadow-black/50 sm:right-4 sm:left-auto sm:w-[390px]">
+          <div className="flex items-center justify-between border-b border-white/10 bg-card px-4 py-3">
+            <div className="flex min-w-0 items-center gap-3">
+              <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/15 text-accent"><Headphones className="h-5 w-5" /></span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black">{activeHuman ? 'Soporte humano' : 'Asistente Francho'}</p>
+                <p className="truncate text-[11px] text-white/45">{activeHuman ? `Caso ${supportTicketId || ''}` : 'IA primero, humano si hace falta'}</p>
+              </div>
+            </div>
+            <button onClick={() => setOpen(false)} className="rounded-lg bg-white/8 p-2 text-white/70 active:scale-95"><X className="h-4 w-4" /></button>
+          </div>
+
+          <div className="flex-1 space-y-2 overflow-y-auto bg-black/10 p-3">
+            {loading && shownMessages.length === 0 ? <CoolLoading label="Cargando soporte..." /> : null}
+            {shownMessages.map((m, idx) => {
+              const mine = ['customer', 'user'].includes(m.sender_role)
+              const text = m.message_text || m.message || ''
+              return (
+                <div key={m.id || idx} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-[86%] whitespace-pre-line rounded-2xl px-3 py-2 text-xs leading-relaxed ${mine ? 'bg-accent text-bg font-semibold' : 'bg-card text-white/85 border border-white/8'}`}>{text}</div>
+                </div>
+              )
+            })}
+            {err && <p className="rounded-xl border border-red-400/25 bg-red-500/10 p-2 text-xs font-semibold text-red-200">{err}</p>}
+          </div>
+
+          <div className="border-t border-white/10 bg-card p-3">
+            {!activeHuman && (
+              <div className="mb-2 grid grid-cols-2 gap-2">
+                <button onClick={() => { setInput('Quiero ver mi saldo') }} className="rounded-lg bg-white/8 px-3 py-2 text-[11px] font-bold text-white/70 active:scale-95">Ver saldo</button>
+                <button onClick={() => { setInput('Quiero revisar mis pedidos') }} className="rounded-lg bg-white/8 px-3 py-2 text-[11px] font-bold text-white/70 active:scale-95">Mis pedidos</button>
+              </div>
+            )}
+            <div className="flex items-end gap-2">
+              <textarea
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); activeHuman ? sendHumanMessage() : sendAiMessage() } }}
+                rows={1}
+                maxLength={1200}
+                placeholder={activeHuman ? 'Escribe a soporte...' : 'Pregúntame por saldo, pedidos o compras...'}
+                className="max-h-24 min-h-10 flex-1 resize-none rounded-xl border border-white/10 bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
+              />
+              <button onClick={activeHuman ? sendHumanMessage : sendAiMessage} disabled={loading || !input.trim()} className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-bg active:scale-95 disabled:opacity-50"><Send className="h-4 w-4" /></button>
+            </div>
+            {!activeHuman && (
+              <button onClick={startHumanSupport} disabled={loading} className="mt-2 flex w-full items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/6 px-3 py-2 text-xs font-black text-white/75 active:scale-95 disabled:opacity-50">
+                <Headphones className="h-4 w-4" /> Hablar con soporte humano
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
@@ -1445,16 +1738,100 @@ function CoolLoading({ label = "Cargando..." }) {
 }
 
 
-function PublicReviewsPanel({ productId, manualProductId, gameName, compact = false }) {
+function LegacyReviewForm({ productId, manualProductId, me, onLoginRequired, onSubmitted }) {
+  const [open, setOpen] = useState(false)
+  const [rating, setRating] = useState(5)
+  const [comment, setComment] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [message, setMessage] = useState('')
+  const [error, setError] = useState('')
+
+  const canReview = !!productId || !!manualProductId
+  if (!canReview) return null
+
+  const submit = async () => {
+    if (me?.is_guest) {
+      onLoginRequired?.()
+      return
+    }
+    const clean = comment.trim()
+    if (clean.length < 4) {
+      setError('Escribe un comentario corto sobre tu experiencia.')
+      return
+    }
+    setSaving(true)
+    setError('')
+    setMessage('')
+    try {
+      const payload = { rating, comment: clean }
+      if (manualProductId) payload.manual_product_id = manualProductId
+      else payload.product_id = productId
+      const res = await api.legacyReview(payload)
+      setMessage(res?.message || 'Gracias. Tu valoración quedó publicada.')
+      setOpen(false)
+      setComment('')
+      onSubmitted?.()
+    } catch (e) {
+      setError(e.message || 'No se pudo guardar la valoración')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="mt-3 rounded-xl border border-green-400/15 bg-green-400/5 p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-xs font-bold text-green-300">¿Compraste antes de existir la web?</p>
+          <p className="mt-1 text-[11px] leading-snug text-white/55">Puedes dejar tu valoración como cliente anterior verificado por Francho Shop.</p>
+        </div>
+        <button onClick={() => me?.is_guest ? onLoginRequired?.() : setOpen(v => !v)} className="flex-shrink-0 rounded-lg bg-green-500/20 px-3 py-2 text-[11px] font-black text-green-300 active:scale-95">
+          Valorar
+        </button>
+      </div>
+      {open && (
+        <div className="mt-3 space-y-2">
+          <div className="flex items-center gap-1">
+            {[1, 2, 3, 4, 5].map(n => (
+              <button key={n} onClick={() => setRating(n)} className={`text-xl ${n <= rating ? 'text-yellow-300' : 'text-white/20'}`}>★</button>
+            ))}
+          </div>
+          <textarea value={comment} onChange={e => { setComment(e.target.value); setError('') }} maxLength={500} rows={3} placeholder="Cuenta brevemente cómo fue tu compra anterior..." className="w-full rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm outline-none focus:border-green-400" />
+          {error && <p className="text-xs text-red-300">{error}</p>}
+          <div className="flex gap-2">
+            <button onClick={submit} disabled={saving} className="rounded-lg bg-green-500 px-3 py-2 text-xs font-black text-bg disabled:opacity-50">{saving ? 'Guardando...' : 'Enviar valoración'}</button>
+            <button onClick={() => setOpen(false)} className="rounded-lg bg-white/10 px-3 py-2 text-xs font-bold text-white/65">Cancelar</button>
+          </div>
+        </div>
+      )}
+      {message && <p className="mt-2 text-xs text-green-300">{message}</p>}
+    </div>
+  )
+}
+
+
+function PublicReviewsPanel({ productId, manualProductId, gameName, compact = false, me = null, onLoginRequired = null }) {
   const [reviews, setReviews] = useState(null)
-  useEffect(() => {
+  const loadReviews = () => {
     const params = { limit: compact ? 3 : 6 }
     if (productId) params.product_id = productId
     if (manualProductId) params.manual_product_id = manualProductId
     if (gameName) params.game_name = gameName
     api.publicReviews(params).then(setReviews).catch(() => setReviews(null))
-  }, [productId, manualProductId, gameName, compact])
-  if (!reviews || !reviews.count) return null
+  }
+  useEffect(() => { loadReviews() }, [productId, manualProductId, gameName, compact])
+  const canSubmitLegacy = !compact && !gameName && (productId || manualProductId)
+  if (!reviews || !reviews.count) {
+    return canSubmitLegacy ? (
+      <div className="card p-4 mb-4 border-yellow-500/20">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <p className="flex items-center gap-2 font-semibold text-yellow-300"><BadgeCheck className="h-4 w-4" />Valoraciones</p>
+          <p className="text-xs text-white/40">Sin valoraciones aún</p>
+        </div>
+        <LegacyReviewForm productId={productId} manualProductId={manualProductId} me={me} onLoginRequired={onLoginRequired} onSubmitted={loadReviews} />
+      </div>
+    ) : null
+  }
   return (
     <div className="card p-4 mb-4 border-yellow-500/20">
       <div className="mb-3 flex items-center justify-between gap-3">
@@ -1469,11 +1846,13 @@ function PublicReviewsPanel({ productId, manualProductId, gameName, compact = fa
               <p className="flex-shrink-0 text-xs text-yellow-300">{'★'.repeat(Number(r.rating || 0))}</p>
             </div>
             {r.comment ? <p className="text-sm text-white/72">{r.comment}</p> : <p className="text-sm text-white/35">Sin comentario escrito.</p>}
+            {r.verified_label && <p className="mt-1 text-[10px] font-semibold text-green-300/80">{r.verified_label}</p>}
             {!productId && !manualProductId && !gameName && <p className="mt-1 truncate text-[11px] text-white/35">{r.product_name}</p>}
             {gameName && <p className="mt-1 truncate text-[11px] text-white/35">{r.product_name}</p>}
           </div>
         ))}
       </div>
+      {canSubmitLegacy && <LegacyReviewForm productId={productId} manualProductId={manualProductId} me={me} onLoginRequired={onLoginRequired} onSubmitted={loadReviews} />}
     </div>
   )
 }
@@ -1755,7 +2134,11 @@ function normalizeCatalogText(value = '') {
 }
 
 function classifyCatalogItem(item, type = 'game') {
-  if (type === 'manual') return item?.category === 'game_account' ? 'game-accounts' : 'manual'
+  if (type === 'manual') {
+    if (item?.category === 'game_account') return 'game-accounts'
+    if (item?.category === 'subscription') return 'subscription'
+    return 'digital-service'
+  }
   if (item?.catalog_type) return item.catalog_type
   const text = normalizeCatalogText(`${item?.title || ''} ${item?.name || ''}`)
   if (/airalo|esim/.test(text)) return 'digital-service'
@@ -1969,19 +2352,16 @@ function SmsCatalogCard({ onSelect }) {
   useEffect(() => { api.smsSettingsGet().then(setSettings).catch(() => {}) }, [])
   const imageUrl = settings?.sms_catalog_image_url
   return (
-    <button onClick={onSelect} className="group block w-full min-w-0 overflow-hidden rounded-lg border border-white/10 bg-card text-left transition active:scale-95 hover:border-accent/50">
-      <span className="block aspect-square bg-[#101820]">
+    <button onClick={onSelect} className="group flex h-full min-h-[188px] w-full min-w-0 flex-col overflow-hidden rounded-lg border border-white/10 bg-card text-left transition active:scale-95 hover:border-accent/50">
+      <span className="block aspect-square flex-shrink-0 bg-[#101820]">
         {imageUrl ? <OptimizedImage src={storeAssetUrl(imageUrl)} alt="Números virtuales" className="h-full w-full object-cover transition group-hover:scale-[1.03]" /> : <span className="block flex h-full w-full items-center justify-center bg-white/5"><Smartphone className="h-10 w-10 text-white/55" /></span>}
       </span>
-      <span className="block p-1.5">
+      <span className="block flex-1 p-1.5">
         <span className="block line-clamp-2 min-h-[28px] break-words text-[11px] font-bold leading-tight">Números Virtuales SMS</span>
         <span className="block mt-1 min-w-0">
           <span className="block truncate text-xs font-black text-accent">Comprar con saldo</span>
           <span className="mt-0.5 inline-block max-w-full truncate rounded bg-white/8 px-1 py-0.5 text-[8px] text-white/45">Verificación SMS</span>
-          <span className="mt-1 grid grid-cols-2 gap-1 text-[8px]">
-            <span className="rounded bg-black/20 px-1 py-0.5 text-green-300">Compras: Nuevo</span>
-            <span className="rounded bg-black/20 px-1 py-0.5 text-yellow-300">Valoración: --</span>
-          </span>
+          <span className="block mt-1 h-3.5 text-[8px] leading-none text-transparent">&nbsp;</span>
         </span>
       </span>
     </button>
@@ -1989,13 +2369,22 @@ function SmsCatalogCard({ onSelect }) {
 }
 
 function SmsNumbersScreen({ me, onBack, onLoginRequired, onBought }) {
+  const initialSmsParams = useRef(null)
+  if (!initialSmsParams.current) {
+    const params = new URLSearchParams(window.location.search)
+    initialSmsParams.current = {
+      country: params.get('sms_country') || '',
+      service: params.get('sms_service') || '',
+      operator: params.get('sms_operator') || 'any',
+    }
+  }
   const [settings, setSettings] = useState(null)
   const [countries, setCountries] = useState([])
   const [services, setServices] = useState([])
   const [operators, setOperators] = useState([])
-  const [country, setCountry] = useState('')
+  const [country, setCountry] = useState(initialSmsParams.current.country)
   const [service, setService] = useState('')
-  const [operator, setOperator] = useState('any')
+  const [operator, setOperator] = useState(initialSmsParams.current.operator || 'any')
   const [activePicker, setActivePicker] = useState('country')
   const [loading, setLoading] = useState(true)
   const [loadingStep, setLoadingStep] = useState(false)
@@ -2005,6 +2394,8 @@ function SmsNumbersScreen({ me, onBack, onLoginRequired, onBought }) {
   const [countryQuery, setCountryQuery] = useState('')
   const [serviceQuery, setServiceQuery] = useState('')
   const [operatorsOpen, setOperatorsOpen] = useState(false)
+  const [showShare, setShowShare] = useState(false)
+  const [showDripHelp, setShowDripHelp] = useState(false)
 
   useEffect(() => {
     setLoading(true); setErr(null)
@@ -2012,7 +2403,7 @@ function SmsNumbersScreen({ me, onBack, onLoginRequired, onBought }) {
       .then(([cfg, data]) => {
         setSettings(cfg)
         setCountries(data.items || [])
-        setActivePicker('country')
+        setActivePicker(initialSmsParams.current.country ? 'service' : 'country')
       })
       .catch(e => setErr(`Error al cargar países: ${e.message}`))
       .finally(() => setLoading(false))
@@ -2022,8 +2413,15 @@ function SmsNumbersScreen({ me, onBack, onLoginRequired, onBought }) {
     if (!country) return
     setLoadingStep(true); setErr(null); setServices([]); setOperators([]); setService(''); setOperator('any'); setServiceQuery('')
     api.smsServices(country).then(data => {
-      setServices(data.items || [])
-      setActivePicker('service')
+      const items = data.items || []
+      setServices(items)
+      const initialService = initialSmsParams.current.service
+      if (initialService && items.some(item => item.key === initialService)) {
+        setService(initialService)
+        setActivePicker(null)
+      } else {
+        setActivePicker('service')
+      }
     }).catch(e => setErr(`Error al cargar aplicaciones: ${e.message}`)).finally(() => setLoadingStep(false))
   }, [country])
 
@@ -2042,6 +2440,12 @@ function SmsNumbersScreen({ me, onBack, onLoginRequired, onBought }) {
   const stock = Number((operator === 'any' ? operators.reduce((sum, op) => sum + Number(op.qty || 0), 0) : selectedOperator?.qty) || selectedService?.qty || 0)
   const filteredCountries = countries.filter(c => !countryQuery || `${c.name} ${c.key}`.toLowerCase().includes(countryQuery.toLowerCase()))
   const filteredServices = services.filter(x => !serviceQuery || `${x.name} ${x.key}`.toLowerCase().includes(serviceQuery.toLowerCase()))
+  const smsShareParams = new URLSearchParams({ screen: 'sms' })
+  if (country) smsShareParams.set('sms_country', country)
+  if (service) smsShareParams.set('sms_service', service)
+  if (operator && operator !== 'any') smsShareParams.set('sms_operator', operator)
+  const smsShareLink = `${window.location.origin}${window.location.pathname}?${smsShareParams.toString()}`
+  const smsShareName = selectedCountry || selectedService ? `Números virtuales${selectedService ? ' para ' + selectedService.name : ''}${selectedCountry ? ' en ' + selectedCountry.name : ''}` : 'Números virtuales SMS'
 
   async function buy() {
     if (me?.is_guest) { onLoginRequired?.(); return }
@@ -2058,81 +2462,112 @@ function SmsNumbersScreen({ me, onBack, onLoginRequired, onBought }) {
   }
 
   return (
-    <div className="min-h-screen bg-bg pb-28">
-      <button onClick={onBack} className="fixed left-3 top-3 z-50 flex h-10 w-10 items-center justify-center rounded-xl border border-white/15 bg-bg/80 shadow-lg shadow-black/30 backdrop-blur active:scale-95" aria-label="Volver">
-        <ArrowLeft className="h-4 w-4" />
-      </button>
+    <div className="h-[100dvh] flex flex-col bg-bg overflow-hidden">
+      {showShare && <ShareProductModal shareLink={smsShareLink} productName={smsShareName} onClose={() => setShowShare(false)} />}
+      <div className="flex-shrink-0 border-b border-white/5 bg-bg/95 p-3.5 backdrop-blur">
+        <div className="mx-auto flex max-w-lg items-center gap-3">
+          <button onClick={onBack} className="flex h-9 w-9 items-center justify-center rounded-full bg-card border border-white/10 active:scale-90 transition" aria-label="Volver">
+            <ArrowLeft className="h-4 w-4 text-white" />
+          </button>
+          <h1 className="min-w-0 flex-1 text-base font-black text-white">Números Virtuales</h1>
+          <button onClick={() => setShowShare(true)} className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-violet-400/35 bg-violet-500/15 text-violet-200 active:scale-90 transition" aria-label="Compartir números virtuales">
+            <Share2 className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
 
-      <main className="mx-auto max-w-lg px-3 pt-3">
+      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col overflow-hidden px-3 pt-3">
         {loading ? <CoolLoading label="Cargando catálogo SMS..." /> : (
-          <>
-            <section className="mb-3 overflow-hidden rounded-xl border border-white/10 bg-card">
-              <div className="relative h-28 bg-[#101820]">
-                {settings?.sms_catalog_image_url ? <OptimizedImage src={storeAssetUrl(settings.sms_catalog_image_url)} alt="" className="absolute inset-0 h-full w-full object-cover" /> : <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/20 via-bg to-emerald-500/10" />}
-                <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/45 to-black/10" />
-                <div className="relative flex h-full items-end p-3">
-                  <div className="min-w-0">
-                    <p className="text-[10px] font-black uppercase text-cyan-200">Activaciones SMS</p>
-                    <h3 className="mt-0.5 text-base font-black leading-tight">Números virtuales para verificaciones</h3>
-                    <p className="mt-1 max-w-[260px] text-[11px] leading-snug text-white/65">El código llega al pedido. Reembolso solo si el SMS no llega y se puede cancelar.</p>
+          <div className="flex flex-1 flex-col overflow-hidden min-h-0">
+            <div className="flex-shrink-0">
+              <section className="mb-3 overflow-hidden rounded-xl border border-white/10 bg-card">
+                <div className="relative min-h-[112px] bg-[#101820]">
+                  {settings?.sms_catalog_image_url ? <OptimizedImage src={storeAssetUrl(settings.sms_catalog_image_url)} alt="" className="absolute inset-0 h-full w-full object-cover" /> : <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/20 via-bg to-emerald-500/10" />}
+                  <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/65 to-black/35" />
+                  <div className="relative flex h-full min-h-[112px] items-center p-4">
+                    <p className="text-xs leading-relaxed text-white/80">
+                      Compra números virtuales de diferentes países para recibir códigos de verificación al instante. El código llegará directamente a tus pedidos de forma automática. Obtén reembolso garantizado si el SMS no llega o si decides cancelar el pedido.
+                    </p>
                   </div>
                 </div>
-              </div>
-            </section>
-            <section className="mb-3 grid grid-cols-2 gap-2">
-              <button onClick={() => setActivePicker('country')} className={`flex min-w-0 items-center gap-2 rounded-xl border px-2.5 py-2 text-left active:scale-[0.99] ${activePicker === 'country' ? 'border-accent bg-accent/10' : 'border-white/10 bg-card'}`}>
-                <span className="flex h-8 w-8 flex-shrink-0 overflow-hidden rounded-lg bg-black/20 text-base"><SmsIcon src={smsCountryIconUrl(selectedCountry)} fallback={<span>{selectedCountry?.flag_emoji || '🌐'}</span>} /></span>
-                <span className="min-w-0"><span className="block text-[10px] uppercase text-white/35">País</span><span className="block truncate text-xs font-black">{selectedCountry?.name || 'Escoger país'}</span></span>
-              </button>
-              <button onClick={() => country && setActivePicker('service')} disabled={!country} className={`flex min-w-0 items-center gap-2 rounded-xl border px-2.5 py-2 text-left active:scale-[0.99] disabled:opacity-50 ${activePicker === 'service' ? 'border-accent bg-accent/10' : 'border-white/10 bg-card'}`}>
-                <span className="flex h-8 w-8 flex-shrink-0 overflow-hidden rounded-lg bg-black/20"><SmsIcon src={smsServiceIconUrl(selectedService || {})} fallback={<Smartphone className="h-4 w-4 text-cyan-200" />} fit="contain" /></span>
-                <span className="min-w-0"><span className="block text-[10px] uppercase text-white/35">App</span><span className="block truncate text-xs font-black">{selectedService?.name || 'Escoger app'}</span></span>
-              </button>
-            </section>
-            {loadingStep && <div className="mb-3 flex justify-center"><Loader2 className="h-4 w-4 animate-spin text-accent" /></div>}
-            {activePicker === 'country' && (
-              <section className="rounded-xl border border-white/10 bg-card">
-                <div className="border-b border-white/10 p-3">
-                  <div className="mb-2 flex items-center justify-between"><p className="text-sm font-black">Escoger país</p><span className="text-[10px] text-white/40">{filteredCountries.length}</span></div>
-                  <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" /><input value={countryQuery} onChange={e => setCountryQuery(e.target.value)} placeholder="Buscar país" className="w-full rounded-lg border border-white/10 bg-bg py-2.5 pl-9 pr-3 text-sm outline-none focus:border-accent" /></div>
-                </div>
-                <div className="grid max-h-[calc(100vh-250px)] grid-cols-2 gap-2 overflow-y-auto p-3 sm:grid-cols-3">
-                  {filteredCountries.map(c => <button key={c.key} onClick={() => { setCountry(c.key); setCountryQuery('') }} className={`min-w-0 rounded-xl border p-2 text-left active:scale-[0.99] ${country === c.key ? 'border-accent bg-accent/12' : 'border-white/10 bg-bg/70 hover:border-white/20'}`}><span className="flex items-center gap-2"><span className="flex h-9 w-9 flex-shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/20 text-lg"><SmsIcon src={smsCountryIconUrl(c)} fallback={<span>{c.flag_emoji || '🌐'}</span>} /></span><span className="min-w-0"><span className="block truncate text-xs font-black">{c.name}</span><span className="block text-[10px] uppercase text-white/35">{c.key}</span></span></span></button>)}
-                </div>
               </section>
-            )}
-
-            {activePicker === 'service' && (
-              <section className="rounded-xl border border-white/10 bg-card">
-                <div className="border-b border-white/10 p-3">
-                  <div className="mb-2 flex items-center justify-between"><div><p className="text-sm font-black">Escoger app</p><p className="text-[11px] text-white/45">{selectedCountry?.name || ''}</p></div><span className="text-[10px] text-white/40">{filteredServices.length}</span></div>
-                  <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" /><input value={serviceQuery} onChange={e => setServiceQuery(e.target.value)} placeholder="Buscar app" className="w-full rounded-lg border border-white/10 bg-bg py-2.5 pl-9 pr-3 text-sm outline-none focus:border-accent" /></div>
-                </div>
-                <div className="max-h-[calc(100vh-250px)] overflow-y-auto p-3">
-                  <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    {filteredServices.map(x => <button key={x.key} onClick={() => { setService(x.key); setServiceQuery(''); setActivePicker(null) }} className={`rounded-xl border p-2.5 text-left active:scale-[0.99] ${service === x.key ? 'border-accent bg-accent/12' : 'border-white/10 bg-bg/70 hover:border-white/20'}`}><span className="flex items-center gap-3"><span className="flex h-10 w-10 flex-shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black/20"><SmsIcon src={smsServiceIconUrl(x)} fallback={<span className="text-sm font-black text-cyan-200">{(x.name || x.key || '?')[0]?.toUpperCase()}</span>} fit="contain" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-black">{x.name}</span><span className="block text-[11px] text-white/40">{x.qty} disponibles</span></span><span className="text-sm font-black text-accent">${Number(x.price || 0).toFixed(2)}</span></span></button>)}
-                  </div>
-                  {!loadingStep && services.length === 0 && <p className="rounded-lg bg-bg p-4 text-center text-xs text-white/45">No hay apps disponibles para este país.</p>}
-                </div>
-              </section>
-            )}
-
-            {!activePicker && (
-              <section className="rounded-xl border border-white/10 bg-card p-3">
-                <button onClick={() => setOperatorsOpen(true)} disabled={!service || operators.length === 0} className="flex w-full items-center justify-between gap-3 rounded-lg bg-bg/70 px-3 py-3 text-left active:scale-[0.99] disabled:opacity-50">
-                  <span className="min-w-0">
-                    <span className="block text-[10px] font-bold uppercase text-white/35">Operador</span>
-                    <span className="block truncate text-sm font-black">{operator === 'any' ? 'Automático' : operator}</span>
-                    <span className="block truncate text-[11px] text-white/45">{operators.length || 0} opciones disponibles</span>
-                  </span>
-                  <ChevronDown className="h-5 w-5 flex-shrink-0 text-accent" />
+              <section className="mb-3 grid grid-cols-2 gap-2">
+                <button onClick={() => setActivePicker('country')} className={`flex min-w-0 items-center gap-2 rounded-xl border px-2.5 py-2 text-left active:scale-[0.99] ${activePicker === 'country' ? 'border-accent bg-accent/10' : 'border-white/10 bg-card'}`}>
+                  <span className="flex h-8 w-8 flex-shrink-0 overflow-hidden rounded-lg bg-black/20 text-base"><SmsIcon src={smsCountryIconUrl(selectedCountry)} fallback={<span>{selectedCountry?.flag_emoji || '🌐'}</span>} /></span>
+                  <span className="min-w-0"><span className="block text-[10px] uppercase text-white/35">País</span><span className="block truncate text-xs font-black">{selectedCountry?.name || 'Escoger país'}</span></span>
+                </button>
+                <button onClick={() => country && setActivePicker('service')} disabled={!country} className={`flex min-w-0 items-center gap-2 rounded-xl border px-2.5 py-2 text-left active:scale-[0.99] disabled:opacity-50 ${activePicker === 'service' ? 'border-accent bg-accent/10' : 'border-white/10 bg-card'}`}>
+                  <span className="flex h-8 w-8 flex-shrink-0 overflow-hidden rounded-lg bg-black/20"><SmsIcon src={smsServiceIconUrl(selectedService || {})} fallback={<Smartphone className="h-4 w-4 text-cyan-200" />} fit="contain" /></span>
+                  <span className="min-w-0"><span className="block text-[10px] uppercase text-white/35">App</span><span className="block truncate text-xs font-black">{selectedService?.name || 'Escoger app'}</span></span>
                 </button>
               </section>
-            )}
+            </div>
 
-            {err && <p className="mt-3 rounded-lg border border-red-500/25 bg-red-500/10 p-3 text-xs font-semibold text-red-300">{err}</p>}
-            {order && <div className="mt-3 rounded-xl border border-green-500/25 bg-green-500/10 p-3 text-xs text-green-100"><p className="font-black text-green-300">Número reservado</p><p className="mt-1 font-mono text-sm">{order.phone}</p><p className="mt-1 text-green-100/70">Consulta el código en Mis pedidos.</p></div>}
-          </>
+            {loadingStep && <div className="mb-3 flex justify-center flex-shrink-0"><Loader2 className="h-4 w-4 animate-spin text-accent" /></div>}
+
+            <div className="flex-1 overflow-hidden min-h-0 flex flex-col">
+              {activePicker === 'country' && (
+                <section className="flex flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-card">
+                  <div className="border-b border-white/10 p-3 flex-shrink-0">
+                    <div className="mb-2 flex items-center justify-between"><p className="text-sm font-black">Escoger país</p><span className="text-[10px] text-white/40">{filteredCountries.length}</span></div>
+                    <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" /><input value={countryQuery} onChange={e => setCountryQuery(e.target.value)} placeholder="Buscar país" className="w-full rounded-lg border border-white/10 bg-bg py-2.5 pl-9 pr-3 text-sm outline-none focus:border-accent" /></div>
+                  </div>
+                  <div className="overflow-y-auto p-3 pb-28 flex-1 min-h-0">
+                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                      {filteredCountries.map(c => (
+                        <button
+                          key={c.key}
+                          onClick={() => { setCountry(c.key); setCountryQuery('') }}
+                          className={`min-w-0 overflow-hidden rounded-xl border p-2 text-left active:scale-[0.99] ${country === c.key ? 'border-accent bg-accent/12' : 'border-white/10 bg-bg/70 hover:border-white/20'}`}
+                        >
+                          <span className="flex items-center gap-2 min-w-0">
+                            <span className="flex h-9 w-9 flex-shrink-0 overflow-hidden rounded-lg border border-white/10 bg-black/20 text-lg">
+                              <SmsIcon src={smsCountryIconUrl(c)} fallback={<span>{c.flag_emoji || '🌐'}</span>} />
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block truncate text-xs font-black">{c.name}</span>
+                              <span className="block text-[10px] uppercase text-white/35">{c.key}</span>
+                            </span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </section>
+              )}
+
+              {activePicker === 'service' && (
+                <section className="flex flex-1 flex-col overflow-hidden rounded-xl border border-white/10 bg-card">
+                  <div className="border-b border-white/10 p-3 flex-shrink-0">
+                    <div className="mb-2 flex items-center justify-between"><div><p className="text-sm font-black">Escoger app</p><p className="text-[11px] text-white/45">{selectedCountry?.name || ''}</p></div><span className="text-[10px] text-white/40">{filteredServices.length}</span></div>
+                    <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" /><input value={serviceQuery} onChange={e => setServiceQuery(e.target.value)} placeholder="Buscar app" className="w-full rounded-lg border border-white/10 bg-bg py-2.5 pl-9 pr-3 text-sm outline-none focus:border-accent" /></div>
+                  </div>
+                  <div className="overflow-y-auto p-3 pb-28 flex-1 min-h-0">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                      {filteredServices.map(x => <button key={x.key} onClick={() => { setService(x.key); setServiceQuery(''); setActivePicker(null) }} className={`rounded-xl border p-2.5 text-left active:scale-[0.99] ${service === x.key ? 'border-accent bg-accent/12' : 'border-white/10 bg-bg/70 hover:border-white/20'}`}><span className="flex items-center gap-3"><span className="flex h-10 w-10 flex-shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black/20"><SmsIcon src={smsServiceIconUrl(x)} fallback={<span className="text-sm font-black text-cyan-200">{(x.name || x.key || '?')[0]?.toUpperCase()}</span>} fit="contain" /></span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-black">{x.name}</span><span className="block text-[11px] text-white/40">{x.qty} disponibles</span></span><span className="text-sm font-black text-accent">${Number(x.price || 0).toFixed(2)}</span></span></button>)}
+                    </div>
+                    {!loadingStep && services.length === 0 && <p className="rounded-lg bg-bg p-4 text-center text-xs text-white/45">No hay apps disponibles para este país.</p>}
+                  </div>
+                </section>
+              )}
+
+              {!activePicker && (
+                <section className="rounded-xl border border-white/10 bg-card p-3">
+                  <button onClick={() => setOperatorsOpen(true)} disabled={!service || operators.length === 0} className="flex w-full items-center justify-between gap-3 rounded-lg bg-bg/70 px-3 py-3 text-left active:scale-[0.99] disabled:opacity-50">
+                    <span className="min-w-0">
+                      <span className="block text-[10px] font-bold uppercase text-white/35">Operador</span>
+                      <span className="block truncate text-sm font-black">{operator === 'any' ? 'Automático' : operator}</span>
+                      <span className="block truncate text-[11px] text-white/45">{operators.length || 0} opciones disponibles</span>
+                    </span>
+                    <ChevronDown className="h-5 w-5 flex-shrink-0 text-accent" />
+                  </button>
+                </section>
+              )}
+
+              {err && <p className="mt-3 rounded-lg border border-red-500/25 bg-red-500/10 p-3 text-xs font-semibold text-red-300">{err}</p>}
+              {order && <div className="mt-3 rounded-xl border border-green-500/25 bg-green-500/10 p-3 text-xs text-green-100"><p className="font-black text-green-300">Número reservado</p><p className="mt-1 font-mono text-sm">{order.phone}</p><p className="mt-1 text-green-100/70">Consulta el código en Mis pedidos.</p></div>}
+            </div>
+          </div>
         )}
       </main>
 
@@ -2155,6 +2590,360 @@ function SmsNumbersScreen({ me, onBack, onLoginRequired, onBought }) {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+function SmmCatalogCard({ onSelect }) {
+  const [settings, setSettings] = useState(null)
+  useEffect(() => { api.smmSettingsGet().then(setSettings).catch(() => {}) }, [])
+  const imageUrl = settings?.smm_catalog_image_url
+  return (
+    <button onClick={onSelect} className="group flex h-full min-h-[188px] w-full min-w-0 flex-col overflow-hidden rounded-lg border border-white/10 bg-card text-left transition active:scale-95 hover:border-accent/50">
+      <span className="block aspect-square flex-shrink-0 bg-[#101820]">
+        {imageUrl ? <OptimizedImage src={storeAssetUrl(imageUrl)} alt="Servicios SMM" className="h-full w-full object-cover transition group-hover:scale-[1.03]" /> : <span className="block flex h-full w-full items-center justify-center bg-white/5"><Share2 className="h-10 w-10 text-white/55" /></span>}
+      </span>
+      <span className="block flex-1 p-1.5">
+        <span className="block line-clamp-2 min-h-[28px] break-words text-[11px] font-bold leading-tight">Seguidores, Likes y Vistas</span>
+        <span className="block mt-1 min-w-0">
+          <span className="block truncate text-xs font-black text-accent">Servicios SMM</span>
+          <span className="mt-0.5 inline-block max-w-full truncate rounded bg-white/8 px-1 py-0.5 text-[8px] text-white/45">Redes sociales</span>
+          <span className="block mt-1 h-3.5 text-[8px] leading-none text-transparent">&nbsp;</span>
+        </span>
+      </span>
+    </button>
+  )
+}
+
+function formatSmmQty(value) {
+  const n = Number(value || 0)
+  if (!Number.isFinite(n) || n <= 0) return '0'
+  if (n >= 1000000000) return 'Sin límite alto'
+  if (n >= 1000000) return `${Number((n / 1000000).toFixed(1)).toLocaleString('es-ES')}M`
+  if (n >= 1000) return `${Number((n / 1000).toFixed(1)).toLocaleString('es-ES')}K`
+  return n.toLocaleString('es-ES')
+}
+
+function smmPlatformForService(service = {}) {
+  const text = `${service.name || ''} ${service.category || ''}`.toLowerCase()
+  const checks = [
+    ['Telegram', ['telegram', 'tg ', ' t.me']],
+    ['WhatsApp', ['whatsapp', 'wa.me']],
+    ['Instagram', ['instagram', 'ig ', 'reels']],
+    ['TikTok', ['tiktok', 'tik tok']],
+    ['YouTube', ['youtube', 'yt ', 'shorts']],
+    ['Facebook', ['facebook', 'fb ', 'page likes']],
+    ['Twitter / X', ['twitter', 'x /', 'x.com', ' x ', 'tweet']],
+    ['Spotify', ['spotify']],
+    ['Twitch', ['twitch']],
+    ['Discord', ['discord']],
+  ]
+  const found = checks.find(([, words]) => words.some(w => text.includes(w)))
+  return found ? found[0] : 'Otros'
+}
+
+function SmmServicesScreen({ me, onBack, onLoginRequired, onBought }) {
+  const [settings, setSettings] = useState(null)
+  const [services, setServices] = useState([])
+  const [platform, setPlatform] = useState('')
+  const [selected, setSelected] = useState(null)
+  const [link, setLink] = useState('')
+  const [quantity, setQuantity] = useState('')
+  const [dripFeed, setDripFeed] = useState(false)
+  const [runs, setRuns] = useState('2')
+  const [intervalMinutes, setIntervalMinutes] = useState('60')
+  const [loading, setLoading] = useState(true)
+  const [buying, setBuying] = useState(false)
+  const [err, setErr] = useState(null)
+  const [query, setQuery] = useState('')
+  const [showShare, setShowShare] = useState(false)
+  const [showDripHelp, setShowDripHelp] = useState(false)
+  useEffect(() => {
+    setLoading(true)
+    Promise.all([api.smmSettingsGet().catch(() => null), api.smmServices()])
+      .then(([cfg, data]) => {
+        const items = data.items || []
+        setSettings(cfg)
+        setServices(items)
+        const firstPlatform = ['Telegram', 'WhatsApp', 'Instagram', 'TikTok', 'YouTube', 'Facebook'].find(name => items.some(s => smmPlatformForService(s) === name))
+        setPlatform(firstPlatform || (items[0] ? smmPlatformForService(items[0]) : ''))
+        setLoading(false)
+      })
+      .catch(e => { setErr(e.message); setLoading(false) })
+  }, [])
+  const platforms = useMemo(() => {
+    const counts = {}
+    services.forEach(s => { const key = smmPlatformForService(s); counts[key] = (counts[key] || 0) + 1 })
+    const preferred = ['Telegram', 'WhatsApp', 'Instagram', 'TikTok', 'YouTube', 'Facebook', 'Twitter / X', 'Spotify', 'Twitch', 'Discord', 'Otros']
+    return preferred.filter(name => counts[name]).map(name => ({ name, count: counts[name] }))
+  }, [services])
+  const filtered = services.filter(s => {
+    const matchesPlatform = !platform || smmPlatformForService(s) === platform
+    const q = query.trim().toLowerCase()
+    const matchesQuery = !q || `${s.name} ${s.category} ${s.service_id || ''}`.toLowerCase().includes(q)
+    return matchesPlatform && matchesQuery
+  })
+  const qty = Number(quantity || selected?.min || 0)
+  const runCount = dripFeed ? Number(runs || 0) : 1
+  const intervalValue = dripFeed ? Number(intervalMinutes || 0) : 0
+  const totalQty = dripFeed ? qty * runCount : qty
+  const rawSubtotal = selected ? Number(selected.unit_price || 0) * totalQty : 0
+  const minOrderPrice = selected ? Number(selected.min_order_price || selected.min_total || 0) : 0
+  const total = selected ? Math.max(rawSubtotal, minOrderPrice) : 0
+  const isMinimumApplied = selected && rawSubtotal < minOrderPrice
+  const pricePerThousand = selected ? Number(selected.unit_price || 0) * 1000 : 0
+  const dripInvalid = !!(selected && dripFeed && (runCount < 2 || intervalValue < 1 || totalQty > Number(selected.max || 0)))
+  const shareLink = `${window.location.origin}${window.location.pathname}?screen=smm`
+  async function buy() {
+    if (me?.is_guest) { onLoginRequired?.(); return }
+    if (!selected) return
+    setBuying(true); setErr(null)
+    try {
+      await api.smmOrderCreate({ service_id: selected.service_id, link, quantity: qty, drip_feed: dripFeed, runs: runCount, interval: intervalValue })
+      onBought?.()
+    } catch (e) { setErr(e.message) }
+    setBuying(false)
+  }
+  if (loading) return <CoolLoading label="Cargando servicios SMM..." />
+
+  if (selected) {
+    return (
+      <div className="h-[100dvh] flex flex-col bg-bg overflow-hidden">
+        {showDripHelp && (
+          <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center">
+            <button className="absolute inset-0" onClick={() => setShowDripHelp(false)} aria-label="Cerrar ayuda" />
+            <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-card p-4 shadow-2xl">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-base font-black text-white">Suministro gradual</p>
+                  <p className="mt-1 text-xs text-white/50">Entrega el servicio en varias partes durante un tiempo configurado.</p>
+                </div>
+                <button onClick={() => setShowDripHelp(false)} className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-white/10 text-white active:scale-90" aria-label="Cerrar"><X className="h-4 w-4" /></button>
+              </div>
+              <div className="space-y-2 text-sm leading-relaxed text-white/70">
+                <p>En vez de enviar toda la cantidad de una vez, el pedido se divide en corridas.</p>
+                <p>Ejemplo: si pones 1000 de cantidad, 5 corridas y 60 minutos, el sistema enviará 1000 unidades por corrida, para un total de 5000 unidades, separadas por 60 minutos.</p>
+                <p>El precio se calcula por la cantidad total, no solo por la primera corrida.</p>
+                <p>Úsalo cuando quieras una entrega más natural. Mantén el perfil, publicación o canal público y no cambies el enlace mientras el pedido esté activo.</p>
+              </div>
+            </div>
+          </div>
+        )}
+        <div className="flex-shrink-0 border-b border-white/5 bg-bg/95 p-3.5 backdrop-blur">
+          <div className="mx-auto flex max-w-lg items-center gap-3">
+            <button onClick={() => { setSelected(null); setErr(null) }} className="flex h-9 w-9 items-center justify-center rounded-full bg-card border border-white/10 active:scale-90 transition" aria-label="Volver"><ArrowLeft className="h-4 w-4 text-white" /></button>
+            <h1 className="min-w-0 flex-1 truncate text-base font-black text-white">Comprar servicio</h1>
+          </div>
+        </div>
+        <main className="mx-auto w-full max-w-lg flex-1 overflow-y-auto px-3 py-3 pb-36">
+          {err && <p className="mb-3 rounded-lg border border-red-500/25 bg-red-500/10 p-3 text-xs font-semibold text-red-300">{err}</p>}
+          <section className="overflow-hidden rounded-xl border border-white/10 bg-card">
+            <div className="border-b border-white/10 bg-gradient-to-br from-accent/15 to-violet-500/10 p-4">
+              <div className="flex items-start gap-3">
+                <span className="flex h-12 w-12 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/20">
+                  {selected.icon_url ? <OptimizedImage src={storeAssetUrl(selected.icon_url)} alt="" className="h-full w-full object-cover" /> : <Share2 className="h-6 w-6 text-accent" />}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-bold uppercase text-accent">{smmPlatformForService(selected)} · {selected.category}</p>
+                  <h2 className="mt-1 break-words text-lg font-black leading-tight">{selected.name}</h2>
+                </div>
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[11px]">
+                <div className="rounded-lg bg-bg/60 p-2"><p className="text-white/35">Mínimo</p><p className="font-black">{formatSmmQty(selected.min)}</p></div>
+                <div className="rounded-lg bg-bg/60 p-2"><p className="text-white/35">Máximo</p><p className="font-black">{formatSmmQty(selected.max)}</p></div>
+                <div className="rounded-lg bg-bg/60 p-2"><p className="text-white/35">Desde</p><p className="font-black text-accent">${Number(selected.min_total || 0).toFixed(2)}</p></div>
+              </div>
+            </div>
+            <div className="space-y-3 p-4">
+              <div className="rounded-xl border border-white/10 bg-bg/70 p-3">
+                <p className="mb-2 flex items-center gap-2 text-xs font-black text-white/75"><FileText className="h-4 w-4 text-accent" />Descripción e instrucciones</p>
+                <div className="whitespace-pre-line break-words text-sm leading-relaxed text-white/68">
+                  {selected.instructions || 'Pega el enlace correcto y elige una cantidad dentro del mínimo y máximo. No cambies el perfil o publicación mientras el pedido esté en proceso.'}
+                </div>
+              </div>
+              <label className="block"><span className="mb-1 block text-[10px] font-bold uppercase text-white/40">Link, perfil o publicación</span><input value={link} onChange={e => setLink(e.target.value)} placeholder="https://..." className="w-full rounded-lg border border-white/10 bg-bg px-3 py-3 text-sm outline-none focus:border-accent" /></label>
+              <label className="block"><span className="mb-1 block text-[10px] font-bold uppercase text-white/40">Cantidad{dripFeed ? ' por corrida' : ''}</span><input value={quantity} onChange={e => setQuantity(e.target.value)} inputMode="numeric" placeholder={`${selected.min} - ${selected.max}`} className="w-full rounded-lg border border-white/10 bg-bg px-3 py-3 text-sm outline-none focus:border-accent" /></label>
+              <div className="rounded-xl border border-white/10 bg-bg/70 p-3">
+                <label className="flex items-center justify-between gap-3 text-sm font-black text-white/80">
+                  <span className="flex items-center gap-2">
+                    Suministro gradual
+                    <button type="button" onClick={(e) => { e.preventDefault(); setShowDripHelp(true) }} className="flex h-6 w-6 items-center justify-center rounded-full border border-white/15 bg-white/5 text-white/65 active:scale-90" aria-label="Explicar suministro gradual">
+                      <CircleHelp className="h-4 w-4" />
+                    </button>
+                  </span>
+                  <input type="checkbox" checked={dripFeed} onChange={e => setDripFeed(e.target.checked)} className="h-5 w-5 accent-[var(--accent)]" />
+                </label>
+                {dripFeed && <div className="mt-3 grid grid-cols-2 gap-2">
+                  <label className="block"><span className="mb-1 block text-[10px] font-bold uppercase text-white/40">Corridas</span><input value={runs} onChange={e => setRuns(e.target.value)} inputMode="numeric" className="w-full rounded-lg border border-white/10 bg-bg px-3 py-2.5 text-sm outline-none focus:border-accent" /></label>
+                  <label className="block"><span className="mb-1 block text-[10px] font-bold uppercase text-white/40">Intervalo min.</span><input value={intervalMinutes} onChange={e => setIntervalMinutes(e.target.value)} inputMode="numeric" className="w-full rounded-lg border border-white/10 bg-bg px-3 py-2.5 text-sm outline-none focus:border-accent" /></label>
+                  <p className="col-span-2 rounded-lg bg-black/20 p-2 text-[11px] text-white/60">Total: <span className="font-black text-white">{Number.isFinite(totalQty) ? totalQty : 0}</span> unidades · {qty || 0} x {runCount || 0} corridas</p>
+                  {totalQty > selected.max && <p className="col-span-2 rounded-lg bg-red-500/10 p-2 text-[11px] font-semibold text-red-200">La cantidad total no puede superar {selected.max}.</p>}
+                </div>}
+              </div>
+              <div className="rounded-xl border border-white/10 bg-bg/70 p-3 text-[11px] text-white/55">
+                <div className="flex items-center justify-between gap-3"><span>Precio por 1000</span><span className="font-bold text-white/80">${pricePerThousand.toFixed(4)}</span></div>
+                <div className="mt-1 flex items-center justify-between gap-3"><span>Subtotal por {dripFeed ? 'cantidad total' : 'cantidad'}</span><span className="font-bold text-white/80">${rawSubtotal.toFixed(4)}</span></div>
+                {isMinimumApplied && <p className="mt-2 rounded-lg bg-yellow-400/10 p-2 text-yellow-100/85">Se aplica mínimo por orden de ${minOrderPrice.toFixed(2)}. El total empezará a subir cuando el subtotal supere ese mínimo.</p>}
+              </div>
+            </div>
+          </section>
+        </main>
+        <div className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-lg border-t border-white/10 bg-bg/95 p-3 pb-[calc(env(safe-area-inset-bottom)+12px)] shadow-2xl shadow-black/50 backdrop-blur">
+          <div className="mb-2 flex items-center justify-between gap-3"><span className="text-xs text-white/45">{isMinimumApplied ? 'Total a pagar · mínimo aplicado' : 'Total a pagar'}</span><span className="text-2xl font-black text-accent">${total.toFixed(2)}</span></div>
+          <button onClick={buy} disabled={buying || !link || qty < selected.min || qty > selected.max || dripInvalid} className="w-full rounded-xl bg-accent py-3 text-sm font-black text-bg active:scale-95 disabled:opacity-50">{buying ? 'Comprando...' : 'Confirmar compra'}</button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="h-[100dvh] flex flex-col bg-bg overflow-hidden">
+      {showShare && <ShareProductModal shareLink={shareLink} productName="Seguidores, Likes y Vistas" onClose={() => setShowShare(false)} />}
+      <div className="flex-shrink-0 border-b border-white/5 bg-bg/95 p-3.5 backdrop-blur">
+        <div className="mx-auto flex max-w-lg items-center gap-3">
+          <button onClick={onBack} className="flex h-9 w-9 items-center justify-center rounded-full bg-card border border-white/10 active:scale-90 transition" aria-label="Volver"><ArrowLeft className="h-4 w-4 text-white" /></button>
+          <h1 className="min-w-0 flex-1 text-base font-black text-white">Servicios SMM</h1>
+          <button onClick={() => setShowShare(true)} className="flex h-9 w-9 items-center justify-center rounded-full border border-violet-400/35 bg-violet-500/15 text-violet-200 active:scale-90" aria-label="Compartir SMM"><Share2 className="h-4 w-4" /></button>
+        </div>
+      </div>
+      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col overflow-hidden px-3 pt-3">
+        <section className="mb-3 overflow-hidden rounded-xl border border-white/10 bg-card flex-shrink-0">
+          <div className="relative min-h-[112px] bg-[#101820]">
+            {settings?.smm_catalog_image_url ? <OptimizedImage src={storeAssetUrl(settings.smm_catalog_image_url)} alt="" className="absolute inset-0 h-full w-full object-cover" /> : <div className="absolute inset-0 bg-gradient-to-br from-violet-500/20 via-bg to-cyan-500/10" />}
+            <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/65 to-black/30" />
+            <div className="relative flex min-h-[112px] items-center p-4"><p className="text-xs leading-relaxed text-white/80">Elige la plataforma, revisa el servicio y compra con tu saldo interno.</p></div>
+          </div>
+        </section>
+        <div className="mb-3 grid grid-cols-3 gap-2 flex-shrink-0">
+          {platforms.map(item => <button key={item.name} onClick={() => { setPlatform(item.name); setQuery('') }} className={`min-w-0 rounded-xl border px-2 py-2 text-center active:scale-[0.99] ${platform === item.name ? 'border-accent bg-accent/12' : 'border-white/10 bg-card'}`}><span className="block truncate text-[11px] font-black leading-tight">{item.name}</span><span className="mt-0.5 block truncate text-[9px] text-white/40">{item.count} servicios</span></button>)}
+        </div>
+        <div className="relative mb-3 flex-shrink-0"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar servicio o ID" className="w-full rounded-lg border border-white/10 bg-card py-2.5 pl-9 pr-3 text-sm outline-none focus:border-accent" /></div>
+        <div className="flex-1 overflow-y-auto pb-8">
+          {err && <p className="mb-3 rounded-lg border border-red-500/25 bg-red-500/10 p-3 text-xs font-semibold text-red-300">{err}</p>}
+          <div className="space-y-2">
+            {filtered.length === 0 ? <p className="rounded-xl border border-dashed border-white/10 bg-card p-5 text-center text-xs text-white/40">No hay servicios visibles en esta plataforma.</p> : filtered.map(s => <button key={s.service_id} onClick={() => { setSelected(s); setQuantity(String(s.min || 1)); setLink(''); setDripFeed(false); setRuns('2'); setIntervalMinutes('60'); setErr(null) }} className="w-full rounded-xl border border-white/10 bg-card p-3 text-left active:scale-[0.99] hover:border-accent/40"><span className="flex gap-3"><span className="flex h-10 w-10 flex-shrink-0 items-center justify-center overflow-hidden rounded-xl border border-white/10 bg-black/20">{s.icon_url ? <OptimizedImage src={storeAssetUrl(s.icon_url)} alt="" className="h-full w-full object-cover" /> : <Share2 className="h-5 w-5 text-accent" />}</span><span className="min-w-0 flex-1"><span className="block text-sm font-black leading-tight">{s.name}</span><span className="mt-1 block text-[11px] text-white/45">Min {formatSmmQty(s.min)} · Max {formatSmmQty(s.max)} · desde ${Number(s.min_total || 0).toFixed(2)}</span></span><ChevronRight className="mt-2 h-4 w-4 flex-shrink-0 text-white/35" /></span></button>)}
+          </div>
+        </div>
+      </main>
+    </div>
+  )
+}
+
+
+function FzrCatalogCard({ type, onSelect }) {
+  const isTelegram = type === 'telegram'
+  const title = isTelegram ? 'Telegram' : 'CapCut'
+  const subtitle = isTelegram ? 'Premium y Estrellas' : 'Pro y Standard'
+  const Icon = isTelegram ? Send : Sparkles
+  const fallbackImg = isTelegram ? 'https://images.unsplash.com/photo-1611605698335-8b1569810432?auto=format&fit=crop&w=600&q=75' : 'https://reseller.fazercards.com/api/v2/media/game-key-covers/0943f75d-90d8-4356-bbe7-a473b301a09d.png'
+  const [img, setImg] = useState(fallbackImg)
+  useEffect(() => {
+    ;(isTelegram ? api.fzrTelegramCatalog() : api.fzrCapcutCatalog()).then(d => { if (d?.imageurl) setImg(d.imageurl) }).catch(() => {})
+  }, [isTelegram])
+  return (
+    <button onClick={onSelect} className="group flex h-full min-h-[188px] w-full min-w-0 flex-col overflow-hidden rounded-lg border border-white/10 bg-card text-left transition active:scale-95 hover:border-accent/50">
+      <span className="block aspect-square flex-shrink-0 bg-[#101820]">
+        <OptimizedImage src={img} alt={title} className="h-full w-full object-cover transition group-hover:scale-[1.03]" />
+      </span>
+      <span className="block flex-1 p-1.5">
+        <span className="block line-clamp-2 min-h-[28px] break-words text-[11px] font-bold leading-tight">{title}</span>
+        <span className="block mt-1 min-w-0">
+          <span className="block truncate text-xs font-black text-accent">{subtitle}</span>
+          <span className="mt-0.5 inline-flex max-w-full items-center gap-1 truncate rounded bg-white/8 px-1 py-0.5 text-[8px] text-white/45"><Icon className="h-2.5 w-2.5" /> Automático</span>
+          <span className="block mt-1 h-3.5 text-[8px] leading-none text-transparent">&nbsp;</span>
+        </span>
+      </span>
+    </button>
+  )
+}
+
+function FzrTelegramScreen({ me, onBack, onLoginRequired, onBought }) {
+  const [catalog, setCatalog] = useState(null)
+  const [mode, setMode] = useState('premium')
+  const [selected, setSelected] = useState(null)
+  const [username, setUsername] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [buying, setBuying] = useState(false)
+  const [err, setErr] = useState(null)
+  const shareLink = `${window.location.origin}${window.location.pathname}?screen=telegram`
+  const [showShare, setShowShare] = useState(false)
+  useEffect(() => {
+    api.fzrTelegramCatalog().then(data => {
+      setCatalog(data)
+      const first = data?.premium?.plans?.[0]
+      if (first) setSelected({ type: 'premium', ...first })
+      setLoading(false)
+    }).catch(e => { setErr(e.message); setLoading(false) })
+  }, [])
+  const premiumPlans = catalog?.premium?.plans || []
+  const starPackages = catalog?.stars?.packages || []
+  const items = mode === 'premium' ? premiumPlans.map(x => ({ type: 'premium', ...x })) : starPackages.map(x => ({ type: 'stars', ...x }))
+  const price = Number(selected?.price_usd || 0)
+  async function buy() {
+    if (me?.is_guest) { onLoginRequired?.(); return }
+    if (!selected || !username.trim()) return
+    setBuying(true); setErr(null)
+    try {
+      await api.fzrTelegramOrder(selected.type === 'premium' ? { product_type: 'premium', telegram_username: username, months: selected.months } : { product_type: 'stars', telegram_username: username, quantity: selected.quantity })
+      onBought?.()
+    } catch (e) { setErr(e.message) }
+    setBuying(false)
+  }
+  if (loading) return <CoolLoading label="Cargando Telegram..." />
+  return (
+    <div className="h-[100dvh] flex flex-col bg-bg overflow-hidden">
+      {showShare && <ShareProductModal shareLink={shareLink} productName="Telegram Premium y Estrellas" onClose={() => setShowShare(false)} />}
+      <div className="flex-shrink-0 border-b border-white/5 bg-bg/95 p-3.5 backdrop-blur"><div className="mx-auto flex max-w-lg items-center gap-3"><button onClick={onBack} className="flex h-9 w-9 items-center justify-center rounded-full bg-card border border-white/10 active:scale-90"><ArrowLeft className="h-4 w-4" /></button><h1 className="min-w-0 flex-1 truncate text-base font-black">{catalog?.display_name || 'Telegram'}</h1><button onClick={() => setShowShare(true)} className="flex h-9 w-9 items-center justify-center rounded-full border border-violet-400/35 bg-violet-500/15 text-violet-200 active:scale-90"><Share2 className="h-4 w-4" /></button></div></div>
+      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col overflow-hidden px-3 pt-3 pb-32">
+        <section className="mb-3 overflow-hidden rounded-xl border border-white/10 bg-card flex-shrink-0"><div className="relative min-h-[118px] bg-[#101820]"><OptimizedImage src={catalog?.imageurl || 'https://images.unsplash.com/photo-1611605698335-8b1569810432?auto=format&fit=crop&w=900&q=75'} alt="" className="absolute inset-0 h-full w-full object-cover" /><div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/65 to-black/25" /><div className="relative flex min-h-[118px] items-center p-4"><p className="text-xs leading-relaxed text-white/80">{catalog?.description || 'Compra Telegram Premium o Estrellas usando tu saldo de Francho Shop. Solo escribe el usuario correcto de Telegram y confirma el plan.'}</p></div></div></section>
+        <div className="mb-3 grid grid-cols-2 gap-2 flex-shrink-0"><button onClick={() => { setMode('premium'); setSelected(premiumPlans[0] ? { type: 'premium', ...premiumPlans[0] } : null) }} className={`rounded-xl border px-3 py-2 text-left active:scale-[0.99] ${mode === 'premium' ? 'border-accent bg-accent/12' : 'border-white/10 bg-card'}`}><span className="block text-sm font-black">Telegram Premium</span><span className="text-[11px] text-white/45">Suscripción</span></button><button onClick={() => { setMode('stars'); setSelected(starPackages[0] ? { type: 'stars', ...starPackages[0] } : null) }} className={`rounded-xl border px-3 py-2 text-left active:scale-[0.99] ${mode === 'stars' ? 'border-accent bg-accent/12' : 'border-white/10 bg-card'}`}><span className="block text-sm font-black">Estrellas</span><span className="text-[11px] text-white/45">Stars</span></button></div>
+        {err && <p className="mb-3 rounded-lg border border-red-500/25 bg-red-500/10 p-3 text-xs font-semibold text-red-300">{err}</p>}
+        {catalog && catalog.available === false && <p className="mb-3 rounded-lg border border-yellow-500/25 bg-yellow-500/10 p-3 text-xs font-semibold text-yellow-200">{catalog.unavailable_reason || 'No disponible temporalmente.'}</p>}
+        {catalog?.instructions && <div className="mb-3 rounded-xl border border-white/10 bg-card p-3 text-xs leading-relaxed text-white/65 whitespace-pre-line"><p className="mb-1 font-black text-white/80">Cómo comprar</p>{catalog.instructions}</div>}
+        <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+          {items.map(item => <button key={`${item.type}-${item.months || item.quantity}`} onClick={() => setSelected(item)} className={`w-full rounded-xl border p-3 text-left active:scale-[0.99] ${selected?.type === item.type && (selected?.months || selected?.quantity) === (item.months || item.quantity) ? 'border-accent bg-accent/12' : 'border-white/10 bg-card'}`}><span className="flex items-center justify-between gap-3"><span><span className="block text-sm font-black">{item.type === 'premium' ? `${item.months} meses Premium` : `${item.quantity} Estrellas`}</span><span className="mt-1 block text-[11px] text-white/45">Entrega automática por proveedor</span></span><span className="text-lg font-black text-accent">${Number(item.price_usd || 0).toFixed(2)}</span></span></button>)}
+        </div>
+      </main>
+      <div className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-lg border-t border-white/10 bg-bg/95 p-3 pb-[calc(env(safe-area-inset-bottom)+12px)] shadow-2xl backdrop-blur"><label className="mb-2 block"><span className="mb-1 block text-[10px] font-bold uppercase text-white/40">Usuario de Telegram</span><input value={username} onChange={e => setUsername(e.target.value)} placeholder="@usuario" className="w-full rounded-lg border border-white/10 bg-card px-3 py-3 text-sm outline-none focus:border-accent" /></label><div className="mb-2 flex items-center justify-between"><span className="text-xs text-white/45">Total</span><span className="text-2xl font-black text-accent">${price.toFixed(2)}</span></div><button onClick={buy} disabled={buying || !selected || !username.trim() || catalog?.available === false} className="w-full rounded-xl bg-accent py-3 text-sm font-black text-bg active:scale-95 disabled:opacity-50">{catalog?.available === false ? 'No disponible temporalmente' : buying ? 'Comprando...' : 'Confirmar compra'}</button></div>
+    </div>
+  )
+}
+
+function FzrCapCutScreen({ me, onBack, onLoginRequired, onBought }) {
+  const [catalog, setCatalog] = useState(null)
+  const [selected, setSelected] = useState(null)
+  const [userId, setUserId] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [buying, setBuying] = useState(false)
+  const [err, setErr] = useState(null)
+  const [showShare, setShowShare] = useState(false)
+  const shareLink = `${window.location.origin}${window.location.pathname}?screen=capcut`
+  useEffect(() => {
+    api.fzrCapcutCatalog().then(data => { setCatalog(data); setSelected(data?.offers?.[0] || null); setLoading(false) }).catch(e => { setErr(e.message); setLoading(false) })
+  }, [])
+  async function buy() {
+    if (me?.is_guest) { onLoginRequired?.(); return }
+    if (!selected || !userId.trim()) return
+    setBuying(true); setErr(null)
+    try { await api.fzrCapcutOrder({ offer_id: selected.offer_id, user_id: userId }); onBought?.() } catch (e) { setErr(e.message) }
+    setBuying(false)
+  }
+  if (loading) return <CoolLoading label="Cargando CapCut..." />
+  const price = Number(selected?.price_usd || 0)
+  return (
+    <div className="h-[100dvh] flex flex-col bg-bg overflow-hidden">
+      {showShare && <ShareProductModal shareLink={shareLink} productName="CapCut Pro" onClose={() => setShowShare(false)} />}
+      <div className="flex-shrink-0 border-b border-white/5 bg-bg/95 p-3.5 backdrop-blur"><div className="mx-auto flex max-w-lg items-center gap-3"><button onClick={onBack} className="flex h-9 w-9 items-center justify-center rounded-full bg-card border border-white/10 active:scale-90"><ArrowLeft className="h-4 w-4" /></button><h1 className="min-w-0 flex-1 truncate text-base font-black">{catalog?.display_name || 'CapCut'}</h1><button onClick={() => setShowShare(true)} className="flex h-9 w-9 items-center justify-center rounded-full border border-violet-400/35 bg-violet-500/15 text-violet-200 active:scale-90"><Share2 className="h-4 w-4" /></button></div></div>
+      <main className="mx-auto flex w-full max-w-lg flex-1 flex-col overflow-hidden px-3 pt-3 pb-32">
+        <section className="mb-3 overflow-hidden rounded-xl border border-white/10 bg-card flex-shrink-0"><div className="relative min-h-[118px] bg-[#101820]">{catalog?.imageurl ? <OptimizedImage src={catalog.imageurl} alt="" className="absolute inset-0 h-full w-full object-cover" /> : <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/20 via-bg to-pink-500/10" />}<div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/65 to-black/25" /><div className="relative flex min-h-[118px] items-center p-4"><p className="text-xs leading-relaxed text-white/80">{catalog?.description || 'Compra CapCut Standard o Pro por User ID. La recarga se entrega directamente a la cuenta indicada.'}</p></div></div></section>
+        {err && <p className="mb-3 rounded-lg border border-red-500/25 bg-red-500/10 p-3 text-xs font-semibold text-red-300">{err}</p>}
+        {catalog && catalog.available === false && <p className="mb-3 rounded-lg border border-yellow-500/25 bg-yellow-500/10 p-3 text-xs font-semibold text-yellow-200">{catalog.unavailable_reason || 'No disponible temporalmente.'}</p>}
+        {catalog?.instructions && <div className="mb-3 rounded-xl border border-white/10 bg-card p-3 text-xs leading-relaxed text-white/65 whitespace-pre-line"><p className="mb-1 font-black text-white/80">Cómo comprar</p>{catalog.instructions}</div>}
+        <div className="flex-1 overflow-y-auto space-y-2 pr-1">
+          {(catalog?.offers || []).map(item => <button key={item.offer_id} onClick={() => setSelected(item)} className={`w-full rounded-xl border p-3 text-left active:scale-[0.99] ${selected?.offer_id === item.offer_id ? 'border-accent bg-accent/12' : 'border-white/10 bg-card'}`}><span className="flex items-center justify-between gap-3"><span><span className="block text-sm font-black">{item.name}</span><span className="mt-1 block text-[11px] text-white/45">CapCut · entrega directa</span></span><span className="text-lg font-black text-accent">${Number(item.price_usd || 0).toFixed(2)}</span></span></button>)}
+        </div>
+      </main>
+      <div className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-lg border-t border-white/10 bg-bg/95 p-3 pb-[calc(env(safe-area-inset-bottom)+12px)] shadow-2xl backdrop-blur"><label className="mb-2 block"><span className="mb-1 block text-[10px] font-bold uppercase text-white/40">User ID de CapCut</span><input value={userId} onChange={e => setUserId(e.target.value)} placeholder="Pega tu User ID" className="w-full rounded-lg border border-white/10 bg-card px-3 py-3 text-sm outline-none focus:border-accent" /></label><div className="mb-2 flex items-center justify-between"><span className="text-xs text-white/45">Total</span><span className="text-2xl font-black text-accent">${price.toFixed(2)}</span></div><button onClick={buy} disabled={buying || !selected || !userId.trim() || catalog?.available === false} className="w-full rounded-xl bg-accent py-3 text-sm font-black text-bg active:scale-95 disabled:opacity-50">{catalog?.available === false ? 'No disponible temporalmente' : buying ? 'Comprando...' : 'Confirmar compra'}</button></div>
     </div>
   )
 }
@@ -2182,7 +2971,13 @@ function HomeScreen({ me, onSelectGame, onNav, onLoginRequired, onOpenNotificati
       const uniqueManual = [...new Map(manualList.filter(Boolean).map(item => [item.id, item])).values()]
       setGames(uniqueGames)
       setManualProducts(uniqueManual)
-      const manualId = Number(new URLSearchParams(window.location.search).get('manual_product') || 0)
+      const params = new URLSearchParams(window.location.search)
+      const manualId = Number(params.get('manual_product') || 0)
+      const referralCode = params.get('ref') || ''
+      if (manualId && referralCode) {
+        rememberProductReferral(manualId, referralCode)
+        if (!me?.is_guest) api.referralTrack(referralCode, manualId).catch(() => {})
+      }
       if (manualId) {
         const match = uniqueManual.find(p => Number(p.id) === manualId)
         if (match) setBuyingManual(match)
@@ -2206,7 +3001,7 @@ function HomeScreen({ me, onSelectGame, onNav, onLoginRequired, onOpenNotificati
   }, [games, me?.is_guest])
 
   const enrichedGames = useMemo(() => games.map(g => ({ ...g, catalogType: classifyCatalogItem(g, 'game') })), [games])
-  const enrichedManual = useMemo(() => manualProducts.map(p => ({ ...p, catalogType: 'manual' })), [manualProducts])
+  const enrichedManual = useMemo(() => manualProducts.map(p => ({ ...p, catalogType: classifyCatalogItem(p, 'manual') })), [manualProducts])
   const q = search.trim().toLowerCase()
   const { filteredGames, filteredManual, filterCounts } = useMemo(() => {
     const matchesSearch = (value) => !q || normalizeCatalogText(value).includes(q)
@@ -2214,15 +3009,16 @@ function HomeScreen({ me, onSelectGame, onNav, onLoginRequired, onOpenNotificati
     const fg = enrichedGames.filter(g => matchesSearch(`${g.title || ''} ${g.name || ''}`) && matchesFilter(g))
     const fm = enrichedManual.filter(p => matchesSearch(p.name || '') && matchesFilter(p))
     const counts = CATALOG_FILTERS.reduce((acc, item) => {
-      acc[item.id] = item.id === 'all'
+      const base = item.id === 'all'
         ? enrichedGames.length + enrichedManual.length
         : enrichedGames.filter(g => g.catalogType === item.id).length + enrichedManual.filter(p => p.catalogType === item.id).length
+      acc[item.id] = base + (item.id === 'all' || item.id === 'digital-service' ? 2 : 0)
       return acc
     }, {})
     return { filteredGames: fg, filteredManual: fm, filterCounts: counts }
   }, [q, activeFilter, enrichedGames, enrichedManual])
   const activeFilterData = useMemo(() => CATALOG_FILTERS.find(item => item.id === activeFilter) || CATALOG_FILTERS[0], [activeFilter])
-  const totalProducts = useMemo(() => games.reduce((sum, g) => sum + Number(g.count || 0), 0) + manualProducts.length, [games, manualProducts])
+  const totalProducts = useMemo(() => games.reduce((sum, g) => sum + Number(g.count || 0), 0) + manualProducts.length + 2, [games, manualProducts])
   const manualGameAccounts = useMemo(() => filteredManual.filter(p => p.catalogType === 'game-accounts'), [filteredManual])
   const manualOther = useMemo(() => filteredManual.filter(p => p.catalogType !== 'game-accounts'), [filteredManual])
 
@@ -2244,11 +3040,15 @@ function HomeScreen({ me, onSelectGame, onNav, onLoginRequired, onOpenNotificati
   }
 
   const showSmsCatalog = !search.trim() && (activeFilter === 'all' || activeFilter === 'digital-service')
+  const showSmmCatalog = !search.trim() && (activeFilter === 'all' || activeFilter === 'digital-service')
+  const showTelegramCatalog = !search.trim() && (activeFilter === 'all' || activeFilter === 'digital-service')
+  const showCapCutCatalog = !search.trim() && (activeFilter === 'all' || activeFilter === 'digital-service')
 
   return (
-    <div className="px-2.5 py-4 md:p-6">
-      <div className="sticky top-0 z-30 -mx-4 mb-3 border-b border-white/5 bg-bg/95 px-4 py-2 backdrop-blur">
-        <div className="flex items-center justify-between gap-3">
+    <div className="flex flex-col flex-1 h-full overflow-hidden bg-bg">
+      {/* Fixed Top Header Section */}
+      <div className="flex-shrink-0 border-b border-white/5 bg-bg/95 px-4 py-2.5 backdrop-blur">
+        <div className="flex items-center justify-between gap-3 max-w-lg mx-auto">
           <div className="flex items-center gap-2">
             <CatalogLogo compact />
             <button onClick={() => setMenuOpen(true)} className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border border-white/10 bg-card text-white active:scale-95" aria-label="Abrir filtros">
@@ -2272,112 +3072,148 @@ function HomeScreen({ me, onSelectGame, onNav, onLoginRequired, onOpenNotificati
         </div>
       </div>
 
-      <div className="mb-4 overflow-hidden rounded-lg border border-white/10 bg-card">
-        <div className="relative aspect-[16/7] min-h-[148px] bg-[#101820]">
-          <div className="absolute inset-y-0 right-0 w-2/3 bg-[url('https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1200&q=75')] bg-cover bg-center opacity-60" />
-          <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(11,17,23,.96),rgba(11,17,23,.65),rgba(11,17,23,.25))]" />
-          <div className="relative z-10 flex h-full max-w-[78%] flex-col justify-center p-4">
-            <p className="text-[11px] font-bold uppercase text-accent">{activeFilterData.title}</p>
-            <h2 className="mt-1 text-2xl font-black leading-tight text-white">Compra rapido y seguro</h2>
-            <p className="mt-2 text-xs leading-relaxed text-white/58">{totalProducts} productos disponibles. Filtra por tipo y encuentra la recarga correcta.</p>
+      {/* Scrollable Catalog Content */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 md:p-6 pb-28">
+        <div className="max-w-lg mx-auto">
+          <div className="mb-4 overflow-hidden rounded-lg border border-white/10 bg-card">
+            <div className="relative aspect-[16/7] min-h-[148px] bg-[#101820]">
+              <div className="absolute inset-y-0 right-0 w-2/3 bg-[url('https://images.unsplash.com/photo-1542751371-adc38448a05e?auto=format&fit=crop&w=1200&q=75')] bg-cover bg-center opacity-60" />
+              <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(11,17,23,.96),rgba(11,17,23,.65),rgba(11,17,23,.25))]" />
+              <div className="relative z-10 flex h-full max-w-[78%] flex-col justify-center p-4">
+                <p className="text-[11px] font-bold uppercase text-accent">{activeFilterData.title}</p>
+                <h2 className="mt-1 text-2xl font-black leading-tight text-white">Compra rapido y seguro</h2>
+                <p className="mt-2 text-xs leading-relaxed text-white/58">{totalProducts} productos disponibles. Filtra por tipo y encuentra la recarga correcta.</p>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
 
-      <div className="mb-4 rounded-lg border border-white/10 bg-card p-3">
-        <div className="relative">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
-          <input type="text" placeholder="Buscar juego, tarjeta o servicio" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full rounded-lg border border-white/10 bg-bg py-3 pl-10 pr-3 text-sm text-white outline-none placeholder-white/35 focus:border-accent" />
-        </div>
-      </div>
+          <div className="mb-4 rounded-lg border border-white/10 bg-card p-3">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" />
+              <input type="text" placeholder="Buscar juego, tarjeta o servicio" value={search} onChange={(e) => setSearch(e.target.value)} className="w-full rounded-lg border border-white/10 bg-bg py-3 pl-10 pr-3 text-sm text-white outline-none placeholder-white/35 focus:border-accent" />
+            </div>
+          </div>
 
-      {menuOpen && (
-        <div className="fixed inset-0 z-50 bg-black/70 p-3 backdrop-blur-sm">
-          <div className="ml-auto flex h-full max-w-sm flex-col overflow-hidden rounded-lg border border-white/10 bg-bg shadow-2xl">
-            <div className="flex items-center justify-between border-b border-white/10 p-4">
-              <div className="flex items-center gap-3">
-                <CatalogLogo compact />
-                <div>
-                  <p className="font-bold">Francho Shop</p>
-                  <p className="text-xs text-white/45">Filtros del catalogo</p>
+          {menuOpen && (
+            <div className="fixed inset-0 z-50 bg-black/70 p-3 backdrop-blur-sm">
+              <div className="ml-auto flex h-full max-w-sm flex-col overflow-hidden rounded-lg border border-white/10 bg-bg shadow-2xl">
+                <div className="flex items-center justify-between border-b border-white/10 p-4">
+                  <div className="flex items-center gap-3">
+                    <CatalogLogo compact />
+                    <div>
+                      <p className="font-bold">Francho Shop</p>
+                      <p className="text-xs text-white/45">Filtros del catalogo</p>
+                    </div>
+                  </div>
+                  <button onClick={() => setMenuOpen(false)} className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 active:scale-95" aria-label="Cerrar filtros">
+                    <X className="h-5 w-5" />
+                  </button>
+                </div>
+                <div className="flex-1 overflow-y-auto p-3">
+                  {CATALOG_FILTERS.map(item => {
+                    const Icon = item.icon
+                    const selected = activeFilter === item.id
+                    const count = filterCounts[item.id] || 0
+                    return (
+                      <button key={item.id} onClick={() => setFilter(item.id)} className={`mb-2 flex w-full items-center gap-3 rounded-lg border p-3 text-left active:scale-[0.99] ${selected ? 'border-accent bg-accent/15' : 'border-white/10 bg-card'}`}>
+                        <span className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${selected ? 'bg-accent text-white' : 'bg-white/8 text-white/65'}`}>
+                          <Icon className="h-5 w-5" />
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-sm font-bold">{item.title}</span>
+                          <span className="block truncate text-xs text-white/45">{item.description}</span>
+                        </span>
+                        <span className="rounded bg-white/10 px-2 py-1 text-xs text-white/55">{count}</span>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
-              <button onClick={() => setMenuOpen(false)} className="flex h-10 w-10 items-center justify-center rounded-lg bg-white/10 active:scale-95" aria-label="Cerrar filtros">
-                <X className="h-5 w-5" />
-              </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-3">
-              {CATALOG_FILTERS.map(item => {
-                const Icon = item.icon
-                const selected = activeFilter === item.id
-                const count = filterCounts[item.id] || 0
+          )}
+
+          {filteredGames.length === 0 && filteredManual.length === 0 && !showSmsCatalog && !showSmmCatalog && !showTelegramCatalog && !showCapCutCatalog ? (
+            <p className="py-8 text-center text-white/50">Sin resultados para "{search || activeFilterData.label}"</p>
+          ) : activeFilter !== 'all' ? (
+            <CatalogGridView
+              title={activeFilterData.title}
+              icon={activeFilterData.icon}
+              count={filteredGames.length + filteredManual.length + (showSmsCatalog ? 1 : 0) + (showSmmCatalog ? 1 : 0) + (showTelegramCatalog ? 1 : 0) + (showCapCutCatalog ? 1 : 0)}
+              onBack={() => { setActiveFilter('all'); setSearch('') }}
+            >
+              {filteredGames.map((g) => <GameCard key={g.name} game={g} onSelect={() => onSelectGame(g)} />)}
+              {showSmsCatalog && <SmsCatalogCard onSelect={() => onNav?.('sms')} />}
+              {showSmmCatalog && <SmmCatalogCard onSelect={() => onNav?.('smm')} />}
+              {showTelegramCatalog && <FzrCatalogCard type="telegram" onSelect={() => onNav?.('telegram')} />}
+              {showCapCutCatalog && <FzrCatalogCard type="capcut" onSelect={() => onNav?.('capcut')} />}
+              {filteredManual.map((p) => <ManualCatalogCard key={p.id} product={p} onSelect={() => setBuyingManual(p)} />)}
+            </CatalogGridView>
+          ) : (
+            <>
+              {CATALOG_FILTERS.filter(f => !['all', 'manual', 'game-accounts'].includes(f.id)).map((section) => {
+                const Icon = section.icon
+                const gamesSec = filteredGames.filter(g => g.catalogType === section.id)
+                const manualSec = filteredManual.filter(p => p.catalogType === section.id)
+                const smsSecCount = (section.id === 'digital-service' && showSmsCatalog) ? 1 : 0
+                const smmSecCount = (section.id === 'digital-service' && showSmmCatalog) ? 1 : 0
+                const telegramSecCount = (section.id === 'digital-service' && showTelegramCatalog) ? 1 : 0
+                const capcutSecCount = (section.id === 'digital-service' && showCapCutCatalog) ? 1 : 0
+                const totalCount = gamesSec.length + manualSec.length + smsSecCount + smmSecCount + telegramSecCount + capcutSecCount
+                if (totalCount === 0) return null
                 return (
-                  <button key={item.id} onClick={() => setFilter(item.id)} className={`mb-2 flex w-full items-center gap-3 rounded-lg border p-3 text-left active:scale-[0.99] ${selected ? 'border-accent bg-accent/15' : 'border-white/10 bg-card'}`}>
-                    <span className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg ${selected ? 'bg-accent text-white' : 'bg-white/8 text-white/65'}`}>
-                      <Icon className="h-5 w-5" />
-                    </span>
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-bold">{item.title}</span>
-                      <span className="block truncate text-xs text-white/45">{item.description}</span>
-                    </span>
-                    <span className="rounded bg-white/10 px-2 py-1 text-xs text-white/55">{count}</span>
-                  </button>
+                  <CatalogSection key={section.id} title={section.title} icon={Icon} count={totalCount} onViewAll={() => setActiveFilter(section.id)}>
+                    {gamesSec.map((g) => <GameCard key={g.name} game={g} onSelect={() => onSelectGame(g)} />)}
+                    {section.id === 'digital-service' && showSmsCatalog && <SmsCatalogCard onSelect={() => onNav?.('sms')} />}
+                    {section.id === 'digital-service' && showSmmCatalog && <SmmCatalogCard onSelect={() => onNav?.('smm')} />}
+                    {section.id === 'digital-service' && showTelegramCatalog && <FzrCatalogCard type="telegram" onSelect={() => onNav?.('telegram')} />}
+                    {section.id === 'digital-service' && showCapCutCatalog && <FzrCatalogCard type="capcut" onSelect={() => onNav?.('capcut')} />}
+                    {manualSec.map((p) => <ManualCatalogCard key={p.id} product={p} onSelect={() => setBuyingManual(p)} />)}
+                  </CatalogSection>
                 )
               })}
+
+              {manualGameAccounts.length > 0 && (
+                <GameAccountsIntro count={manualGameAccounts.length} onViewAll={() => setActiveFilter('game-accounts')}>
+                  {manualGameAccounts.map((p) => <ManualCatalogCard key={p.id} product={p} onSelect={() => setBuyingManual(p)} />)}
+                </GameAccountsIntro>
+              )}
+            </>
+          )}
+
+          {buyingManual && (
+            <ManualBuyModal
+              me={me}
+              onLoginRequired={onLoginRequired}
+              product={buyingManual}
+              onClose={() => { setBuyingManual(null); setBuyResult(null) }}
+              onBought={(result) => { setBuyResult(result); api.me().then(setMe).catch(() => {}) }}
+              buyResult={buyResult}
+            />
+          )}
+
+          <HomeReviewsPanel onNav={onNav} />
+
+          <div className="mt-8 border-t border-white/10 pt-6">
+            <div className="grid grid-cols-3 gap-2">
+              <button onClick={() => onNav?.('guides')} className="card min-h-[76px] p-3 text-center active:scale-95"><Globe2 className="mx-auto mb-1 h-5 w-5" aria-hidden="true" /><span className="block text-[11px] font-semibold">Guías</span></button>
+              <button onClick={() => onNav?.('help')} className="card min-h-[76px] p-3 text-center active:scale-95"><BookOpen className="mx-auto mb-1 h-5 w-5" aria-hidden="true" /><span className="block text-[11px] font-semibold">Ayuda</span></button>
+              <button onClick={() => onNav?.('terms')} className="card min-h-[76px] p-3 text-center active:scale-95"><FileText className="mx-auto mb-1 h-5 w-5" aria-hidden="true" /><span className="block text-[11px] font-semibold">Términos</span></button>
+              <button onClick={() => onNav?.('faq')} className="card min-h-[76px] p-3 text-center active:scale-95"><CircleHelp className="mx-auto mb-1 h-5 w-5" aria-hidden="true" /><span className="block text-[11px] font-semibold">FAQ</span></button>
+              <button onClick={() => onNav?.('contact')} className="card min-h-[76px] p-3 text-center active:scale-95"><MessageCircle className="mx-auto mb-1 h-5 w-5" aria-hidden="true" /><span className="block text-[11px] font-semibold">Contacto</span></button>
+              <button onClick={() => openExternalUrl(WHATSAPP_CHANNEL_URL)} className="card min-h-[76px] p-3 text-center active:scale-95"><Store className="mx-auto mb-1 h-5 w-5" aria-hidden="true" /><span className="block text-[11px] font-semibold">Canal</span></button>
+            </div>
+            <div className="mt-4 space-y-1 text-center text-[10px] text-white/30">
+              <p>Francho Shop · Recargas de juegos · Gift cards · Suscripciones · Productos digitales</p>
+              <p>Recargas de juegos, gift cards, suscripciones y productos digitales para Cuba y el mundo.</p>
+              <p>Soporte y canal oficial de WhatsApp</p>
+              <p>© 2026 Francho Shop · Hecho con dedicación para Cuba y el mundo</p>
             </div>
           </div>
-        </div>
-      )}
-
-      {filteredGames.length === 0 && filteredManual.length === 0 && !showSmsCatalog ? (
-        <p className="py-8 text-center text-white/50">Sin resultados para "{search || activeFilterData.label}"</p>
-      ) : activeFilter !== 'all' ? (
-        <CatalogGridView
-          title={activeFilterData.title}
-          icon={activeFilterData.icon}
-          count={filteredGames.length + filteredManual.length + (showSmsCatalog ? 1 : 0)}
-          onBack={() => { setActiveFilter('all'); setSearch('') }}
-        >
-          {filteredGames.map((g) => <GameCard key={g.name} game={g} onSelect={() => onSelectGame(g)} />)}
-          {showSmsCatalog && <SmsCatalogCard onSelect={() => onNav?.('sms')} />}
-          {filteredManual.map((p) => <ManualCatalogCard key={p.id} product={p} onSelect={() => setBuyingManual(p)} />)}
-        </CatalogGridView>
-      ) : (
-        <>
-          {CATALOG_FILTERS.filter(f => !['all', 'manual'].includes(f.id)).map((section) => {
-            const items = filteredGames.filter(g => g.catalogType === section.id)
-            return items.length > 0 ? <CatalogSection key={section.id} title={section.title} icon={section.icon} count={items.length} onViewAll={() => setFilter(section.id)}>{items.map((g) => <GameCard key={g.name} game={g} onSelect={() => onSelectGame(g)} />)}</CatalogSection> : null
-          })}
-          {showSmsCatalog && <CatalogSection title="Números virtuales" icon={Smartphone} count={1} onViewAll={() => setFilter('digital-service')}><SmsCatalogCard onSelect={() => onNav?.('sms')} /></CatalogSection>}
-          {manualGameAccounts.length > 0 && <GameAccountsIntro count={manualGameAccounts.length} onViewAll={() => setFilter('game-accounts')}>{manualGameAccounts.map((p) => <ManualCatalogCard key={p.id} product={p} onSelect={() => setBuyingManual(p)} />)}</GameAccountsIntro>}
-          {manualOther.length > 0 && <CatalogSection title="Servicios y cuentas" icon={Wrench} count={manualOther.length} onViewAll={() => setFilter('manual')}>{manualOther.map((p) => <ManualCatalogCard key={p.id} product={p} onSelect={() => setBuyingManual(p)} />)}</CatalogSection>}
-        </>
-      )}
-
-      {buyingManual && <ManualBuyModal me={me} onLoginRequired={onLoginRequired} product={buyingManual} onClose={() => { setBuyingManual(null); setBuyResult(null) }} onBought={(result) => setBuyResult(result)} buyResult={buyResult} />}
-
-      <HomeReviewsPanel onNav={onNav} />
-
-      <div className="mt-8 border-t border-white/10 pt-6">
-        <p className="mb-3 inline-flex w-full items-center justify-center gap-1 text-center text-xs text-white/40"><Info className="h-3.5 w-3.5" aria-hidden="true" />Informacion</p>
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-5">
-          <button onClick={() => onNav?.('guides')} className="card p-3 text-center active:scale-95"><Globe2 className="mx-auto mb-1 h-6 w-6" aria-hidden="true" /><span className="block text-[11px] font-semibold">Guías</span><span className="block mt-0.5 text-[9px] leading-tight text-white/40">Recargas y compras</span></button>
-          <button onClick={() => onNav?.('help')} className="card p-3 text-center active:scale-95"><BookOpen className="mx-auto mb-1 h-6 w-6" aria-hidden="true" /><span className="block text-[11px] font-semibold">Ayuda</span></button>
-          <button onClick={() => onNav?.('faq')} className="card p-3 text-center active:scale-95"><CircleHelp className="mx-auto mb-1 h-6 w-6" aria-hidden="true" /><span className="block text-[11px] font-semibold">FAQ</span></button>
-          <button onClick={() => onNav?.('terms')} className="card p-3 text-center active:scale-95"><FileText className="mx-auto mb-1 h-6 w-6" aria-hidden="true" /><span className="block text-[11px] font-semibold">Términos</span></button>
-          <button onClick={() => onNav?.('contact')} className="card p-3 text-center active:scale-95"><MessageCircle className="mx-auto mb-1 h-6 w-6" aria-hidden="true" /><span className="block text-[11px] font-semibold">Contacto</span><span className="block mt-0.5 text-[9px] leading-tight text-white/40">Soporte y novedades oficiales</span></button>
-        </div>
-        <div className="mt-4 space-y-1 text-center text-[10px] text-white/30">
-          <p>Francho Shop · Recargas de juegos · Gift cards · Suscripciones · Productos digitales</p>
-          <p>Recargas de juegos, gift cards, suscripciones y productos digitales para Cuba y el mundo.</p>
-          <p>Soporte y canal oficial de WhatsApp</p>
-          <p>© 2026 Francho Shop · Hecho con dedicación para Cuba y el mundo</p>
         </div>
       </div>
     </div>
   )
 }
-
 
 function GameAccountsIntro({ count, children, onViewAll }) {
   return (
@@ -2408,11 +3244,11 @@ function flattenCatalogChildren(children) {
 
 function CatalogViewMoreCard({ title, onClick }) {
   return (
-    <button onClick={onClick} className="group block w-full min-w-0 overflow-hidden rounded-lg border border-white/10 bg-card text-left transition active:scale-95 hover:border-accent/50" aria-label={`Ver más ${title}`}>
+    <button onClick={onClick} className="group flex h-full min-h-[188px] w-full min-w-0 flex-col overflow-hidden rounded-lg border border-white/10 bg-card text-left transition active:scale-95 hover:border-accent/50" aria-label={`Ver más ${title}`}>
       <span className="block flex aspect-square items-center justify-center bg-white/5 text-accent">
         <ChevronRight className="h-8 w-8" />
       </span>
-      <span className="block p-1.5">
+      <span className="block flex-1 p-1.5">
         <span className="block line-clamp-2 min-h-[28px] break-words text-[11px] font-bold leading-tight text-accent">Ver más</span>
         <span className="block mt-1 flex min-w-0 items-center justify-between gap-1"><span className="truncate text-[9px] text-white/45">{title}</span><ChevronRight className="h-3 w-3 flex-shrink-0 text-white/35" /></span>
         <span className="block mt-1 h-3.5 text-[8px] leading-none text-transparent">&nbsp;</span>
@@ -2480,11 +3316,11 @@ function CatalogSection({ title, icon: Icon, count, children, onViewAll }) {
 function ManualCatalogCard({ product, onSelect }) {
   // Local cacheBust removed
   return (
-    <button onClick={onSelect} className="group block w-full min-w-0 overflow-hidden rounded-lg border border-white/10 bg-card text-left transition active:scale-95 hover:border-accent/50">
-      <span className="block aspect-square bg-[#101820]">
+    <button onClick={onSelect} className="group flex h-full min-h-[188px] w-full min-w-0 flex-col overflow-hidden rounded-lg border border-white/10 bg-card text-left transition active:scale-95 hover:border-accent/50">
+      <span className="block aspect-square flex-shrink-0 bg-[#101820]">
         {product.icon_url ? <OptimizedImage src={`${product.icon_url}?v=${cacheBust}`} className="h-full w-full object-cover transition group-hover:scale-[1.03]" alt={product.name} /> : <span className="block flex h-full w-full items-center justify-center bg-white/5"><CategoryIcon category={product.category} className="h-9 w-9 text-white/55" /></span>}
       </span>
-      <span className="block p-1.5">
+      <span className="block flex-1 p-1.5">
         <span className="block line-clamp-2 min-h-[28px] break-words text-[11px] font-bold leading-tight">{product.name}</span>
         <span className="block mt-1 min-w-0">
           <span className="block truncate text-xs font-black text-accent">{manualProductPriceRange(product)}</span>
@@ -2505,13 +3341,13 @@ function GameCard({ game, onSelect }) {
   const TypeIcon = game.catalogType === 'card' ? Gift : game.catalogType === 'game-cdkey' ? KeyRound : game.catalogType === 'game-console' ? Gamepad2 : Smartphone
 
   return (
-    <button onClick={onSelect} className="group block w-full min-w-0 overflow-hidden rounded-lg border border-white/10 bg-card text-left transition active:scale-95 hover:border-accent/50">
-      <span className="block relative aspect-square bg-[#101820]">
+    <button onClick={onSelect} className="group flex h-full min-h-[188px] w-full min-w-0 flex-col overflow-hidden rounded-lg border border-white/10 bg-card text-left transition active:scale-95 hover:border-accent/50">
+      <span className="block relative aspect-square flex-shrink-0 bg-[#101820]">
         {showImage && <OptimizedImage src={imgSrc} alt={game.title || game.name} className={`h-full w-full object-cover transition duration-300 group-hover:scale-[1.03] ${imgLoaded ? 'opacity-100' : 'opacity-0'}`} onError={() => setImgError(true)} onLoad={() => setImgLoaded(true)} />}
         {(!showImage || !imgLoaded) && <span className="block absolute inset-0 flex items-center justify-center bg-white/5"><TypeIcon className="h-10 w-10 text-white/55" aria-hidden="true" /></span>}
         <span className="block absolute left-1.5 top-1.5 max-w-[calc(100%-12px)] truncate rounded bg-black/55 px-1.5 py-0.5 text-[9px] font-bold text-white/80 backdrop-blur">{game.catalogType === 'card' ? 'Card' : game.catalogType === 'direct-topup' ? 'Top-Up' : game.catalogType === 'game-cdkey' ? 'CD-Key' : 'Game'}</span>
       </span>
-      <span className="block p-1.5">
+      <span className="block flex-1 p-1.5">
         <span className="block line-clamp-2 min-h-[28px] break-words text-[11px] font-bold leading-tight">{game.title || game.name}</span>
         <span className="block mt-1 flex min-w-0 items-center justify-between gap-1"><span className="truncate text-[9px] text-white/45">{game.count} productos</span><ChevronDown className="h-3 w-3 flex-shrink-0 -rotate-90 text-white/35" /></span>
         <SocialStatsLine item={game} compact />
@@ -2548,15 +3384,18 @@ function RegionsScreen({ game, gameData, me, onSelectRegion, onCountKnown }) {
   useEffect(() => {
     if (loading || err) return
     if (typeof onCountKnown === 'function') onCountKnown(regions.length)
-    if (regions.length === 1 && regions[0]?.raw_name) {
-      const t = setTimeout(() => onSelectRegion(regions[0].raw_name), 0)
-      return () => clearTimeout(t)
+  }, [regions, loading, err, onCountKnown])
+
+  useEffect(() => {
+    if (loading || err || regions.length !== 1) return
+    const onlyRegion = regions[0]?.raw_name || regions[0]?.name || regions[0]
+    if (onlyRegion === 'Global') {
+      onSelectRegion('Global')
     }
-  }, [regions, loading, err])
+  }, [regions, loading, err, onSelectRegion])
 
   if (loading) return <CoolLoading label="Obteniendo regiones..." />
   if (err) return <ErrorView msg={err} />
-  if (regions.length <= 1) return <CoolLoading label="Cargando productos..." />
 
   const iconUrl = gameData?.icon_url
   // Local cacheBust removed
@@ -2701,6 +3540,7 @@ function ProductsScreen({ game, gameData, region, me, onSelectProduct, onLoginRe
   const [submitting, setSubmitting] = useState(false)
   const [orderError, setOrderError] = useState(null)
   const [showShare, setShowShare] = useState(false)
+  const [showDripHelp, setShowDripHelp] = useState(false)
   const [shareTarget, setShareTarget] = useState(null) // { link, name }
   const descriptionRef = useRef(null)
   const instructionsRef = useRef(null)
@@ -2708,21 +3548,38 @@ function ProductsScreen({ game, gameData, region, me, onSelectProduct, onLoginRe
   const [detail, setDetail] = useState(null)
 
   useEffect(() => {
-    (me?.is_guest ? api.publicProducts(game, region) : api.products(game, region))
+    let cancelled = false
+    setLoading(true)
+    setErr(null)
+    setProducts([])
+    setSelectedId(null)
+    setDetail(null)
+    setFields({})
+    setOrderError(null)
+    ;(me?.is_guest ? api.publicProducts(game, region) : api.products(game, region))
       .then((p) => {
+        if (cancelled) return
         const arr = Array.isArray(p) ? p : []
         const uniqueProducts = [...new Map(arr.filter(Boolean).map(item => [item.id, item])).values()]
         setProducts(sortProductsByValue(uniqueProducts))
         setLoading(false)
       })
-      .catch((e) => { setErr(e.message); setLoading(false) })
+      .catch((e) => {
+        if (cancelled) return
+        setErr(e.message)
+        setLoading(false)
+      })
+    return () => { cancelled = true }
   }, [game, region, me?.is_guest])
 
   useEffect(() => {
     if (!selectedId) { setDetail(null); return }
-    (me?.is_guest ? api.publicProductDetail(selectedId, region) : api.productDetail(selectedId, region))
-      .then(d => setDetail(d))
-      .catch(e => setOrderError(e.message))
+    let cancelled = false
+    setDetail(null)
+    ;(me?.is_guest ? api.publicProductDetail(selectedId, region) : api.productDetail(selectedId, region))
+      .then(d => { if (!cancelled) setDetail(d) })
+      .catch(e => { if (!cancelled) setOrderError(e.message) })
+    return () => { cancelled = true }
   }, [selectedId, region, me?.is_guest])
 
   const selectedProduct = products.find(p => p.id === selectedId)
@@ -3028,7 +3885,7 @@ function ShareProductModal({ shareLink, productName, onClose }) {
 
   // Actualizar URL del navegador automáticamente al montar
   useEffect(() => {
-    try { window.history.replaceState({}, '', shareLink) } catch {}
+    try { window.history.replaceState(window.history.state || {}, '', shareLink) } catch {}
     // Al desmontar, no limpiamos aquí (lo hace goBack)
   }, [shareLink])
 
@@ -3162,6 +4019,7 @@ function ProductDetailScreen({ productId, region, me, onCancel, onBought, onLogi
   const [submitting, setSubmitting] = useState(false)
   const [orderError, setOrderError] = useState(null)
   const [showShare, setShowShare] = useState(false)
+  const [showDripHelp, setShowDripHelp] = useState(false)
   const descriptionRef = useRef(null)
   const instructionsRef = useRef(null)
   // Local cacheBust removed
@@ -3181,7 +4039,7 @@ function ProductDetailScreen({ productId, region, me, onCancel, onBought, onLogi
     if (region && region !== '__standard__') params.set('region', region)
     if (!me?.is_guest) params.set('ref', me.user_id)
     const newUrl = window.location.origin + window.location.pathname + '?' + params.toString()
-    try { window.history.replaceState({}, '', newUrl) } catch {}
+    try { window.history.replaceState(window.history.state || {}, '', newUrl) } catch {}
   }, [detail, region, me?.is_guest, me?.user_id])
 
   if (loading || !detail) return <CoolLoading label="Cargando detalles del producto..." />
@@ -3344,6 +4202,8 @@ function ProductDetailScreen({ productId, region, me, onCancel, onBought, onLogi
           </button>
         </div>
       )}
+
+      <PublicReviewsPanel productId={detail.id} me={me} onLoginRequired={onLoginRequired} />
 
       {orderError && <p className="mb-4 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-center text-sm text-red-300">{orderError}</p>}
 
@@ -3562,7 +4422,7 @@ function ResultScreen({ result, onHome }) {
 //  PANTALLAS DE AUTENTICACIÓN WEB
 // ════════════════════════════════════════════════════════
 
-function AuthWrapper({ children, title, subtitle }) {
+function AuthWrapper({ children, title, subtitle, privatePortal = false }) {
   return (
     <div className="min-h-screen bg-bg px-4 py-5">
       <div className="mx-auto flex min-h-screen w-full max-w-md flex-col justify-center">
@@ -3573,11 +4433,11 @@ function AuthWrapper({ children, title, subtitle }) {
             <div className="relative flex min-h-[260px] flex-col justify-between p-5">
               <div className="flex items-center justify-between gap-3">
                 <CatalogLogo compact />
-                <span className="rounded-full border border-green-400/25 bg-green-400/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-green-200">Página oficial</span>
+                <span className="rounded-full border border-green-400/25 bg-green-400/10 px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-green-200">{privatePortal ? 'Panel privado' : 'Página oficial'}</span>
               </div>
               <div>
-                <h1 className="text-3xl font-black leading-tight text-white">Francho Shop</h1>
-                <p className="mt-2 text-sm leading-relaxed text-white/70">Recargas de juegos, gift cards, suscripciones y productos digitales para Cuba y el mundo.</p>
+                <h1 className="text-3xl font-black leading-tight text-white">{privatePortal ? 'Panel Francho Shop' : 'Francho Shop'}</h1>
+                <p className="mt-2 text-sm leading-relaxed text-white/70">{privatePortal ? 'Acceso separado para administración, vendedores y revendedores autorizados.' : 'Recargas de juegos, gift cards, suscripciones y productos digitales para Cuba y el mundo.'}</p>
                 {subtitle && <p className="mt-2 text-xs font-semibold text-accent">{subtitle}</p>}
               </div>
             </div>
@@ -3590,7 +4450,7 @@ function AuthWrapper({ children, title, subtitle }) {
         </div>
         <div className="card p-4">
           <h2 className="mb-1 text-xl font-black">{title}</h2>
-          <p className="mb-4 text-xs leading-relaxed text-white/45">Accede a tu cuenta para comprar, revisar pedidos, recibir entregas y mantener tu historial protegido.</p>
+          <p className="mb-4 text-xs leading-relaxed text-white/45">{privatePortal ? 'Usa tus credenciales de panel. Este acceso no aparece en la tienda normal para vendedores.' : 'Accede a tu cuenta para comprar, revisar pedidos, recibir entregas y mantener tu historial protegido.'}</p>
           {children}
         </div>
         <div className="mt-4 grid grid-cols-2 gap-2 text-xs text-white/55">
@@ -3629,7 +4489,7 @@ function PasswordInput({ placeholder, value, onChange, onKeyDown }) {
   )
 }
 
-function LoginScreen({ onSuccess, onRegister, onForgot }) {
+function LoginScreen({ onSuccess, onRegister, onForgot, privatePortal = false }) {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -3646,7 +4506,7 @@ function LoginScreen({ onSuccess, onRegister, onForgot }) {
   }
 
   return (
-    <AuthWrapper title="Iniciar sesión" subtitle="Recargas oficiales de juegos y gift cards">
+    <AuthWrapper title={privatePortal ? 'Iniciar sesión en el panel' : 'Iniciar sesión'} subtitle={privatePortal ? 'Acceso privado de Francho Shop' : 'Recargas oficiales de juegos y gift cards'} privatePortal={privatePortal}>
       {err && <p className="text-red-400 text-sm mb-3 card p-2 text-center">{err}</p>}
       <input type="email" placeholder="Email" value={email}
         onChange={e => setEmail(e.target.value)}
@@ -3669,7 +4529,8 @@ function LoginScreen({ onSuccess, onRegister, onForgot }) {
       </button>
       <div className="flex justify-between mt-4 text-sm">
         <button onClick={onForgot} className="text-accent">¿Olvidaste la contraseña?</button>
-        <button onClick={onRegister} className="text-accent2">Crear cuenta</button>
+        {!privatePortal && <button onClick={onRegister} className="text-accent2">Crear cuenta</button>}
+        {privatePortal && <a href="/" className="text-accent2">Ir a la tienda</a>}
       </div>
       {api.isTelegram() && (
         <p className="text-[10px] text-white/30 text-center mt-6">
@@ -4225,13 +5086,13 @@ function PartnerHelpScreen({ me, onTopUp }) {
       steps: [
         `Deposita al menos $${minDeposit.toFixed(2)} USDT en total.`,
         'El sistema cuenta depósitos pagados, no facturas pendientes.',
-        'Cuando el total depositado llega al mínimo, el catálogo empieza a mostrar precios preferenciales.',
-        'No importa si después gastas el saldo: lo que se revisa es el total depositado histórico.',
-        'Si todavía falta, el perfil muestra cuánto debes depositar para activar el beneficio.',
+        'Cuando haces una recarga individual igual o mayor al mínimo, el catálogo empieza a mostrar precios preferenciales.',
+        'No se suma por partes: la recarga debe cumplir el mínimo en una sola operación.',
+        'Si todavía falta, el perfil muestra cuánto debe tener tu mayor recarga individual para activar el beneficio.',
       ],
       examples: [
         discountActive ? 'Tu precio preferencial ya está activo.' : `Ahora mismo faltan $${remaining.toFixed(2)} USDT para activar precios preferenciales.`,
-        'Si depositas 30 USDT y luego 20 USDT, llegas a 50 USDT total y se activa.',
+        'Ejemplo: si el mínimo es 50 USDT, 20 + 30 no activa el beneficio; debe ser una recarga de 50 USDT o más.',
       ],
       mistakes: [
         'Pensar que el rol revendedor solo ya activa el descuento.',
@@ -4349,7 +5210,7 @@ function PartnerHelpScreen({ me, onTopUp }) {
             <div className="min-w-0 flex-1">
               <p className="font-semibold">{discountActive ? 'Precio preferencial activo' : 'Falta depósito mínimo'}</p>
               <p className="mt-1 text-sm text-white/60">
-                {discountActive ? `Ya superaste el mínimo de $${minDeposit.toFixed(2)} USDT.` : `Deposita $${remaining.toFixed(2)} USDT más para activar precios preferenciales.`}
+                {discountActive ? `Ya tienes una recarga individual de al menos $${minDeposit.toFixed(2)} USDT.` : `Tu mayor recarga individual debe subir $${remaining.toFixed(2)} USDT más para activar precios preferenciales.`}
               </p>
               {!discountActive && <button onClick={onTopUp} className="mt-3 rounded-lg bg-accent/20 px-3 py-2 text-sm font-bold text-accent"><span className="inline-flex items-center gap-1"><WalletCards className="h-4 w-4" />Depositar ahora</span></button>}
             </div>
@@ -4909,7 +5770,28 @@ function ManualBuyModal({ product, onClose, onBought, buyResult, me, onLoginRequ
   const selectedOption = activeOptions.find(o => o.id === selectedOptionId)
   const displayPrice = selectedOption ? selectedOption.price : product.price
   const shareLink = `${window.location.origin}${window.location.pathname}?manual_product=${product.id}`
+  const rewardCampaign = product.referral_campaign
   const [showShare, setShowShare] = useState(false)
+  const [showDripHelp, setShowDripHelp] = useState(false)
+  const [rewardShareLink, setRewardShareLink] = useState('')
+  const [loadingRewardLink, setLoadingRewardLink] = useState(false)
+  const displayShareLink = rewardShareLink || shareLink
+
+  async function openShareModal() {
+    if (rewardCampaign) {
+      if (me?.is_guest) { if (typeof onLoginRequired === 'function') onLoginRequired(); return }
+      setLoadingRewardLink(true)
+      try {
+        const data = await api.referralProductLink(product.id)
+        if (data?.url) setRewardShareLink(data.url)
+      } catch (e) {
+        setErr(e.message)
+      } finally {
+        setLoadingRewardLink(false)
+      }
+    }
+    setShowShare(true)
+  }
 
   async function handleBuy() {
     if (buying) return
@@ -4919,7 +5801,7 @@ function ManualBuyModal({ product, onClose, onBought, buyResult, me, onLoginRequ
     if (missing) { setErr(`Completa: ${missing.label}`); return }
     setBuying(true); setErr(null)
     try {
-      const res = await api.buyManualProduct(product.id, selectedOptionId, customerData)
+      const res = await api.buyManualProduct(product.id, selectedOptionId, customerData, getProductReferral(product.id))
       onBought(res)
     } catch (e) { setErr(e.message); setBuying(false) }
   }
@@ -4931,7 +5813,7 @@ function ManualBuyModal({ product, onClose, onBought, buyResult, me, onLoginRequ
     <div className="fixed inset-0 z-50 bg-bg flex justify-center">
       {showShare && (
         <ShareProductModal
-          shareLink={shareLink}
+          shareLink={displayShareLink}
           productName={product.name}
           onClose={() => setShowShare(false)}
         />
@@ -4985,8 +5867,8 @@ function ManualBuyModal({ product, onClose, onBought, buyResult, me, onLoginRequ
                   ✕
                 </button>
                 <button
-                  onClick={() => setShowShare(true)}
-                  aria-label="Compartir producto"
+                  onClick={openShareModal}
+                  aria-label={rewardCampaign ? "Compartir y ganar" : "Compartir producto"}
                   className="absolute right-3 top-3 flex items-center gap-1.5 rounded-full px-3 py-2 text-xs font-semibold active:scale-95 transition-all"
                   style={{
                     background: 'linear-gradient(135deg, rgba(99,102,241,0.75), rgba(139,92,246,0.75))',
@@ -4995,8 +5877,8 @@ function ManualBuyModal({ product, onClose, onBought, buyResult, me, onLoginRequ
                     color: '#e9d5ff'
                   }}
                 >
-                  <Share2 className="h-3.5 w-3.5" />
-                  <span>Compartir</span>
+                  {loadingRewardLink ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Share2 className="h-3.5 w-3.5" />}
+                  <span>{rewardCampaign ? 'Ganar' : 'Compartir'}</span>
                 </button>
               </div>
 
@@ -5009,6 +5891,16 @@ function ManualBuyModal({ product, onClose, onBought, buyResult, me, onLoginRequ
                 </div>
 
                 <ProductTrustPanel product={product} />
+
+                {rewardCampaign && (
+                  <div className="mb-4 rounded-xl border border-emerald-400/20 bg-emerald-500/10 p-3">
+                    <p className="text-sm font-black text-emerald-300">Comparte y gana ${Number(rewardCampaign.reward_amount_usdt || 0).toFixed(2)} USDT</p>
+                    <p className="mt-1 text-xs leading-relaxed text-white/65">Comparte este producto. Si alguien compra desde tu enlace, ganas la recompensa cuando el pedido sea completado.</p>
+                    <button onClick={openShareModal} disabled={loadingRewardLink} className="mt-3 w-full rounded-lg bg-emerald-400 px-3 py-2 text-sm font-black text-bg active:scale-95 disabled:opacity-60">
+                      {loadingRewardLink ? 'Preparando enlace...' : 'Compartir y ganar'}
+                    </button>
+                  </div>
+                )}
 
                 {product.seller_store && (
                   <div className="mb-4 rounded-xl border border-green-500/20 bg-green-500/10 p-3">
@@ -5124,7 +6016,7 @@ Francho Shop no vende cuentas robadas, hackeadas, recuperadas, baneadas o con da
                 )}
 
                 <div ref={reviewsRef} className="scroll-mt-16 mb-6">
-                  <PublicReviewsPanel manualProductId={product.id} />
+                  <PublicReviewsPanel manualProductId={product.id} me={me} onLoginRequired={onLoginRequired} />
                 </div>
 
                 {err && <p className="mb-6 rounded-lg border border-red-500/20 bg-red-500/10 p-3 text-center text-sm text-red-300">{err}</p>}
@@ -5138,8 +6030,8 @@ Francho Shop no vende cuentas robadas, hackeadas, recuperadas, baneadas o con da
                   X
                 </button>
                 <button
-                  onClick={() => setShowShare(true)}
-                  aria-label="Compartir"
+                  onClick={openShareModal}
+                  aria-label={rewardCampaign ? "Compartir y ganar" : "Compartir"}
                   className="h-12 w-12 flex-shrink-0 rounded-xl active:scale-95 transition-all"
                   style={{
                     background: 'linear-gradient(135deg, rgba(99,102,241,0.25), rgba(139,92,246,0.25))',
@@ -5682,6 +6574,8 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
   const [restoreProductId, setRestoreProductId] = useState('')
   const [restoringProduct, setRestoringProduct] = useState(false)
   const [productFilter, setProductFilter] = useState('all')
+  const [referralCampaigns, setReferralCampaigns] = useState([])
+  const [referralCommissions, setReferralCommissions] = useState([])
 
   useEffect(() => { loadData() }, [])
 
@@ -5691,7 +6585,7 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
       const me = await api.profile().catch(() => null)
       const adminRole = me?.role === 'admin'
       setIsAdminRole(adminRole)
-      const [dash, rd, p, o, gp, rs, sp, sl, asl, asales, afinance, st, rv, wd, ob, al] = await Promise.all([
+      const [dash, rd, p, o, gp, rs, sp, sl, asl, asales, afinance, st, rv, wd, ob, al, rc, rcom] = await Promise.all([
         api.sellerDashboard().catch(() => null),
         api.sellerRechargeDashboard().catch(() => null),
         fetch('/api/admin/manual-products', { headers: authHeadersObj() }).then(r => r.json()).catch(() => []),
@@ -5708,6 +6602,8 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
         adminRole ? api.adminSellerWithdrawals().then(r => r.items || []).catch(() => []) : Promise.resolve([]),
         adminRole ? api.adminOxaPayBalance('USDT').catch(() => null) : Promise.resolve(null),
         adminRole ? api.adminAudit(50).catch(() => []) : Promise.resolve([]),
+        api.adminReferralCampaigns().catch(() => []),
+        api.adminReferralCommissions('', 100).catch(() => []),
       ])
       setSellerDashboard(dash)
       setRechargeDashboard(rd)
@@ -5733,6 +6629,8 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
       setWithdrawals(Array.isArray(wd) ? wd : [])
       setOxaBalance(ob)
       setAudit(Array.isArray(al) ? al : [])
+      setReferralCampaigns(Array.isArray(rc) ? rc : [])
+      setReferralCommissions(Array.isArray(rcom) ? rcom : [])
     } catch (e) { setErr(e.message) }
     setLoading(false)
   }
@@ -5755,7 +6653,6 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
   }
 
   async function handleComplete(orderId) {
-    if (!deliveryData.trim() && !deliveryFile) { alert('Escribe los datos de entrega o adjunta un archivo'); return }
     try {
       if (deliveryFile) await api.adminCompleteOrderWithFile(orderId, deliveryData, adminNote, deliveryFile)
       else await api.adminCompleteOrder(orderId, deliveryData, adminNote)
@@ -5783,8 +6680,15 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
   }
 
   async function openOrderDetail(order) {
-    try { setSelectedOrderDetail(await api.adminManualOrderDetail(order.id)) }
-    catch (e) { alert(e.message) }
+    try {
+      const detail = await api.adminManualOrderDetail(order.id)
+      setSelectedOrderDetail(detail)
+      setManagingDelivery(detail)
+      setChangeDeliveryData(detail.delivery_data || '')
+      setChangeDeliveryNote(detail.admin_note || '')
+      try { setDeliveryEvents(await api.adminDeliveryEvents(detail.id)) }
+      catch { setDeliveryEvents([]) }
+    } catch (e) { alert(e.message) }
   }
 
   async function refundOrder(order) {
@@ -5818,7 +6722,7 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
   async function handleResendDelivery() {
     if (!managingDelivery) return
     setDeliveryActionLoading(true)
-    try { await api.resendDelivery(managingDelivery.id); await openDeliveryManager(managingDelivery) }
+    try { await api.resendDelivery(managingDelivery.id); await openOrderDetail(managingDelivery) }
     catch (e) { alert(e.message) }
     setDeliveryActionLoading(false)
   }
@@ -5827,7 +6731,7 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
     if (!managingDelivery) return
     if (!changeDeliveryData.trim()) { alert('Escribe la nueva entrega'); return }
     setDeliveryActionLoading(true)
-    try { await api.changeDelivery(managingDelivery.id, changeDeliveryData, changeDeliveryNote); await loadData(); await openDeliveryManager({ ...managingDelivery, delivery_data: changeDeliveryData, admin_note: changeDeliveryNote }) }
+    try { await api.changeDelivery(managingDelivery.id, changeDeliveryData, changeDeliveryNote); await loadData(); await openOrderDetail(managingDelivery) }
     catch (e) { alert(e.message) }
     setDeliveryActionLoading(false)
   }
@@ -5836,7 +6740,7 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
     if (!managingDelivery) return
     const reason = prompt('Motivo de revocación') || 'Entrega revocada'
     setDeliveryActionLoading(true)
-    try { await api.revokeDelivery(managingDelivery.id, reason); setManagingDelivery(null); await loadData() }
+    try { await api.revokeDelivery(managingDelivery.id, reason); setManagingDelivery(null); setSelectedOrderDetail(null); await loadData() }
     catch (e) { alert(e.message) }
     setDeliveryActionLoading(false)
   }
@@ -6096,6 +7000,7 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
     { id: 'products', label: 'Productos', icon: Package },
     { id: 'orders', label: pendingCount > 0 ? `Pedidos (${pendingCount})` : 'Pedidos', icon: ClipboardList },
     { id: 'recharges', label: 'Mis recargas', icon: Smartphone },
+    { id: 'referrals', label: 'Compartidos', icon: Share2 },
     ...(isAdminRole ? [
       { id: 'pricing', label: 'Ganancias', icon: DollarSign },
       { id: 'sellers', label: 'Vendedores', icon: BriefcaseBusiness },
@@ -6241,6 +7146,12 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
                     </span>
                     <span className="text-white/40">Stock: {p.stock < 0 ? '∞' : p.stock}</span>
                   </div>
+                  <div className="mb-3 rounded-lg bg-black/15 p-2 text-xs text-white/55">
+                    {(() => {
+                      const campaign = referralCampaigns.find(c => Number(c.product_id) === Number(p.id)) || p.referral_campaign
+                      return campaign ? `Recompensa: $${Number(campaign.reward_amount_usdt || 0).toFixed(2)} · ${campaign.status}` : 'Sin recompensa por compartir'
+                    })()}
+                  </div>
                   <div className="flex gap-2">
                     <button onClick={() => onEdit(p)}
                       className="flex-1 py-2 rounded-lg bg-accent/20 text-accent text-sm font-semibold active:scale-95">
@@ -6359,8 +7270,8 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
                         ) : (
                           <span className={`rounded-lg px-3 py-2 text-center text-sm font-semibold ${o.status === 'completed' ? 'bg-green-500/15 text-green-300' : o.status === 'revoked' ? 'bg-red-500/15 text-red-300' : o.status === 'refunded' ? 'bg-yellow-500/15 text-yellow-300' : 'bg-white/10 text-white/60'}`}>{o.status}</span>
                         )}
-                        <button onClick={() => openOrderDetail(o)} className="rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold text-white/75">Detalle</button>
-                        <button onClick={() => openDeliveryManager(o)} className="rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold text-white/75">Entrega</button>
+                        <button onClick={() => openOrderDetail(o)} className="rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold text-white/75">Gestionar</button>
+                        {(o.case_id || o.case?.id) && <button onClick={() => onOpenCase(o.id, true)} className="rounded-lg bg-accent/20 px-3 py-2 text-sm font-bold text-accent">Abrir chat</button>}
                         {o.status === 'pending' ? <button onClick={() => cancelOrder(o)} className="rounded-lg bg-red-500/20 px-3 py-2 text-sm font-bold text-red-300">Cancelar</button> : <button onClick={() => refundOrder(o)} disabled={['refunded','canceled'].includes(o.status)} className="rounded-lg bg-yellow-500/20 px-3 py-2 text-sm font-bold text-yellow-300 disabled:opacity-50">Reembolsar</button>}
                       </div>
                     )}
@@ -6377,10 +7288,10 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
           <div className="max-h-[90vh] w-full overflow-y-auto rounded-xl border border-white/10 bg-bg p-4 shadow-2xl">
             <div className="mb-4 flex items-start justify-between gap-3">
               <div>
-                <p className="text-lg font-bold">Pedido #{selectedOrderDetail.id}</p>
+                <p className="text-lg font-bold">Gestionar pedido #{selectedOrderDetail.id}</p>
                 <p className="text-xs text-white/45">{selectedOrderDetail.product_name} · Cliente {selectedOrderDetail.customer_name || selectedOrderDetail.customer_username || `#${selectedOrderDetail.user_id}`}</p>
               </div>
-              <button onClick={() => setSelectedOrderDetail(null)} className="rounded-lg bg-white/10 px-3 py-2 text-sm">Cerrar</button>
+              <button onClick={() => { setSelectedOrderDetail(null); setManagingDelivery(null) }} className="rounded-lg bg-white/10 px-3 py-2 text-sm">Cerrar</button>
             </div>
             <div className="grid grid-cols-2 gap-2 text-sm">
               <div className="card p-3"><p className="text-xs text-white/45">Estado</p><p className="font-bold">{selectedOrderDetail.status}</p></div>
@@ -6393,7 +7304,55 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
               <PersonInfoCard title="Vendedor" data={selectedOrderDetail} kind="seller" />
             </div>
             {selectedOrderDetail.customer_data && Object.keys(selectedOrderDetail.customer_data).length > 0 && <div className="mt-3 card p-3"><p className="mb-2 text-sm font-semibold">Datos cliente</p>{Object.entries(selectedOrderDetail.customer_data).map(([k,v]) => <p key={k} className="text-xs text-white/60"><span className="text-white/35">{k}:</span> {String(v)}</p>)}</div>}
-            {selectedOrderDetail.delivery_data && <div className="mt-3 card p-3"><p className="mb-2 text-sm font-semibold">Entrega</p><Linkify className="text-xs text-white/65">{selectedOrderDetail.delivery_data}</Linkify></div>}
+            {selectedOrderDetail.delivery_data && <div className="mt-3 card p-3"><p className="mb-2 text-sm font-semibold">Entrega actual</p><Linkify className="text-xs text-white/65">{selectedOrderDetail.delivery_data}</Linkify></div>}
+
+            <div className="mt-3 rounded-xl border border-white/10 bg-card p-3">
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-bold text-white">Gestionar entrega</p>
+                  <p className="text-xs text-white/45">Reenviar, cambiar o revocar la entrega desde el mismo pedido.</p>
+                </div>
+                <span className="rounded-lg bg-white/8 px-2 py-1 text-[10px] font-bold text-white/45">{deliveryEvents.length} eventos</span>
+              </div>
+              <div className="space-y-2">
+                <textarea value={changeDeliveryData} onChange={e => setChangeDeliveryData(e.target.value)} rows={3} placeholder="Nueva entrega" className="w-full rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm outline-none focus:border-accent resize-none" />
+                <input value={changeDeliveryNote} onChange={e => setChangeDeliveryNote(e.target.value)} placeholder="Nota interna/cliente" className="w-full rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm outline-none focus:border-accent" />
+                <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <button onClick={handleResendDelivery} disabled={deliveryActionLoading || !selectedOrderDetail.delivery_data} className="rounded-lg bg-accent/20 px-3 py-2 text-sm font-bold text-accent disabled:opacity-50">Reenviar</button>
+                  <button onClick={handleChangeDelivery} disabled={deliveryActionLoading} className="rounded-lg bg-green-500/20 px-3 py-2 text-sm font-bold text-green-300 disabled:opacity-50">Cambiar</button>
+                  <button onClick={handleRevokeDelivery} disabled={deliveryActionLoading} className="rounded-lg bg-red-500/20 px-3 py-2 text-sm font-bold text-red-300 disabled:opacity-50">Revocar</button>
+                  <button
+                    onClick={async () => {
+                      setDeliveryActionLoading(true)
+                      try {
+                        await api.sendEmailNotification(selectedOrderDetail.id)
+                        alert('Notificación por correo enviada con éxito')
+                        await openOrderDetail(selectedOrderDetail)
+                      } catch (e) {
+                        alert('Error enviando notificación: ' + e.message)
+                      }
+                      setDeliveryActionLoading(false)
+                    }}
+                    disabled={deliveryActionLoading || !selectedOrderDetail.delivery_data}
+                    className="rounded-lg bg-blue-500/20 px-3 py-2 text-sm font-bold text-blue-300 disabled:opacity-50"
+                  >
+                    Gmail
+                  </button>
+                </div>
+              </div>
+              {deliveryEvents.length > 0 && (
+                <div className="mt-3 max-h-36 overflow-y-auto rounded-lg bg-black/15 p-2">
+                  {deliveryEvents.map(ev => (
+                    <div key={ev.id} className="border-t border-white/5 py-2 first:border-t-0 text-xs text-white/60">
+                      <p><span className="font-semibold text-white/75">{ev.event_type}</span> · Actor #{ev.actor_id} · {ev.status}</p>
+                      {ev.admin_note && <p className="text-white/45">{ev.admin_note}</p>}
+                      {ev.error_message && <p className="text-red-300">{ev.error_message}</p>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {selectedOrderDetail.case && (
               <div className="mt-3 border-t border-white/5 pt-3">
                 <div className="flex items-center justify-between gap-3 text-xs bg-black/10 p-3 rounded-xl border border-white/5">
@@ -6417,26 +7376,11 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
               <button onClick={() => refundOrder(selectedOrderDetail)} disabled={['refunded','canceled'].includes(selectedOrderDetail.status)} className="rounded-lg bg-yellow-500/20 px-3 py-2 text-sm font-bold text-yellow-300 disabled:opacity-50">Reembolsar</button>
               <button onClick={() => cancelOrder(selectedOrderDetail)} disabled={selectedOrderDetail.status !== 'pending'} className="rounded-lg bg-red-500/20 px-3 py-2 text-sm font-bold text-red-300 disabled:opacity-50">Cancelar</button>
             </div>
-            {selectedOrderDetail.delivery_data && (
-              <button
-                onClick={async () => {
-                  try {
-                    await api.sendEmailNotification(selectedOrderDetail.id)
-                    alert('Notificación por correo enviada con éxito')
-                  } catch (e) {
-                    alert('Error enviando notificación: ' + e.message)
-                  }
-                }}
-                className="mt-2 w-full rounded-lg bg-blue-500/20 py-2 text-sm font-bold text-blue-300 active:scale-95 transition-all"
-              >
-                Notificar por Correo (Gmail)
-              </button>
-            )}
           </div>
         </div>
       )}
 
-      {managingDelivery && (
+      {managingDelivery && !selectedOrderDetail && (
         <div className="fixed inset-0 z-40 flex items-end bg-black/70 p-3 sm:items-center">
           <div className="max-h-[90vh] w-full overflow-y-auto rounded-xl border border-white/10 bg-bg p-4 shadow-2xl">
             <div className="mb-4 flex items-start justify-between gap-3">
@@ -6684,6 +7628,38 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
         </div>
       )}
 
+      {tab === 'referrals' && (
+        <div className="space-y-3">
+          <div className="grid grid-cols-3 gap-2">
+            <div className="card p-3"><p className="text-xs text-white/45">Campañas</p><p className="text-xl font-bold">{referralCampaigns.length}</p></div>
+            <div className="card p-3"><p className="text-xs text-white/45">Pendientes</p><p className="text-xl font-bold text-yellow-300">${referralCommissions.filter(c => ['pending','approved'].includes(c.status)).reduce((sum, c) => sum + Number(c.reward_amount_usdt || 0), 0).toFixed(2)}</p></div>
+            <div className="card p-3"><p className="text-xs text-white/45">Pagadas</p><p className="text-xl font-bold text-emerald-300">${referralCommissions.filter(c => c.status === 'paid').reduce((sum, c) => sum + Number(c.reward_amount_usdt || 0), 0).toFixed(2)}</p></div>
+          </div>
+          <div className="card p-4">
+            <p className="mb-3 text-sm font-semibold">Campañas por producto</p>
+            {referralCampaigns.length === 0 ? <p className="text-sm text-white/45">No hay recompensas configuradas. Edita un producto y activa Ganancias por compartir.</p> : referralCampaigns.map(c => (
+              <div key={c.id} className="border-t border-white/5 py-3 text-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0"><p className="truncate font-bold">{c.product_name}</p><p className="text-xs text-white/45">{c.payer_type === 'seller' ? 'Paga vendedor' : 'Paga plataforma'} · {c.status}</p></div>
+                  <p className="font-black text-accent">${Number(c.reward_amount_usdt || 0).toFixed(2)}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="card p-4">
+            <p className="mb-3 text-sm font-semibold">Comisiones recientes</p>
+            {referralCommissions.length === 0 ? <p className="text-sm text-white/45">Todavía no hay comisiones.</p> : referralCommissions.map(c => (
+              <div key={c.id} className="border-t border-white/5 py-3 text-sm">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0"><p className="truncate font-bold">{c.product_name}</p><p className="text-xs text-white/45">Pedido #{c.order_id} · Comparte #{c.referrer_user_id} · Compra #{c.buyer_user_id}</p></div>
+                  <div className="text-right"><p className="font-black text-accent">${Number(c.reward_amount_usdt || 0).toFixed(2)}</p><p className="text-xs text-white/45">{c.status}</p></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {tab === 'audit' && isAdminRole && (
         <div className="space-y-3">
           {audit.length === 0 ? <div className="card p-8 text-center text-white/50">Sin eventos de auditoría</div> : audit.map(item => {
@@ -6730,7 +7706,7 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
         <div className="space-y-3">
           <div className="card p-4">
             <p className="text-sm font-semibold text-white/80">Regla para revendedores</p>
-            <p className="mt-1 text-xs text-white/45">El usuario puede tener rol revendedor, pero solo recibe precios preferenciales cuando su total depositado pagado llega a este mínimo.</p>
+            <p className="mt-1 text-xs text-white/45">El usuario puede tener rol revendedor, pero solo recibe precios preferenciales si tiene una recarga pagada individual igual o mayor a este mínimo. No es acumulable.</p>
             <div className="mt-3 flex gap-2">
               <input value={resellerMinDeposit} onChange={e => setResellerMinDeposit(e.target.value)} inputMode="decimal" className="min-w-0 flex-1 rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm outline-none focus:border-accent" />
               <button onClick={saveResellerSettings} disabled={savingResellerSettings} className="rounded-lg bg-accent/20 px-3 py-2 text-sm font-bold text-accent disabled:opacity-60">
@@ -7183,11 +8159,27 @@ function AdminEditProductScreen({ product, onSaved, onCancel, me }) {
   const [uploadingDeliveryFile, setUploadingDeliveryFile] = useState(false)
   const [iconPreview, setIconPreview] = useState(product?.icon_url || '')
   const [err, setErr] = useState(null)
+  const [saveMsg, setSaveMsg] = useState('')
   const [canUsePremiumStickers, setCanUsePremiumStickers] = useState(false)
+  const [referralRewardEnabled, setReferralRewardEnabled] = useState(false)
+  const [referralRewardAmount, setReferralRewardAmount] = useState('')
+  const [referralMinOrderAmount, setReferralMinOrderAmount] = useState('0')
 
   useEffect(() => {
     api.profile().then((profile) => setCanUsePremiumStickers(profile?.role === 'admin')).catch(() => setCanUsePremiumStickers(false))
   }, [])
+
+  useEffect(() => {
+    if (isNew || !product?.id) return
+    api.adminReferralCampaigns().then(items => {
+      const campaign = (items || []).find(c => Number(c.product_id) === Number(product.id))
+      if (campaign) {
+        setReferralRewardEnabled(campaign.status === 'active')
+        setReferralRewardAmount(String(campaign.reward_amount_usdt ?? ''))
+        setReferralMinOrderAmount(String(campaign.min_order_amount_usdt ?? 0))
+      }
+    }).catch(() => null)
+  }, [isNew, product?.id])
 
   function getHeaders() {
     const h = { 'Content-Type': 'application/json' }
@@ -7288,8 +8280,12 @@ function AdminEditProductScreen({ product, onSaved, onCancel, me }) {
     }
     if (deliveryType === 'auto_text' && !autoDeliveryText.trim()) { setErr('Escribe el texto de entrega automática'); return }
     if (deliveryType === 'auto_file' && !autoDeliveryFileUrl) { setErr('Sube el archivo de entrega automática'); return }
+    const rewardValue = Number(String(referralRewardAmount || '0').replace(',', '.'))
+    const minOrderValue = Number(String(referralMinOrderAmount || '0').replace(',', '.')) || 0
+    if (referralRewardEnabled && (!rewardValue || rewardValue <= 0)) { setErr('Escribe una recompensa mayor que 0 USDT para activar Ganancias por compartir'); return }
+    if (referralRewardEnabled && rewardValue > 1000) { setErr('La recompensa parece demasiado alta. Revisa el monto.'); return }
     const validFields = fields.filter(f => f.label.trim())
-    setSaving(true); setErr(null)
+    setSaving(true); setErr(null); setSaveMsg('')
 
     const body = {
       name: name.trim(),
@@ -7333,6 +8329,9 @@ function AdminEditProductScreen({ product, onSaved, onCancel, me }) {
       auto_delivery_file_mime: deliveryType === 'auto_file' ? autoDeliveryFileMime : '',
       is_active: isActive,
       stock: category === 'game_account' ? (accountStatus === 'sold' ? 0 : 1) : (parseInt(stock) || -1),
+      referral_reward_enabled: referralRewardEnabled,
+      referral_reward_amount_usdt: referralRewardEnabled ? rewardValue : 0,
+      referral_min_order_amount_usdt: minOrderValue,
     }
 
     try {
@@ -7341,9 +8340,28 @@ function AdminEditProductScreen({ product, onSaved, onCancel, me }) {
         : `/api/admin/manual-products/${product.id}`
       const method = isNew ? 'POST' : 'PUT'
       const res = await fetch(url, { method, headers: getHeaders(), body: JSON.stringify(body) })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data.detail || 'Error')
-      onSaved()
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok) throw new Error(data.detail || data.message || 'No se pudo guardar')
+      const savedProductId = isNew ? data.id : product.id
+      if (savedProductId) {
+        const campaignRes = await api.saveReferralCampaign({
+          product_id: Number(savedProductId),
+          reward_amount_usdt: referralRewardEnabled ? rewardValue : 0,
+          payer_type: null,
+          status: referralRewardEnabled ? 'active' : 'disabled',
+          min_order_amount_usdt: minOrderValue,
+        })
+        const campaign = campaignRes?.campaign
+        if (campaign) {
+          setReferralRewardEnabled(campaign.status === 'active')
+          setReferralRewardAmount(String(campaign.reward_amount_usdt ?? ''))
+          setReferralMinOrderAmount(String(campaign.min_order_amount_usdt ?? 0))
+        } else if (!referralRewardEnabled) {
+          setReferralRewardEnabled(false)
+        }
+      }
+      setSaveMsg(referralRewardEnabled ? 'Producto y recompensa guardados. Ganancias por compartir quedó activa.' : 'Producto guardado. Ganancias por compartir quedó desactivada.')
+      setSaving(false)
     } catch (e) { setErr(e.message); setSaving(false) }
   }
 
@@ -7352,6 +8370,7 @@ function AdminEditProductScreen({ product, onSaved, onCancel, me }) {
       <h2 className="text-xl font-bold mb-4 flex items-center gap-2">{isNew ? <><Package className="h-5 w-5" aria-hidden="true" />Crear producto</> : <><Edit3 className="h-5 w-5" aria-hidden="true" />Editar producto</>}</h2>
 
       {err && <p className="text-red-400 text-sm mb-3 card p-2 text-center">{err}</p>}
+      {saveMsg && <p className="text-emerald-300 text-sm mb-3 card border-emerald-500/25 bg-emerald-500/10 p-2 text-center">{saveMsg}</p>}
 
       <div className="space-y-3">
         <div>
@@ -7716,6 +8735,38 @@ function AdminEditProductScreen({ product, onSaved, onCancel, me }) {
           {canUsePremiumStickers && <PremiumStickerPicker value={instructions} onInsert={(code) => appendPremiumStickerText(setInstructions, code)} />}
         </div>
 
+        <div className={`card p-3 ${referralRewardEnabled ? 'border-emerald-500/30 bg-emerald-500/5' : 'border-white/10'}`}>
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-emerald-300">Ganancias por compartir</p>
+              <p className="text-xs text-white/45">Si alguien compra desde un enlace compartido, el usuario gana saldo cuando el pedido se completa.</p>
+              <span className={`mt-2 inline-flex rounded-full px-2 py-1 text-[10px] font-bold ${referralRewardEnabled ? 'bg-emerald-500/15 text-emerald-200' : 'bg-white/8 text-white/45'}`}>
+                {referralRewardEnabled ? 'Activado' : 'Desactivado'}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={() => { setReferralRewardEnabled(v => !v); setSaveMsg(''); setErr(null) }}
+              aria-pressed={referralRewardEnabled}
+              className={`flex h-9 w-16 flex-shrink-0 items-center rounded-full p-1 transition-colors ${referralRewardEnabled ? 'bg-emerald-500' : 'bg-white/20'}`}
+            >
+              <span className={`h-7 w-7 rounded-full bg-white shadow-md transition-transform ${referralRewardEnabled ? 'translate-x-7' : 'translate-x-0'}`} />
+            </button>
+          </div>
+          {referralRewardEnabled && (
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block text-xs text-white/50">Recompensa USDT
+                <input value={referralRewardAmount} onChange={e => { setReferralRewardAmount(e.target.value); setSaveMsg('') }} inputMode="decimal" placeholder="0.25" className="mt-1 w-full rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm outline-none focus:border-accent" />
+              </label>
+              <label className="block text-xs text-white/50">Compra mínima
+                <input value={referralMinOrderAmount} onChange={e => { setReferralMinOrderAmount(e.target.value); setSaveMsg('') }} inputMode="decimal" placeholder="0" className="mt-1 w-full rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm outline-none focus:border-accent" />
+              </label>
+            </div>
+          )}
+          {referralRewardEnabled && isSeller && <p className="mt-2 text-[11px] text-yellow-200/80">La recompensa se descuenta de tu saldo disponible de vendedor cuando el pedido se completa.</p>}
+          {referralRewardEnabled && !isSeller && <p className="mt-2 text-[11px] text-white/45">En productos de Francho Shop se registra como gasto/promoción de plataforma.</p>}
+        </div>
+
         <div className="flex items-center gap-3 card p-3">
           <button onClick={() => setIsActive(!isActive)}
             className={`w-12 h-7 rounded-full flex items-center transition-colors ${isActive ? 'bg-green-500' : 'bg-white/20'}`}>
@@ -7728,7 +8779,7 @@ function AdminEditProductScreen({ product, onSaved, onCancel, me }) {
       <div className="flex gap-3 mt-6">
         <button onClick={onCancel}
           className="flex-1 py-3 rounded-xl border border-white/20 text-white/60 font-semibold active:scale-95">
-          Cancelar
+          {saveMsg ? 'Volver al panel' : 'Cancelar'}
         </button>
         <button onClick={handleSave} disabled={saving}
           className="flex-1 py-3 rounded-xl bg-gradient-to-r from-accent to-accent2 font-bold active:scale-95 disabled:opacity-50">
@@ -7835,6 +8886,7 @@ function ProfileScreen({ onOrders, onHome, onAdmin, onPartnerHelp }) {
   const [showTopUp, setShowTopUp] = useState(false)
   const [sellerStoreSlug, setSellerStoreSlug] = useState('')
   const [guideSlug, setGuideSlug] = useState('')
+  const [shareEarnings, setShareEarnings] = useState(null)
 
   useEffect(() => {
     api.profile()
@@ -7842,6 +8894,7 @@ function ProfileScreen({ onOrders, onHome, onAdmin, onPartnerHelp }) {
         setProfile(p)
         setProfileName(p.display_name || p.name || '')
         setProfileEmail(p.email || '')
+        api.referralMyEarnings().then(setShareEarnings).catch(() => null)
         setLoading(false)
       })
       .catch(e => { setErr(e.message); setLoading(false) })
@@ -8087,13 +9140,13 @@ function ProfileScreen({ onOrders, onHome, onAdmin, onPartnerHelp }) {
       {profile.role === 'reseller' && !profile.reseller_discount_active && (
         <div className="card mb-4 border-yellow-500/20 p-4">
           <p className="flex items-center gap-2 text-sm font-semibold text-yellow-300"><AlertTriangle className="h-4 w-4" />Precios preferenciales pendientes</p>
-          <p className="mt-2 text-xs text-white/60">Debes llegar a ${Number(profile.reseller_min_deposit || 50).toFixed(2)} USDT depositados. Faltan ${Number(profile.reseller_deposit_remaining || 0).toFixed(2)} USDT.</p>
+          <p className="mt-2 text-xs text-white/60">Debes hacer una recarga individual de al menos ${Number(profile.reseller_min_deposit || 50).toFixed(2)} USDT. No cuenta acumulado 20 + 30. Faltan ${Number(profile.reseller_deposit_remaining || 0).toFixed(2)} USDT sobre tu mayor recarga.</p>
           <button onClick={() => setShowTopUp(true)} className="mt-3 rounded-lg bg-accent/20 px-3 py-2 text-xs font-bold text-accent">Depositar</button>
         </div>
       )}
 
-      {/* Panel Privado — visible para admins, vendedores y revendedores */}
-      {['admin', 'seller', 'reseller'].includes(profile.role) && (
+      {/* Panel Privado — acceso rápido solo para admin principal en la tienda normal */}
+      {profile.role === 'admin' && (
         <button onClick={onAdmin} className="card p-4 w-full flex items-center justify-between mb-4 active:scale-95 border-yellow-500/30">
           <span className="block flex items-center gap-3">
             <Crown className="h-6 w-6 text-yellow-400" />
@@ -8115,6 +9168,25 @@ function ProfileScreen({ onOrders, onHome, onAdmin, onPartnerHelp }) {
           <div className="rounded-lg bg-black/20 p-2"><p className="text-xs text-white/40">Compras</p><p className="font-bold">${Number(profile.referral_stats?.total_referred_spent || 0).toFixed(2)}</p></div>
         </div>
         <button onClick={() => copyText(`${window.location.origin}${window.location.pathname}?ref=${profile.referral_code || profile.user_id}`)} className="mt-3 w-full rounded-lg bg-green-500/15 px-3 py-2 text-sm font-bold text-green-300"><span className="inline-flex items-center justify-center gap-1"><LinkIcon className="h-4 w-4" />Copiar enlace de referido</span></button>
+      </div>
+
+      <div className="card p-4 mb-4 border-emerald-500/20">
+        <p className="flex items-center gap-2 text-sm font-semibold text-emerald-300"><Share2 className="h-4 w-4" />Mis ganancias por compartir</p>
+        <p className="mt-2 text-xs text-white/60">Recompensas por enlaces de productos. Se pagan solo cuando el pedido queda completado.</p>
+        <div className="mt-3 grid grid-cols-3 gap-2">
+          <div className="rounded-lg bg-black/20 p-2"><p className="text-xs text-white/40">Pendiente</p><p className="font-bold text-yellow-300">${Number(shareEarnings?.pending_total || 0).toFixed(2)}</p></div>
+          <div className="rounded-lg bg-black/20 p-2"><p className="text-xs text-white/40">Pagado</p><p className="font-bold text-emerald-300">${Number(shareEarnings?.paid_total || 0).toFixed(2)}</p></div>
+          <div className="rounded-lg bg-black/20 p-2"><p className="text-xs text-white/40">Enlaces</p><p className="font-bold">{shareEarnings?.links?.length || 0}</p></div>
+        </div>
+        <div className="mt-3 max-h-44 space-y-2 overflow-y-auto">
+          {(shareEarnings?.commissions || []).slice(0, 6).map(c => (
+            <div key={c.id} className="rounded-lg border border-white/10 bg-black/15 p-2 text-xs">
+              <div className="flex items-center justify-between gap-2"><p className="truncate font-bold text-white/80">{c.product_name}</p><span className="font-black text-accent">${Number(c.reward_amount_usdt || 0).toFixed(2)}</span></div>
+              <p className="mt-1 text-white/40">Pedido #{c.order_id} · {c.status === 'paid' ? 'Pagada' : c.status === 'pending' ? 'Pendiente' : c.status}</p>
+            </div>
+          ))}
+          {shareEarnings && (shareEarnings.commissions || []).length === 0 && <p className="rounded-lg bg-black/15 p-3 text-center text-xs text-white/40">Aún no tienes comisiones por compartir productos.</p>}
+        </div>
       </div>
 
       {/* ═══ SECCIÓN: CUENTAS VINCULADAS (Expandible) ═══ */}
@@ -8313,7 +9385,7 @@ function playNotificationSound() {
   } catch (_) {}
 }
 
-function OrderCaseChatScreen({ orderId, admin = false, me, onBack }) {
+function OrderCaseChatScreen({ orderId, admin = false, me, openReviewOnLoad = false, onReviewAutoOpened, onBack }) {
   const [caseData, setCaseData] = useState(null)
   const [order, setOrder] = useState(null)
   const [loading, setLoading] = useState(true)
@@ -8323,6 +9395,9 @@ function OrderCaseChatScreen({ orderId, admin = false, me, onBack }) {
   const [status, setStatus] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [requestingReview, setRequestingReview] = useState(false)
+  const [reviewModalOpen, setReviewModalOpen] = useState(false)
+  const [copiedReviewLink, setCopiedReviewLink] = useState(false)
   const messagesEndRef = useRef(null)
   const fileInputRef = useRef(null)
   const lastMsgCount = useRef(0)
@@ -8535,12 +9610,93 @@ function OrderCaseChatScreen({ orderId, admin = false, me, onBack }) {
     setSubmitting(false)
   }
 
+  async function markDeliveredFromChat() {
+    if (!admin || submitting) return
+    setSubmitting(true)
+    setErr(null)
+    try {
+      if (order?.status === 'pending' || caseData?.order_status === 'pending') {
+        await api.adminCompleteOrder(orderId, '', '')
+        await loadData()
+      } else {
+        const data = await api.updateAdminManualCaseStatus(orderId, 'delivered')
+        setCaseData(data)
+        setStatus(data.status || 'delivered')
+      }
+    } catch (e) {
+      setErr(e.message)
+    }
+    setSubmitting(false)
+  }
+
+  async function requestReview() {
+    if (!admin || requestingReview) return
+    setRequestingReview(true)
+    setErr(null)
+    try {
+      const data = await api.requestAdminManualCaseReview(orderId)
+      setCaseData(data)
+      lastMsgCount.current = data.messages?.length || 0
+      setStatus(data.status || status)
+    } catch (e) {
+      setErr(e.message)
+    }
+    setRequestingReview(false)
+  }
+
   const messages = caseData?.messages || []
   const badge = statusLabels[caseData?.status || status] || caseData?.status || 'Pendiente'
   const sellerName = caseData?.seller_store_name || caseData?.seller_name || order?.seller_store_name || order?.seller_name || 'Francho Shop'
+  const canRequestReview = admin && (order?.status === 'completed' || caseData?.order_status === 'completed') && !caseData?.reviewed && !caseData?.review_requested
+  const reviewActionLabel = caseData?.reviewed ? 'Ya valorado' : caseData?.review_requested ? 'Valoración pedida' : 'Pedir valoración'
+  const reviewOrderForModal = {
+    ...(order || {}),
+    id: orderId,
+    type: 'manual',
+    status: order?.status || caseData?.order_status || 'completed',
+    product: order?.product || caseData?.product_name || `Pedido #${orderId}`,
+    review: caseData?.review || order?.review || null,
+  }
+
+  const isReviewRequestText = (text = '') => {
+    const t = String(text || '').toLowerCase()
+    return t.includes('solicitud de valoracion') || t.includes('dejes tu valoracion') || t.includes('deja tu valoracion')
+  }
+
+  const cleanReviewRequestText = (text = '') => String(text || '')
+    .replace(/Puedes dejarla desde Mis pedidos:[\s\S]*$/i, '')
+    .replace(/https?:\/\/\S+/g, '')
+    .trim()
+
+  function handleReviewCompleted(_, review) {
+    setCaseData(prev => prev ? { ...prev, reviewed: true, review } : prev)
+    setOrder(prev => prev ? { ...prev, review } : prev)
+    setReviewModalOpen(false)
+    refreshDataRef.current?.()
+  }
+
+  const reviewLink = `${window.location.origin}${window.location.pathname}?case=${orderId}&review=1`
+  const reviewShareText = `Gracias por comprar en Francho Shop. Puedes valorar tu pedido #${orderId} aquí:\n${reviewLink}`
+
+  async function copyReviewLink() {
+    const ok = await copyText(reviewShareText)
+    if (ok) {
+      setCopiedReviewLink(true)
+      setTimeout(() => setCopiedReviewLink(false), 1800)
+    }
+  }
   const sellerOnline = caseData?.seller_online || false
   const sellerLastSeen = caseData?.seller_last_seen || 0
   // Read receipts: el campo 'receipt' ya viene calculado desde el backend por mensaje
+
+  useEffect(() => {
+    if (!openReviewOnLoad || admin || !caseData) return
+    const canOpenReview = !caseData.reviewed && (order?.status === 'completed' || caseData?.order_status === 'completed')
+    if (canOpenReview) {
+      setReviewModalOpen(true)
+      onReviewAutoOpened?.()
+    }
+  }, [openReviewOnLoad, admin, caseData?.id, caseData?.reviewed, caseData?.order_status, order?.status])
 
   if (loading && !caseData) {
     return (
@@ -8682,10 +9838,23 @@ function OrderCaseChatScreen({ orderId, admin = false, me, onBack }) {
               {Object.entries(statusLabels).map(([id, label]) => <option key={id} value={id}>{label}</option>)}
             </select>
           </div>
-          <div className="flex gap-2">
-            <button onClick={() => changeStatus('delivered')} disabled={submitting}
-              className="rounded-lg bg-green-500/25 px-2.5 py-1.5 font-bold text-green-400 border border-green-500/30 active:scale-95">
-              Marcar Entregado
+          <div className="flex flex-wrap gap-2">
+            <button onClick={requestReview} disabled={requestingReview || !canRequestReview}
+              title={caseData?.reviewed ? 'El cliente ya dejó valoración' : caseData?.review_requested ? 'Ya se pidió valoración en este caso' : 'Enviar solicitud de valoración al cliente'}
+              className="inline-flex items-center gap-1 rounded-lg bg-yellow-500/20 px-2.5 py-1.5 font-bold text-yellow-200 border border-yellow-500/30 active:scale-95 disabled:opacity-45">
+              {requestingReview ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <BadgeCheck className="h-3.5 w-3.5" />}
+              {reviewActionLabel}
+            </button>
+            <button onClick={copyReviewLink} disabled={caseData?.reviewed}
+              title={caseData?.reviewed ? 'El cliente ya dejó valoración' : 'Copiar texto con enlace directo para valorar'}
+              className="inline-flex items-center gap-1 rounded-lg bg-white/10 px-2.5 py-1.5 font-bold text-white/70 border border-white/10 active:scale-95 disabled:opacity-45">
+              {copiedReviewLink ? <Check className="h-3.5 w-3.5 text-green-300" /> : <LinkIcon className="h-3.5 w-3.5" />}
+              {copiedReviewLink ? 'Copiado' : 'Copiar enlace'}
+            </button>
+            <button onClick={markDeliveredFromChat} disabled={submitting}
+              title={(order?.status === 'pending' || caseData?.order_status === 'pending') ? 'Completar pedido sin datos adicionales de entrega' : 'Marcar el caso como entregado'}
+              className="rounded-lg bg-green-500/25 px-2.5 py-1.5 font-bold text-green-400 border border-green-500/30 active:scale-95 disabled:opacity-50">
+              {submitting ? 'Procesando...' : (order?.status === 'pending' || caseData?.order_status === 'pending') ? 'Completar pedido' : 'Marcar Entregado'}
             </button>
             <button onClick={() => changeStatus('closed')} disabled={submitting}
               className="rounded-lg bg-red-500/25 px-2.5 py-1.5 font-bold text-red-400 border border-red-500/30 active:scale-95">
@@ -8768,6 +9937,54 @@ function OrderCaseChatScreen({ orderId, admin = false, me, onBack }) {
                       <div className="mb-1 text-[9px] text-yellow-400/70 font-bold">🔒 Nota interna · {fmt(m.created_at)}</div>
                       <div className="whitespace-pre-line break-words leading-relaxed"><Linkify>{m.message}</Linkify></div>
                     </div>
+                  </div>
+                )
+              }
+
+              const isReviewRequest = isReviewRequestText(m.message)
+              if (isReviewRequest) {
+                const canReviewHere = !admin && !caseData?.reviewed && (order?.status === 'completed' || caseData?.order_status === 'completed')
+                const reviewBody = cleanReviewRequestText(m.message)
+                return (
+                  <div key={m.id} className={`flex flex-col max-w-[88%] ${isRight ? 'ml-auto items-end' : 'items-start'}`}>
+                    <div className={`rounded-2xl border px-4 py-3 text-xs shadow-sm ${isRight ? 'border-yellow-300/35 bg-yellow-500/20 text-yellow-50 rounded-br-none' : 'border-yellow-400/25 bg-[#2b2616] text-yellow-50 rounded-bl-none'}`}>
+                      <div className="mb-2 flex items-center gap-2">
+                        <span className="flex h-7 w-7 items-center justify-center rounded-full bg-yellow-300/20 text-yellow-200">
+                          <BadgeCheck className="h-4 w-4" />
+                        </span>
+                        <div>
+                          <p className="text-[11px] font-black uppercase tracking-wide text-yellow-100">Valora tu compra</p>
+                          <p className="text-[10px] text-yellow-100/60">Pedido #{orderId}</p>
+                        </div>
+                      </div>
+                      <p className="whitespace-pre-line break-words text-[11px] leading-relaxed text-yellow-50/85">{reviewBody}</p>
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        {caseData?.reviewed ? (
+                          <span className="inline-flex items-center gap-1 rounded-lg border border-green-400/25 bg-green-500/15 px-3 py-2 text-[11px] font-bold text-green-200">
+                            <CircleCheck className="h-3.5 w-3.5" /> Valoración recibida
+                          </span>
+                        ) : canReviewHere ? (
+                          <button
+                            onClick={() => setReviewModalOpen(true)}
+                            className="inline-flex items-center gap-2 rounded-xl bg-yellow-300 px-3 py-2 text-[11px] font-black text-black active:scale-95"
+                          >
+                            <BadgeCheck className="h-4 w-4" /> Dejar valoración
+                          </button>
+                        ) : admin ? (
+                          <span className="rounded-lg bg-white/10 px-3 py-2 text-[11px] font-semibold text-white/55">Solicitud enviada al cliente</span>
+                        ) : (
+                          <span className="rounded-lg bg-white/10 px-3 py-2 text-[11px] font-semibold text-white/55">Disponible cuando el pedido esté completado</span>
+                        )}
+                      </div>
+                      <div className={`mt-2 text-right text-[9px] ${isRight ? 'text-white/50' : 'text-white/30'}`}>
+                        {fmt(m.created_at)}
+                      </div>
+                    </div>
+                    {isRight && (
+                      <div className="mt-0.5 flex items-center justify-end px-1">
+                        <ReceiptIcon receipt={m.receipt} isMine={true} />
+                      </div>
+                    )}
                   </div>
                 )
               }
@@ -8873,6 +10090,103 @@ function OrderCaseChatScreen({ orderId, admin = false, me, onBack }) {
           </button>
         </div>
       </footer>
+
+      {reviewModalOpen && !admin && (
+        <div className="fixed inset-0 z-[70] flex items-end justify-center bg-black/70 p-3 backdrop-blur-sm sm:items-center">
+          <div className="absolute inset-0" onClick={() => setReviewModalOpen(false)} />
+          <div className="relative w-full max-w-md rounded-2xl border border-white/10 bg-card p-4 shadow-2xl">
+            <div className="mb-3 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-sm font-black">Valorar pedido #{orderId}</p>
+                <p className="mt-0.5 text-xs text-white/45">{reviewOrderForModal.product}</p>
+              </div>
+              <button onClick={() => setReviewModalOpen(false)} className="rounded-lg bg-white/10 p-2 text-white/60 active:scale-95">
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            <ChatReviewForm order={reviewOrderForModal} onReviewed={handleReviewCompleted} />
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ChatReviewForm({ order, onReviewed }) {
+  const [rating, setRating] = useState(order.review?.rating || 0)
+  const [comment, setComment] = useState(order.review?.comment || '')
+  const [saving, setSaving] = useState(false)
+  const [done, setDone] = useState(!!order.review)
+  const imageUrl = order.icon_url || order.image_url || order.product_image || (Array.isArray(order.account_images) ? order.account_images[0] : '')
+
+  async function submitReview() {
+    if (!rating || saving) return
+    setSaving(true)
+    try {
+      await api.reviewManualOrder(order.id, rating, comment)
+      const review = { rating, comment }
+      setDone(true)
+      onReviewed?.(order, review)
+    } catch (e) {
+      alert(e.message || 'No se pudo enviar la valoración')
+    }
+    setSaving(false)
+  }
+
+  return (
+    <div className="rounded-2xl border border-white/10 bg-bg/70 p-3">
+      <div className="mb-4 flex gap-3">
+        <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border border-white/10 bg-black/25">
+          {imageUrl ? (
+            <OptimizedImage src={storeAssetUrl(imageUrl)} alt={order.product || 'Producto'} className="h-full w-full object-cover" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-white/35"><Package className="h-7 w-7" /></div>
+          )}
+        </div>
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-bold text-white/55">Tu experiencia ayuda a otros clientes</p>
+          <p className="mt-1 line-clamp-2 text-sm font-black leading-tight text-white">{order.product || ('Pedido #' + order.id)}</p>
+          {order.option_name && <p className="mt-1 truncate text-[11px] text-accent">{order.option_name}</p>}
+        </div>
+      </div>
+
+      <p className="mb-2 text-xs font-semibold text-white/60">Selecciona una puntuación</p>
+      <div className="mb-3 flex items-center gap-1.5">
+        {[1, 2, 3, 4, 5].map(n => (
+          <button
+            key={n}
+            onClick={() => { setRating(n); setDone(false) }}
+            className={`flex h-10 w-10 items-center justify-center rounded-xl border text-2xl active:scale-95 ${n <= rating ? 'border-yellow-300/50 bg-yellow-300/15 text-yellow-300' : 'border-white/10 bg-white/5 text-white/25'}`}
+            title={`${n} estrella${n === 1 ? '' : 's'}`}
+          >
+            ★
+          </button>
+        ))}
+      </div>
+
+      <textarea
+        value={comment}
+        onChange={e => { setComment(e.target.value); setDone(false) }}
+        maxLength={500}
+        rows={3}
+        placeholder="Comentario opcional sobre tu compra"
+        className="mb-3 w-full resize-none rounded-xl border border-white/10 bg-card px-3 py-2 text-xs outline-none focus:border-accent"
+      />
+
+      {done ? (
+        <p className="inline-flex items-center gap-1 rounded-lg border border-green-400/25 bg-green-500/15 px-3 py-2 text-xs font-bold text-green-200">
+          <CircleCheck className="h-4 w-4" /> Gracias por valorar esta compra.
+        </p>
+      ) : (
+        <button
+          onClick={submitReview}
+          disabled={!rating || saving}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-accent px-4 py-3 text-sm font-black text-white active:scale-95 disabled:opacity-50"
+        >
+          {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <BadgeCheck className="h-4 w-4" />}
+          {saving ? 'Enviando...' : 'Enviar valoración'}
+        </button>
+      )}
     </div>
   )
 }
@@ -8929,14 +10243,20 @@ function OrdersScreen({ onOpenCase }) {
       api.myOrders().catch(() => []),
       api.myManualOrders().catch(() => []),
       api.smsMyOrders(50).catch(() => ({ items: [] })),
-    ]).then(([regular, manual, smsData]) => {
+      api.smmMyOrders(50).catch(() => ({ items: [] })),
+      api.fzrMyOrders(50).catch(() => ({ items: [] })),
+    ]).then(([regular, manual, smsData, smmData, fzrData]) => {
       // Marcar tipo y unificar
       const r = (regular || []).map(o => ({ ...o, type: 'auto' }))
       const m = (manual || []).map(o => ({ ...o, type: 'manual' }))
       const smsItems = Array.isArray(smsData) ? smsData : (smsData?.items || [])
       const sms = smsItems.map(o => ({ ...o, type: 'sms', product: `Número virtual ${o.service || ''}`.trim(), price: o.sell_price || o.price || 0, option_name: o.phone || '', icon_url: '', seller_store_name: 'Francho Shop', status: o.status === 'completed' ? 'completed' : o.status === 'refunded' || o.status === 'canceled' ? 'failed' : 'pending' }))
+      const smmItems = Array.isArray(smmData) ? smmData : (smmData?.items || [])
+      const smm = smmItems.map(o => ({ ...o, type: 'smm', product: o.service_name || 'Servicio SMM', price: o.sell_price || 0, option_name: o.drip_feed ? `${o.total_quantity || (Number(o.quantity || 0) * Number(o.runs || 1))} total · ${o.quantity || 0} x ${o.runs || 1}` : `${o.quantity || ''} unidades`.trim(), icon_url: '', seller_store_name: 'Francho Shop', status: o.status === 'completed' ? 'completed' : o.status === 'partial' ? 'partial' : o.status === 'failed' || o.status === 'refunded' ? 'failed' : o.status === 'processing' ? 'processing' : 'pending' }))
+      const fzrItems = Array.isArray(fzrData) ? fzrData : (fzrData?.items || [])
+      const fzr = fzrItems.map(o => ({ ...o, type: 'fzr', product: o.product_name || 'Producto digital', price: o.sell_price || 0, option_name: o.target ? `Destino: ${o.product_type?.includes('telegram') ? '@' : ''}${o.target}` : '', icon_url: '', seller_store_name: 'Francho Shop', status: o.status === 'completed' ? 'completed' : o.status === 'failed' || o.status === 'refunded' ? 'failed' : o.status === 'processing' ? 'processing' : 'pending' }))
       // Ordenar por fecha (más recientes primero)
-      const all = [...r, ...m, ...sms].sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+      const all = [...r, ...m, ...sms, ...smm, ...fzr].sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
       setOrders(all)
       setLoading(false)
     }).catch(e => { setErr(e.message); setLoading(false) })
@@ -8974,11 +10294,11 @@ function OrdersScreen({ onOpenCase }) {
                 <div className="border-b border-white/10 bg-gradient-to-r from-accent/15 to-accent2/10 p-3 sm:p-4">
                   <div className="flex items-start gap-3">
                     <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl border border-white/10 bg-bg/70">
-                      {productImage ? <OptimizedImage src={productImage} alt={o.product || 'Producto'} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center">{o.type === 'sms' ? <Smartphone className="h-6 w-6 text-accent" /> : o.type === 'manual' ? <Wrench className="h-6 w-6 text-accent" /> : <ShoppingCart className="h-6 w-6 text-accent" />}</div>}
+                      {productImage ? <OptimizedImage src={productImage} alt={o.product || 'Producto'} className="h-full w-full object-cover" /> : <div className="flex h-full w-full items-center justify-center">{o.type === 'sms' ? <Smartphone className="h-6 w-6 text-accent" /> : o.type === 'smm' ? <Share2 className="h-6 w-6 text-accent" /> : o.type === 'manual' ? <Wrench className="h-6 w-6 text-accent" /> : <ShoppingCart className="h-6 w-6 text-accent" />}</div>}
                     </div>
                     <div className="min-w-0 flex-1 text-left">
                       <div className="mb-1 flex flex-wrap items-center gap-2">
-                        <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-white/65">{o.type === 'sms' ? 'Número virtual' : o.type === 'manual' ? 'Manual' : 'Recarga automática'}</span>
+                        <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] font-bold text-white/65">{o.type === 'sms' ? 'Número virtual' : o.type === 'smm' ? 'Servicio SMM' : o.type === 'fzr' ? 'Producto digital' : o.type === 'manual' ? 'Manual' : 'Recarga automática'}</span>
                         <span className={info.color + ' inline-flex items-center gap-1 text-[11px] font-bold'}><StatusIcon status={info.status} className="h-3.5 w-3.5" />{info.label}</span>
                       </div>
                       <p className="text-sm font-black leading-tight">{o.product || 'Producto'}</p>
@@ -9000,6 +10320,10 @@ function OrdersScreen({ onOpenCase }) {
                     {o.type === 'sms' && o.phone && <p><span className="text-white/35">Número:</span> <code>{o.phone}</code></p>}
                     {o.type === 'sms' && o.sms_code && <p><span className="text-white/35">Código SMS:</span> <code>{o.sms_code}</code></p>}
                     {o.type === 'sms' && !o.sms_code && <p><span className="text-white/35">SMS:</span> Pendiente de llegada</p>}
+                    {o.type === 'smm' && o.link && <p><span className="text-white/35">Enlace:</span> <span className="break-all">{o.link}</span></p>}
+                    {o.type === 'smm' && o.drip_feed ? <p><span className="text-white/35">Suministro gradual:</span> {o.quantity} x {o.runs} cada {o.interval} min</p> : null}
+                    {o.type === 'smm' && o.provider_order_id && <p><span className="text-white/35">Proveedor:</span> <code>{o.provider_order_id}</code></p>}
+                    {o.type === 'smm' && o.remains && <p><span className="text-white/35">Restante:</span> {o.remains}</p>}
                   </div>
                   {o.customer_data && Object.keys(o.customer_data).length > 0 && (
                     <div className="mb-3 rounded-lg bg-black/20 p-2 text-xs text-white/65">
@@ -9160,7 +10484,7 @@ function AdminSmsPanel() {
         is_featured: Number(form.is_featured ? 1 : 0),
         is_hidden: Number(form.is_hidden ? 1 : 0),
         sort_order: Number(form.sort_order || 100),
-        custom_markup: form.custom_markup === '' ? null : Number(form.custom_markup),
+        custom_markup: form.custom_markup === '' ? null : Number(percentToMultiplier(form.custom_markup)),
         min_price: form.min_price === '' ? null : Number(form.min_price),
       })
       setMsg('País/app guardado')
@@ -9272,11 +10596,314 @@ function AdminSmsPanel() {
   )
 }
 
+
+function AdminFzrPanel() {
+  const [data, setData] = useState(null)
+  const [selectedKey, setSelectedKey] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
+  const [msg, setMsg] = useState(null)
+  const [err, setErr] = useState(null)
+  async function load() {
+    setLoading(true); setErr(null)
+    try { setData(await api.fzrAdminSettingsGet()) } catch (e) { setErr(e.message) }
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+  async function save() {
+    setSaving(true); setMsg(null); setErr(null)
+    try { await api.fzrAdminSettingsSet(data); setMsg('Configuración FZR guardada'); await load() } catch (e) { setErr(e.message) }
+    setSaving(false)
+  }
+  async function uploadFzrImage(item, file) {
+    if (!file) return
+    if (!file.type?.startsWith('image/')) { setErr('Selecciona una imagen válida'); return }
+    if (file.size > 5 * 1024 * 1024) { setErr('La imagen no puede pasar de 5 MB'); return }
+    setUploading(true); setErr(null); setMsg(null)
+    try {
+      const uploadFile = await compressImageForUpload(file)
+      const res = await api.uploadIcon(uploadFile)
+      setData(v => ({ ...v, [item.imageKey]: res.url }))
+      setMsg('Imagen subida. Guarda para dejarla aplicada.')
+    } catch (e) { setErr(e.message) }
+    setUploading(false)
+  }
+  if (loading) return <CoolLoading label="Cargando FZR..." />
+  const balance = data?.provider_balance?.balance ?? data?.provider_balance_usd ?? '0'
+  const cards = [
+    {
+      key: 'telegram', title: data?.fzr_telegram_display_name || 'Telegram', fallbackTitle: 'Telegram', subtitle: 'Premium y Estrellas', icon: Send,
+      enabledKey: 'fzr_telegram_enabled', markupKey: 'fzr_telegram_markup', resellerMarkupKey: 'fzr_telegram_reseller_markup', minKey: 'fzr_telegram_min_price_usd', imageKey: 'fzr_telegram_image_url', displayKey: 'fzr_telegram_display_name', descriptionKey: 'fzr_telegram_description', instructionsKey: 'fzr_telegram_instructions', sortKey: 'fzr_telegram_sort_order', catalog: data?.telegram_catalog,
+    },
+    {
+      key: 'capcut', title: data?.fzr_capcut_display_name || 'CapCut', fallbackTitle: 'CapCut', subtitle: 'Standard y Pro', icon: Sparkles,
+      enabledKey: 'fzr_capcut_enabled', markupKey: 'fzr_capcut_markup', resellerMarkupKey: 'fzr_capcut_reseller_markup', minKey: 'fzr_capcut_min_price_usd', imageKey: 'fzr_capcut_image_url', displayKey: 'fzr_capcut_display_name', descriptionKey: 'fzr_capcut_description', instructionsKey: 'fzr_capcut_instructions', sortKey: 'fzr_capcut_sort_order', catalog: data?.capcut_catalog,
+    },
+  ]
+  const selected = cards.find(x => x.key === selectedKey)
+  const SelectedIcon = selected?.icon || Sparkles
+  const setField = (key, value) => setData(v => ({ ...v, [key]: value }))
+  const fieldValue = (item, key, fallback = '') => data?.[key] || item?.catalog?.[key.replace(/^fzr_(telegram|capcut)_/, '')] || fallback
+  return (
+    <div className="space-y-4">
+      <section className="rounded-xl border border-white/10 bg-card p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-black">Catálogo FZR Cards</h2>
+            <p className="mt-1 text-xs text-white/45">Edita estos productos como BuffPin: imagen, nombre, textos, visibilidad, orden y ganancias.</p>
+          </div>
+          <button onClick={save} disabled={saving || !data} className="rounded-lg bg-accent px-3 py-2 text-xs font-black text-bg disabled:opacity-50">
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <span className="inline-flex items-center gap-1"><Save className="h-3.5 w-3.5" /> Guardar</span>}
+          </button>
+        </div>
+        <div className="mt-3 rounded-lg bg-bg/70 p-3 text-xs text-white/60">Balance proveedor: <span className="font-black text-accent">${Number(balance || 0).toFixed(4)} USD</span></div>
+      </section>
+
+      <div className="grid gap-2" style={{ gridTemplateColumns: 'repeat(2, minmax(0, 1fr))' }}>
+        {cards.map(item => {
+          const Icon = item.icon
+          const img = data?.[item.imageKey] || item.catalog?.imageurl || ''
+          const isVisible = String(data?.[item.enabledKey] ?? '1') === '1'
+          return <button key={item.key} onClick={() => setSelectedKey(item.key)} className="min-w-0 overflow-hidden rounded-lg border border-white/10 bg-bg text-left active:scale-95 hover:border-accent/45">
+            <span className="relative block aspect-square w-full overflow-hidden bg-white/5">
+              {img ? <OptimizedImage src={storeAssetUrl(img)} className="h-full w-full object-cover" alt={item.title} /> : <span className="flex h-full w-full items-center justify-center"><Icon className="h-8 w-8 text-white/30" /></span>}
+              <span className={(isVisible ? 'bg-green-500/80' : 'bg-red-500/80') + ' absolute left-1.5 top-1.5 rounded px-1.5 py-0.5 text-[9px] font-bold text-white'}>{isVisible ? 'Visible' : 'Oculto'}</span>
+            </span>
+            <span className="block p-2">
+              <span className="block line-clamp-2 min-h-[28px] text-[11px] font-bold leading-tight text-white/80">{item.title}</span>
+              <span className="mt-1 block truncate text-[10px] text-accent">{item.subtitle}</span>
+            </span>
+          </button>
+        })}
+      </div>
+
+      {selected && (
+        <div className="fixed inset-0 z-50 bg-black/70 p-3 backdrop-blur-sm">
+          <div className="mx-auto flex h-full max-w-lg flex-col overflow-hidden rounded-lg border border-white/10 bg-bg shadow-2xl">
+            <div className="flex items-center justify-between border-b border-white/10 p-4">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold">{data?.[selected.displayKey] || selected.fallbackTitle}</p>
+                <p className="text-xs text-white/40">FZR Cards · {selected.subtitle}</p>
+              </div>
+              <button onClick={() => setSelectedKey(null)} className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg bg-white/10 active:scale-95" aria-label="Cerrar"><X className="h-5 w-5" /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <div className="mb-4 flex items-start gap-3">
+                <div className="h-24 w-24 flex-shrink-0 overflow-hidden rounded-lg border border-white/10 bg-card">
+                  {data?.[selected.imageKey] || selected.catalog?.imageurl ? <OptimizedImage src={storeAssetUrl(data?.[selected.imageKey] || selected.catalog?.imageurl)} className="h-full w-full object-cover" alt="" /> : <div className="flex h-full w-full items-center justify-center"><SelectedIcon className="h-9 w-9 text-white/35" /></div>}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs text-white/45">Proveedor</p>
+                  <p className="truncate text-sm font-semibold text-white/85">FZR Cards</p>
+                  <p className={('mt-1 text-xs font-bold ') + (selected.catalog?.available ? 'text-emerald-300' : 'text-yellow-200')}>{selected.catalog?.available ? 'Disponible' : selected.catalog?.unavailable_reason || 'No disponible temporalmente'}</p>
+                  <label className="mt-3 inline-flex cursor-pointer items-center gap-1 rounded-lg bg-white/10 px-3 py-2 text-xs font-bold text-white/75 active:scale-95">
+                    {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />} Cambiar imagen
+                    <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={e => { uploadFzrImage(selected, e.target.files?.[0]); e.target.value = '' }} />
+                  </label>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <label className="block text-xs text-white/50">Nombre visible
+                  <input value={data?.[selected.displayKey] || ''} onChange={e => setField(selected.displayKey, e.target.value)} placeholder={selected.fallbackTitle} className="mt-1 w-full rounded-lg border border-white/10 bg-card px-3 py-2 text-sm outline-none focus:border-accent" />
+                </label>
+                <label className="block text-xs text-white/50">Orden
+                  <input value={data?.[selected.sortKey] ?? '100'} onChange={e => setField(selected.sortKey, e.target.value)} inputMode="numeric" className="mt-1 w-full rounded-lg border border-white/10 bg-card px-3 py-2 text-sm outline-none focus:border-accent" />
+                </label>
+                <label className="col-span-2 flex items-center gap-2 rounded-lg border border-white/10 bg-card px-3 py-2 text-sm text-white/70">
+                  <input type="checkbox" checked={String(data?.[selected.enabledKey] ?? '1') === '1'} onChange={e => setField(selected.enabledKey, e.target.checked ? '1' : '0')} /> Visible en catálogo
+                </label>
+                <label className="col-span-2 block text-xs text-white/50">URL de imagen
+                  <input value={data?.[selected.imageKey] || ''} onChange={e => setField(selected.imageKey, e.target.value)} placeholder="URL de imagen" className="mt-1 w-full rounded-lg border border-white/10 bg-card px-3 py-2 text-xs outline-none focus:border-accent" />
+                </label>
+                <div className="col-span-2 block text-xs text-white/50">
+                  <span className="mb-1 block text-xs text-white/50">Descripción pública</span>
+                  <PremiumRichTextEditor value={fieldValue(selected, selected.descriptionKey)} onChange={(value) => setField(selected.descriptionKey, value)} rows={5} placeholder="Texto que verá el cliente arriba de las opciones." className="mt-1 w-full" />
+                  <PremiumStickerPicker value={data?.[selected.descriptionKey] || ''} onInsert={(code) => setField(selected.descriptionKey, `${data?.[selected.descriptionKey] || ''}${data?.[selected.descriptionKey] && !String(data?.[selected.descriptionKey]).endsWith(' ') ? ' ' : ''}${code} `)} />
+                </div>
+                <div className="col-span-2 block text-xs text-white/50">
+                  <span className="mb-1 block text-xs text-white/50">Cómo comprar / instrucciones</span>
+                  <PremiumRichTextEditor value={fieldValue(selected, selected.instructionsKey)} onChange={(value) => setField(selected.instructionsKey, value)} rows={6} placeholder="Pasos, condiciones y advertencias para el cliente." className="mt-1 w-full" />
+                  <PremiumStickerPicker value={data?.[selected.instructionsKey] || ''} onInsert={(code) => setField(selected.instructionsKey, `${data?.[selected.instructionsKey] || ''}${data?.[selected.instructionsKey] && !String(data?.[selected.instructionsKey]).endsWith(' ') ? ' ' : ''}${code} `)} />
+                </div>
+              </div>
+
+              <div className="mt-4 grid grid-cols-3 gap-3">
+                <label className="block text-xs text-white/50">Cliente %
+                  <input value={multiplierToPercent(data?.[selected.markupKey] || '')} onChange={e => setField(selected.markupKey, percentToMultiplier(e.target.value))} placeholder="Global" inputMode="decimal" className="mt-1 w-full rounded-lg border border-white/10 bg-card px-3 py-2 text-sm outline-none focus:border-accent" />
+                </label>
+                <label className="block text-xs text-white/50">Revendedor %
+                  <input value={multiplierToPercent(data?.[selected.resellerMarkupKey] || '')} onChange={e => setField(selected.resellerMarkupKey, percentToMultiplier(e.target.value))} placeholder="Global" inputMode="decimal" className="mt-1 w-full rounded-lg border border-white/10 bg-card px-3 py-2 text-sm outline-none focus:border-accent" />
+                </label>
+                <label className="block text-xs text-white/50">Mínimo USDT
+                  <input value={data?.[selected.minKey] ?? '0'} onChange={e => setField(selected.minKey, e.target.value)} placeholder="0" inputMode="decimal" className="mt-1 w-full rounded-lg border border-white/10 bg-card px-3 py-2 text-sm outline-none focus:border-accent" />
+                </label>
+              </div>
+
+              <button onClick={save} disabled={saving || !data} className="mt-4 w-full rounded-lg bg-accent/20 px-3 py-2 text-sm font-bold text-accent disabled:opacity-60">
+                {saving ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : <span className="inline-flex items-center justify-center gap-1"><Save className="h-4 w-4" /> Guardar producto FZR</span>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {msg && <p className="rounded-lg border border-green-500/25 bg-green-500/10 p-3 text-sm font-semibold text-green-300">{msg}</p>}
+      {err && <p className="rounded-lg border border-red-500/25 bg-red-500/10 p-3 text-sm font-semibold text-red-300">{err}</p>}
+    </div>
+  )
+}
+
+function AdminSmmPanel() {
+  const [settingsData, setSettingsData] = useState(null)
+  const [services, setServices] = useState([])
+  const [orders, setOrders] = useState([])
+  const [selectedId, setSelectedId] = useState(null)
+  const [form, setForm] = useState({ is_active: 0, display_name: '', icon_url: '', instructions: '', custom_markup: '', min_price: '', sort_order: 100 })
+  const [query, setQuery] = useState('')
+  const [smmViewMode, setSmmViewMode] = useState('search')
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [msg, setMsg] = useState(null)
+  const [err, setErr] = useState(null)
+  const selected = services.find(s => Number(s.service_id) === Number(selectedId))
+  const isSmmEdited = (svc) => !!(svc?.display_name || svc?.icon_url || svc?.instructions || svc?.custom_markup !== null && svc?.custom_markup !== undefined || svc?.min_price !== null && svc?.min_price !== undefined || Number(svc?.sort_order ?? 100) !== 100)
+  const activeSmmCount = services.filter(s => Number(s.is_active || 0) === 1).length
+  const editedSmmCount = services.filter(isSmmEdited).length
+  const filtered = services.filter(s => {
+    const q = query.trim().toLowerCase()
+    const sid = String(s.service_id || '')
+    const searchable = `${s.name} ${s.display_name || ''} ${s.category || ''} ${sid}`.toLowerCase()
+    if (q) return sid === q || sid.includes(q) || searchable.includes(q)
+    if (smmViewMode === 'active') return Number(s.is_active || 0) === 1
+    if (smmViewMode === 'edited') return isSmmEdited(s)
+    return false
+  }).slice(0, 160)
+  async function loadAll() {
+    setLoading(true); setErr(null)
+    try {
+      const [cfg, svc, ord] = await Promise.all([api.smmAdminSettingsGet(), api.smmAdminServices(), api.smmAdminOrders(80).catch(() => ({ items: [] }))])
+      setSettingsData(cfg)
+      setServices(svc.items || [])
+      setOrders(ord.items || [])
+      if (selectedId && !(svc.items || []).some(item => Number(item.service_id) === Number(selectedId))) setSelectedId(null)
+    } catch (e) { setErr(e.message) }
+    setLoading(false)
+  }
+  useEffect(() => { loadAll() }, [])
+  useEffect(() => {
+    if (!selected) return
+    setForm({
+      is_active: Number(selected.is_active || 0),
+      display_name: selected.display_name || selected.name || '',
+      icon_url: selected.icon_url || '',
+      instructions: selected.instructions || '',
+      custom_markup: selected.custom_markup !== null && selected.custom_markup !== undefined ? multiplierToPercent(selected.custom_markup) : '',
+      min_price: selected.min_price ?? '',
+      sort_order: Number(selected.sort_order ?? 100),
+    })
+  }, [selectedId, selected?.updated_at])
+  async function saveSettings() {
+    setSaving(true); setMsg(null); setErr(null)
+    try { await api.smmAdminSettingsSet(settingsData); setMsg('Configuración SMM guardada') } catch (e) { setErr(e.message) }
+    setSaving(false)
+  }
+  async function syncServices() {
+    setSaving(true); setMsg(null); setErr(null)
+    try { const r = await api.smmAdminSync(); setMsg(r.message || 'Servicios sincronizados'); await loadAll() } catch (e) { setErr(e.message) }
+    setSaving(false)
+  }
+  async function saveService() {
+    if (!selected) return
+    setSaving(true); setMsg(null); setErr(null)
+    try {
+      await api.smmAdminServiceUpdate(selected.service_id, {
+        is_active: Number(form.is_active ? 1 : 0),
+        display_name: form.display_name || null,
+        icon_url: form.icon_url || null,
+        instructions: form.instructions || null,
+        custom_markup: form.custom_markup === '' ? null : Number(form.custom_markup),
+        min_price: form.min_price === '' ? null : Number(form.min_price),
+        sort_order: Number(form.sort_order || 100),
+      })
+      setMsg('Servicio SMM guardado')
+      const svc = await api.smmAdminServices()
+      setServices(svc.items || [])
+    } catch (e) { setErr(e.message) }
+    setSaving(false)
+  }
+  async function uploadImage(target, file) {
+    if (!file) return
+    setSaving(true); setMsg(null); setErr(null)
+    try {
+      const compressed = await compressImageForUpload(file)
+      const res = await api.uploadIcon(compressed)
+      if (target === 'catalog') setSettingsData(v => ({ ...v, smm_catalog_image_url: res.url }))
+      else setForm(v => ({ ...v, icon_url: res.url }))
+      setMsg('Imagen subida. Guarda para aplicar.')
+    } catch (e) { setErr(e.message) }
+    setSaving(false)
+  }
+  if (loading) return <CoolLoading label="Cargando panel SMM..." />
+  return (
+    <div className="space-y-5">
+      <div className="grid gap-4 xl:grid-cols-[360px_1fr]">
+        <section className="rounded-xl border border-white/10 bg-card p-4">
+          <div className="mb-4 flex items-center justify-between gap-3"><div><h2 className="text-base font-black">SMMFollows</h2><p className="text-xs text-white/45">API, ganancia e imagen pública.</p></div><button onClick={saveSettings} disabled={saving} className="rounded-lg bg-accent px-3 py-2 text-xs font-black text-bg disabled:opacity-50"><Save className="inline h-3.5 w-3.5" /> Guardar</button></div>
+          <div className="space-y-3">
+            <label className="block"><span className="mb-1 block text-[10px] font-bold uppercase text-white/40">API Key</span><input value={settingsData?.smm_api_key || ''} onChange={e => setSettingsData(v => ({ ...v, smm_api_key: e.target.value }))} className="w-full rounded-lg border border-white/10 bg-bg px-3 py-2 text-xs outline-none focus:border-accent" placeholder="API key de SMMFollows" /></label>
+            <div className="grid grid-cols-2 gap-2"><label className="block"><span className="mb-1 block text-[10px] font-bold uppercase text-white/40">Ganancia global %</span><input value={multiplierToPercent(settingsData?.smm_default_markup || '1')} onChange={e => setSettingsData(v => ({ ...v, smm_default_markup: percentToMultiplier(e.target.value) }))} className="w-full rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm outline-none focus:border-accent" placeholder="80" /></label><label className="block"><span className="mb-1 block text-[10px] font-bold uppercase text-white/40">Mínimo orden USDT</span><input value={settingsData?.smm_min_price_usd ?? '0'} onChange={e => setSettingsData(v => ({ ...v, smm_min_price_usd: e.target.value }))} className="w-full rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm outline-none focus:border-accent" placeholder="0" /></label></div>
+            <div className="rounded-xl border border-white/10 bg-bg/70 p-3"><div className="mb-2 aspect-video overflow-hidden rounded-lg bg-black/25">{settingsData?.smm_catalog_image_url ? <OptimizedImage src={storeAssetUrl(settingsData.smm_catalog_image_url)} alt="" className="h-full w-full object-cover" /> : <div className="flex h-full items-center justify-center text-white/35"><Share2 className="h-8 w-8" /></div>}</div><input value={settingsData?.smm_catalog_image_url || ''} onChange={e => setSettingsData(v => ({ ...v, smm_catalog_image_url: e.target.value }))} className="mb-2 w-full rounded-lg border border-white/10 bg-card px-3 py-2 text-xs outline-none focus:border-accent" placeholder="URL de imagen" /><label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-white/8 px-3 py-2 text-xs font-bold text-white/70 active:scale-95"><Edit3 className="h-4 w-4" /> Subir imagen<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={e => { uploadImage('catalog', e.target.files?.[0]); e.target.value = '' }} /></label></div>
+            <textarea value={settingsData?.smm_terms_and_conditions || ''} onChange={e => setSettingsData(v => ({ ...v, smm_terms_and_conditions: e.target.value }))} rows={4} className="w-full rounded-lg border border-white/10 bg-bg px-3 py-2 text-xs outline-none focus:border-accent" placeholder="Condiciones del servicio SMM" />
+            <div className="rounded-lg bg-black/20 p-3 text-xs text-white/60">Balance proveedor: {settingsData?.provider_balance?.balance ? `$${settingsData.provider_balance.balance} ${settingsData.provider_balance.currency || ''}` : settingsData?.provider_balance?.error || 'No consultado'}</div>
+            <button onClick={syncServices} disabled={saving} className="w-full rounded-xl border border-cyan-300/25 bg-cyan-300/10 py-3 text-sm font-black text-cyan-200 disabled:opacity-50"><RefreshCcw className="inline h-4 w-4" /> Sincronizar servicios</button>
+          </div>
+        </section>
+        <section className="rounded-xl border border-white/10 bg-card p-4">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-base font-black">Servicios</h2><p className="text-xs text-white/45">Activa solo lo que quieres vender y cambia nombre/instrucciones.</p></div><div className="rounded-lg bg-bg px-3 py-2 text-xs text-white/50">{services.length} sincronizados</div></div>
+          <div className="mb-3 space-y-2">
+            <div className="relative"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" /><input value={query} onChange={e => { setQuery(e.target.value); setSmmViewMode('search') }} placeholder="Buscar por ID, nombre o categoría" className="w-full rounded-lg border border-white/10 bg-bg py-2.5 pl-9 pr-3 text-sm outline-none focus:border-accent" /></div>
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => { setSmmViewMode('search'); setQuery('') }} className={`rounded-lg px-3 py-2 text-xs font-bold ${smmViewMode === 'search' && !query ? 'bg-accent text-bg' : 'border border-white/10 bg-bg text-white/55'}`}>Buscar</button>
+              <button onClick={() => { setSmmViewMode('active'); setQuery('') }} className={`rounded-lg px-3 py-2 text-xs font-bold ${smmViewMode === 'active' ? 'bg-emerald-400 text-bg' : 'border border-white/10 bg-bg text-white/55'}`}>Visibles ({activeSmmCount})</button>
+              <button onClick={() => { setSmmViewMode('edited'); setQuery('') }} className={`rounded-lg px-3 py-2 text-xs font-bold ${smmViewMode === 'edited' ? 'bg-violet-400 text-bg' : 'border border-white/10 bg-bg text-white/55'}`}>Editados ({editedSmmCount})</button>
+            </div>
+          </div>
+          <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_360px]">
+            <div className="max-h-[560px] space-y-2 overflow-y-auto pr-1">
+              {filtered.length === 0 ? <div className="rounded-xl border border-dashed border-white/10 bg-bg/45 p-5 text-center text-xs text-white/40">{query ? 'No hay servicios con esa búsqueda.' : smmViewMode === 'search' ? 'Busca por ID, nombre o categoría para cargar resultados.' : 'No hay servicios en este filtro.'}</div> : filtered.map(item => <button key={item.service_id} onClick={() => setSelectedId(item.service_id)} className={`w-full rounded-xl border p-3 text-left active:scale-[0.99] ${Number(selectedId) === Number(item.service_id) ? 'border-accent bg-accent/12' : 'border-white/10 bg-bg/70'}`}><span className="flex items-start gap-3"><span className={`mt-0.5 h-2.5 w-2.5 rounded-full ${item.is_active ? 'bg-emerald-400' : 'bg-white/20'}`} /><span className="min-w-0 flex-1"><span className="block text-xs font-black leading-tight">{item.display_name || item.name}</span><span className="mt-1 block truncate text-[10px] text-white/40">#{item.service_id} · {item.category}</span><span className="mt-1 block text-[10px] text-white/35">Costo proveedor: ${Number(item.rate || 0).toFixed(4)}/1000 · Rango {item.min_qty}-{item.max_qty}</span></span>{isSmmEdited(item) && <Sparkles className="mt-0.5 h-4 w-4 flex-shrink-0 text-violet-300" />}</span></button>)}
+            </div>
+            <div className="rounded-xl border border-white/10 bg-bg/70 p-4">
+              {!selected ? <div className="rounded-xl border border-dashed border-white/10 bg-card/50 p-5 text-center text-xs text-white/40">Selecciona un servicio para editarlo.</div> : <div className="space-y-3">
+                <div className="rounded-xl border border-white/10 bg-card p-3">
+                  <div className="mb-2 flex items-start justify-between gap-3"><div className="min-w-0"><p className="text-[10px] font-bold uppercase text-white/35">Servicio original</p><p className="mt-1 whitespace-pre-wrap break-words text-sm font-black leading-snug">{selected.name}</p></div><span className={`flex-shrink-0 rounded-full px-2 py-1 text-[10px] font-bold ${form.is_active ? 'bg-emerald-400/15 text-emerald-200' : 'bg-white/8 text-white/45'}`}>{form.is_active ? 'Visible' : 'Oculto'}</span></div>
+                  <div className="grid grid-cols-2 gap-2 text-[11px] text-white/55"><p className="rounded-lg bg-bg/70 p-2"><span className="block text-white/35">ID</span><code>{selected.service_id}</code></p><p className="rounded-lg bg-bg/70 p-2"><span className="block text-white/35">Categoría</span>{selected.category || 'General'}</p><p className="rounded-lg bg-bg/70 p-2"><span className="block text-white/35">Costo proveedor</span>${Number(selected.rate || 0).toFixed(4)}/1000</p><p className="rounded-lg bg-bg/70 p-2"><span className="block text-white/35">Rango</span>{selected.min_qty}-{selected.max_qty}</p></div>
+                </div>
+                <label className="flex items-center gap-2 rounded-lg bg-card p-3 text-xs font-bold"><input type="checkbox" checked={!!form.is_active} onChange={e => setForm(v => ({ ...v, is_active: e.target.checked ? 1 : 0 }))} /> Activo para vender</label>
+                <label className="block"><span className="mb-1 block text-[10px] font-bold uppercase text-white/40">Nombre visible</span><input value={form.display_name} onChange={e => setForm(v => ({ ...v, display_name: e.target.value }))} className="w-full rounded-lg border border-white/10 bg-card px-3 py-2 text-sm outline-none focus:border-accent" /></label>
+                <label className="block"><span className="mb-1 block text-[10px] font-bold uppercase text-white/40">Icono</span><input value={form.icon_url} onChange={e => setForm(v => ({ ...v, icon_url: e.target.value }))} className="w-full rounded-lg border border-white/10 bg-card px-3 py-2 text-xs outline-none focus:border-accent" /></label>
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-white/8 px-3 py-2 text-xs font-bold text-white/70 active:scale-95"><Edit3 className="h-4 w-4" /> Subir icono<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" onChange={e => { uploadImage('service', e.target.files?.[0]); e.target.value = '' }} /></label>
+                <label className="block"><span className="mb-1 block text-[10px] font-bold uppercase text-white/40">Instrucciones para el cliente</span><textarea value={form.instructions} onChange={e => setForm(v => ({ ...v, instructions: e.target.value }))} rows={6} className="w-full rounded-lg border border-white/10 bg-card px-3 py-2 text-xs leading-relaxed outline-none focus:border-accent" placeholder="Escribe aquí cómo comprar, qué enlace poner y condiciones del servicio. Se respetan los saltos de línea." /></label>
+                <div className="grid grid-cols-3 gap-2"><label className="block"><span className="mb-1 block text-[10px] font-bold uppercase text-white/35">Ganancia %</span><input value={form.custom_markup} onChange={e => setForm(v => ({ ...v, custom_markup: e.target.value }))} placeholder="Global" className="w-full rounded-lg border border-white/10 bg-card px-3 py-2 text-xs outline-none focus:border-accent" /></label><label className="block"><span className="mb-1 block text-[10px] font-bold uppercase text-white/35">Mínimo orden</span><input value={form.min_price} onChange={e => setForm(v => ({ ...v, min_price: e.target.value }))} placeholder="0" className="w-full rounded-lg border border-white/10 bg-card px-3 py-2 text-xs outline-none focus:border-accent" /></label><label className="block"><span className="mb-1 block text-[10px] font-bold uppercase text-white/35">Orden</span><input value={form.sort_order} onChange={e => setForm(v => ({ ...v, sort_order: e.target.value }))} placeholder="100" className="w-full rounded-lg border border-white/10 bg-card px-3 py-2 text-xs outline-none focus:border-accent" /></label></div>
+                <button onClick={saveService} disabled={saving || !selected} className="w-full rounded-xl bg-accent py-3 text-sm font-black text-bg disabled:opacity-50"><Save className="inline h-4 w-4" /> Guardar servicio</button>
+              </div>}
+            </div>
+          </div>
+        </section>
+      </div>
+      <section className="rounded-xl border border-white/10 bg-card p-4"><h2 className="mb-3 text-base font-black">Pedidos SMM recientes</h2><div className="space-y-2">{orders.slice(0, 12).map(o => <div key={o.id} className="rounded-lg bg-bg/70 p-3 text-xs"><div className="flex items-center justify-between gap-3"><p className="font-bold">#{o.id} · {o.service_name}</p><span className="text-accent">${Number(o.sell_price || 0).toFixed(2)}</span></div><p className="mt-1 text-white/45">{o.username || o.first_name || o.user_id} · {o.status} · {o.drip_feed ? `${o.total_quantity || (Number(o.quantity || 0) * Number(o.runs || 1))} total` : `${o.quantity} unidades`}</p></div>)}</div></section>
+      {msg && <p className="rounded-lg border border-green-500/25 bg-green-500/10 p-3 text-sm font-semibold text-green-300">{msg}</p>}
+      {err && <p className="rounded-lg border border-red-500/25 bg-red-500/10 p-3 text-sm font-semibold text-red-300">{err}</p>}
+    </div>
+  )
+}
+
 // ══════════════════════════════════════
 //  PANEL PRIVADO (FASE 1 & FASE 2)
 // ══════════════════════════════════════
 
-function PanelScreen({ me, onLogout, onHome, onOpenCase, onEditProduct }) {
+function PanelScreen({ me, setMe, onLogout, onHome, onOpenCase, onEditProduct, initialRole = null, initialTab = null, portalMode = false }) {
   const [activeRole, setActiveRole] = useState(null)
   const [activeTab, setActiveTab] = useState(null)
   const [menuOpen, setMenuOpen] = useState(false)
@@ -9314,16 +10941,17 @@ function PanelScreen({ me, onLogout, onHome, onOpenCase, onEditProduct }) {
   // Inicializar rol activo
   useEffect(() => {
     if (availableRoles.length > 0 && !activeRole) {
-      setActiveRole(availableRoles[0].id)
+      const preferredRole = initialRole && availableRoles.some(r => r.id === initialRole) ? initialRole : availableRoles[0].id
+      setActiveRole(preferredRole)
     }
-  }, [availableRoles, activeRole])
+  }, [availableRoles, activeRole, initialRole])
 
   // Inicializar pestaña activa
   useEffect(() => {
-    if (activeRole === 'admin') setActiveTab('dashboard')
-    else if (activeRole === 'seller') setActiveTab('store')
+    if (activeRole === 'admin') setActiveTab(initialTab || 'dashboard')
+    else if (activeRole === 'seller') setActiveTab(initialTab || 'store')
     else if (activeRole === 'reseller') setActiveTab('catalog')
-  }, [activeRole])
+  }, [activeRole, initialTab])
 
   // Configurar las pestañas según rol activo
   const tabs = useMemo(() => {
@@ -9332,9 +10960,12 @@ function PanelScreen({ me, onLogout, onHome, onOpenCase, onEditProduct }) {
         { id: 'dashboard', label: 'Resumen', icon: Home },
         { id: 'products', label: 'Productos', icon: Package },
         { id: 'orders', label: 'Pedidos', icon: ClipboardList },
+        { id: 'cases', label: 'Casos', icon: Headphones },
         { id: 'recharges', label: 'Mis recargas', icon: Smartphone },
         { id: 'pricing', label: 'Ganancias', icon: DollarSign },
         { id: 'sms', label: 'Números SMS', icon: Smartphone },
+        { id: 'smm', label: 'Servicios SMM', icon: Share2 },
+        { id: 'fzr', label: 'FZR Cards', icon: Sparkles },
         { id: 'sellers', label: 'Vendedores', icon: BriefcaseBusiness },
         { id: 'withdrawals', label: 'Retiros', icon: WalletCards },
         { id: 'users', label: 'Clientes', icon: User },
@@ -9485,7 +11116,7 @@ function PanelScreen({ me, onLogout, onHome, onOpenCase, onEditProduct }) {
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-2.5 text-xs font-bold text-bg hover:bg-accent/90 active:scale-95 transition"
           >
             <ArrowLeft className="h-4 w-4" />
-            Volver a la tienda
+            {portalMode ? 'Abrir tienda' : 'Volver a la tienda'}
           </button>
           <div className="mt-3 flex items-center justify-between text-[10px] text-white/35 font-bold">
             <span className="truncate max-w-[125px]">{me.name}</span>
@@ -9524,11 +11155,14 @@ function PanelScreen({ me, onLogout, onHome, onOpenCase, onEditProduct }) {
         {/* Content body */}
         <main className="flex-1 overflow-y-auto px-2.5 py-3 md:px-6 md:py-6">
           {activeRole === 'admin' && activeTab === 'sms' && <AdminSmsPanel />}
-          {activeRole === 'admin' && activeTab !== 'sms' && (
+          {activeRole === 'admin' && activeTab === 'smm' && <AdminSmmPanel />}
+          {activeRole === 'admin' && activeTab === 'fzr' && <AdminFzrPanel />}
+          {activeRole === 'admin' && activeTab === 'cases' && <SellerCasesPanel onOpenCase={onOpenCase} />}
+          {activeRole === 'admin' && activeTab !== 'sms' && activeTab !== 'smm' && activeTab !== 'fzr' && activeTab !== 'cases' && (
             <AdminProductsScreen
               externalTab={activeTab}
               onTabChange={setActiveTab}
-              onEdit={onEditProduct}
+              onEdit={(p) => onEditProduct(p, activeRole)}
               onOpenCase={onOpenCase}
             />
           )}
@@ -9545,7 +11179,7 @@ function PanelScreen({ me, onLogout, onHome, onOpenCase, onEditProduct }) {
           {activeRole === 'seller' && activeTab === 'products' && (
             <AdminProductsScreen
               externalTab="products"
-              onEdit={onEditProduct}
+              onEdit={(p) => onEditProduct(p, activeRole)}
               onOpenCase={onOpenCase}
             />
           )}
@@ -9701,9 +11335,25 @@ function SellerStoreConfigForm({ store, onSave, saving, success }) {
 function SellerCasesPanel({ onOpenCase }) {
   const [cases, setCases] = useState([])
   const [loading, setLoading] = useState(true)
-  
+
+  const fmtCaseDate = (ts) => ts ? new Date(Number(ts) * 1000).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '-'
+  const caseStatusLabel = (status) => ({
+    open: 'Abierto',
+    waiting_seller: 'Espera vendedor',
+    waiting_customer: 'Espera cliente',
+    delivered: 'Entregado',
+    closed: 'Cerrado',
+  }[status] || status || '-')
+  const orderStatusLabel = (status) => ({
+    pending: 'Pendiente',
+    completed: 'Completado',
+    refunded: 'Reembolsado',
+    canceled: 'Cancelado',
+    revoked: 'Revocado',
+  }[status] || status || '-')
+
   useEffect(() => {
-    api.adminManualOrderCases()
+    api.adminManualCases()
       .then(res => {
         setCases(res.items || [])
         setLoading(false)
@@ -9715,27 +11365,73 @@ function SellerCasesPanel({ onOpenCase }) {
   }, [])
 
   if (loading) return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-accent" /></div>
-  
+
   return (
-    <div className="space-y-3 w-full max-w-4xl">
+    <div className="space-y-3 w-full max-w-5xl">
+      <div className="flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-sm font-black uppercase tracking-wide text-white">Casos de pedidos</p>
+          <p className="text-xs text-white/45">Revisa el contexto del pedido antes de abrir el chat.</p>
+        </div>
+        <span className="w-fit rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] font-bold text-white/55">{cases.length} casos</span>
+      </div>
+
       {cases.length === 0 ? (
         <div className="card p-6 text-center text-white/50">No hay casos activos.</div>
       ) : (
-        cases.map(c => (
-          <div key={c.order_id} className="card p-3 sm:p-4 flex items-center justify-between gap-3 border-yellow-500/10">
-            <div>
-              <p className="font-bold text-sm">Pedido #{c.order_id}</p>
-              <p className="text-xs text-white/50 mt-1">Cliente: {c.customer_name || 'Desconocido'}</p>
-              <p className="text-xs text-white/50">Estado del caso: <span className="font-semibold text-yellow-300">{c.status}</span></p>
+        cases.map(c => {
+          const customer = c.customer_name || c.customer_username || `#${c.customer_id || '-'}`
+          const seller = c.seller_store_name || c.seller_name || c.seller_username || `#${c.seller_id || c.product_owner_id || '-'}`
+          return (
+            <div key={c.id || c.order_id} className="card border-yellow-500/10 p-3 sm:p-4">
+              <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0 flex-1">
+                  <div className="mb-2 flex flex-wrap items-center gap-2">
+                    <span className="rounded-lg bg-accent/15 px-2.5 py-1 text-xs font-black text-accent">Pedido #{c.order_id}</span>
+                    <span className="rounded-lg bg-yellow-500/15 px-2.5 py-1 text-xs font-bold text-yellow-200">{caseStatusLabel(c.status)}</span>
+                    <span className="rounded-lg bg-white/8 px-2.5 py-1 text-xs font-bold text-white/65">Pedido: {orderStatusLabel(c.order_status)}</span>
+                  </div>
+                  <p className="truncate text-sm font-black text-white">{c.product_name || 'Producto sin nombre'}</p>
+                  {c.option_name && <p className="mt-0.5 truncate text-xs font-bold text-accent">{c.option_name}</p>}
+                  <div className="mt-3 grid gap-2 text-xs sm:grid-cols-2">
+                    <div className="rounded-lg bg-black/20 p-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-white/35">Creado</span>
+                        <strong className="truncate text-right text-white/80">{fmtCaseDate(c.order_created_at || c.created_at)}</strong>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between gap-3">
+                        <span className="text-white/35">Ultima actividad</span>
+                        <strong className="truncate text-right text-white/80">{fmtCaseDate(c.updated_at)}</strong>
+                      </div>
+                    </div>
+                    <div className="rounded-lg bg-black/20 p-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-white/35">Cliente</span>
+                        <strong className="truncate text-right text-white/80">{customer}</strong>
+                      </div>
+                      <div className="mt-1 flex items-center justify-between gap-3">
+                        <span className="text-white/35">Vendedor</span>
+                        <strong className="truncate text-right text-white/80">{seller}</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div className="flex shrink-0 flex-row items-center justify-between gap-3 lg:w-36 lg:flex-col lg:items-stretch">
+                  <div className="rounded-xl border border-green-400/15 bg-green-400/10 px-3 py-2 text-center">
+                    <span className="block text-[10px] font-bold uppercase text-green-200/60">Importe</span>
+                    <strong className="text-sm text-green-200">${Number(c.price || 0).toFixed(2)}</strong>
+                  </div>
+                  <button
+                    onClick={() => onOpenCase(c.order_id, true)}
+                    className="rounded-xl bg-accent px-3 py-2.5 text-xs font-black text-bg hover:bg-accent/90 active:scale-95 transition"
+                  >
+                    Abrir chat
+                  </button>
+                </div>
+              </div>
             </div>
-            <button
-              onClick={() => onOpenCase(c.order_id, true)}
-              className="rounded-lg bg-accent/20 px-3 py-1.5 text-xs font-bold text-accent hover:bg-accent/30 active:scale-95 transition"
-            >
-              Abrir Chat
-            </button>
-          </div>
-        ))
+          )
+        })
       )}
     </div>
   )
@@ -9756,6 +11452,7 @@ function ResellerCatalog({ me, onBought }) {
 
   // Selección de juego
   const [selectedGame, setSelectedGame] = useState(null)
+  const [showGamesList, setShowGamesList] = useState(true)
   const [regions, setRegions] = useState([])
   const [selectedRegion, setSelectedRegion] = useState(null)
   const [products, setProducts] = useState([])
@@ -9793,15 +11490,18 @@ function ResellerCatalog({ me, onBought }) {
     setSelectedRegion(null)
     setProducts([])
     setLoadingProducts(true)
+    setShowGamesList(false)
     try {
       const regs = await api.regions(game.name)
-      setRegions(regs || [])
-      if (!regs || regs.length === 0) {
+      const arr = Array.isArray(regs) ? regs : []
+      const uniqueRegions = [...new Map(arr.filter(Boolean).map(item => [item.raw_name || item.name || item, item])).values()]
+      setRegions(uniqueRegions)
+      if (uniqueRegions.length === 0) {
         setSelectedRegion('__standard__')
         loadGameProducts(game.name, '__standard__')
-      } else if (regs.length === 1) {
-        setSelectedRegion(regs[0].serverName)
-        loadGameProducts(game.name, regs[0].serverName)
+      } else if (uniqueRegions.length === 1) {
+        setSelectedRegion(uniqueRegions[0].raw_name)
+        loadGameProducts(game.name, uniqueRegions[0].raw_name)
       } else {
         setLoadingProducts(false)
       }
@@ -9929,6 +11629,15 @@ function ResellerCatalog({ me, onBought }) {
 
   return (
     <div className="space-y-6">
+      <div className="grid grid-cols-2 gap-3">
+        <button onClick={() => { window.location.href = '/?screen=telegram' }} className="rounded-xl border border-white/10 bg-card p-3 text-left active:scale-[0.98]">
+          <span className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent/15 text-accent"><Send className="h-5 w-5" /></span><span><span className="block text-xs font-black">Telegram</span><span className="text-[10px] text-white/45">Premium y Estrellas</span></span></span>
+        </button>
+        <button onClick={() => { window.location.href = '/?screen=capcut' }} className="rounded-xl border border-white/10 bg-card p-3 text-left active:scale-[0.98]">
+          <span className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-xl bg-cyan-400/15 text-cyan-200"><Sparkles className="h-5 w-5" /></span><span><span className="block text-xs font-black">CapCut</span><span className="text-[10px] text-white/45">Standard y Pro</span></span></span>
+        </button>
+      </div>
+
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex rounded-xl bg-card border border-white/10 p-1 flex-shrink-0 self-start">
           <button
@@ -9959,31 +11668,54 @@ function ResellerCatalog({ me, onBought }) {
 
       {activeCategory === 'auto' && (
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-start">
-          <div className="lg:col-span-1 space-y-2 max-h-[60vh] overflow-y-auto pr-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-white/40 mb-3">Selecciona un juego</h3>
-            {filteredGames.length === 0 ? (
-              <div className="text-center p-6 border border-white/5 rounded-xl text-white/40 text-xs">No se encontraron juegos</div>
-            ) : (
-              filteredGames.map(g => (
-                <button
-                  key={g.name}
-                  onClick={() => selectGame(g)}
-                  className={`flex w-full items-center gap-3 rounded-xl p-3 border text-left transition active:scale-[0.98] ${selectedGame?.name === g.name ? 'border-accent bg-accent/10' : 'border-white/10 bg-card hover:border-white/20'}`}
-                >
-                  {g.icon_url ? (
-                    <img src={g.icon_url} className="h-10 w-10 rounded-lg object-cover" alt={g.title} />
+          {(!selectedGame || showGamesList) ? (
+            <div className="lg:col-span-1 space-y-2 max-h-[60vh] overflow-y-auto pr-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-white/40 mb-3">Selecciona un juego</h3>
+              {filteredGames.length === 0 ? (
+                <div className="text-center p-6 border border-white/5 rounded-xl text-white/40 text-xs">No se encontraron juegos</div>
+              ) : (
+                filteredGames.map(g => (
+                  <button
+                    key={g.name}
+                    onClick={() => selectGame(g)}
+                    className={`flex w-full items-center gap-3 rounded-xl p-3 border text-left transition active:scale-[0.98] ${selectedGame?.name === g.name ? 'border-accent bg-accent/10' : 'border-white/10 bg-card hover:border-white/20'}`}
+                  >
+                    {g.icon_url ? (
+                      <img src={g.icon_url} className="h-10 w-10 rounded-lg object-cover" alt={g.title} />
+                    ) : (
+                      <span className="block h-10 w-10 bg-black/40 rounded-lg flex items-center justify-center text-lg">{g.emoji || '🎮'}</span>
+                    )}
+                    <span className="block min-w-0 flex-1">
+                      <span className="block text-xs font-bold truncate">{g.title}</span>
+                      <span className="block text-[10px] text-white/45 mt-0.5">{g.count} productos</span>
+                    </span>
+                    <ChevronRight className="h-4 w-4 text-white/30" />
+                  </button>
+                ))
+              )}
+            </div>
+          ) : (
+            <div className="lg:col-span-1 space-y-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-white/40 mb-3">Juego seleccionado</h3>
+              <button
+                onClick={() => setShowGamesList(true)}
+                className="flex w-full items-center justify-between gap-3 rounded-xl p-3 border border-accent bg-accent/10 text-left transition active:scale-[0.98]"
+              >
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  {selectedGame.icon_url ? (
+                    <img src={selectedGame.icon_url} className="h-10 w-10 rounded-lg object-cover" alt={selectedGame.title} />
                   ) : (
-                    <span className="block h-10 w-10 bg-black/40 rounded-lg flex items-center justify-center text-lg">{g.emoji || '🎮'}</span>
+                    <span className="block h-10 w-10 bg-black/40 rounded-lg flex items-center justify-center text-lg">{selectedGame.emoji || '🎮'}</span>
                   )}
-                  <span className="block min-w-0 flex-1">
-                    <span className="block text-xs font-bold truncate">{g.title}</span>
-                    <span className="block text-[10px] text-white/45 mt-0.5">{g.count} productos</span>
-                  </span>
-                  <ChevronRight className="h-4 w-4 text-white/30" />
-                </button>
-              ))
-            )}
-          </div>
+                  <div className="min-w-0 flex-1">
+                    <span className="block text-xs font-black truncate">{selectedGame.title}</span>
+                    <span className="block text-[10px] text-white/50 mt-0.5">Toca para cambiar de juego</span>
+                  </div>
+                </div>
+                <ChevronDown className="h-4 w-4 text-accent" />
+              </button>
+            </div>
+          )}
 
           <div className="lg:col-span-2 space-y-4">
             {selectedGame ? (
@@ -10004,11 +11736,11 @@ function ResellerCatalog({ me, onBought }) {
                   <div className="flex flex-wrap gap-1.5">
                     {regions.map(r => (
                       <button
-                        key={r.serverName}
-                        onClick={() => selectRegion(r.serverName)}
-                        className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition ${selectedRegion === r.serverName ? 'bg-accent text-bg' : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10'}`}
+                        key={r.raw_name || r}
+                        onClick={() => selectRegion(r.raw_name)}
+                        className={`rounded-lg px-3 py-1.5 text-[10px] font-black uppercase tracking-wider transition ${selectedRegion === r.raw_name ? 'bg-accent text-bg' : 'bg-white/5 text-white/60 hover:text-white hover:bg-white/10'}`}
                       >
-                        🌐 {r.serverName}
+                        {r.name || r}
                       </button>
                     ))}
                   </div>
@@ -10294,6 +12026,9 @@ function ResellerCatalog({ me, onBought }) {
 function ResellerSales({ me, onOpenCase }) {
   const [orders, setOrders] = useState([])
   const [loading, setLoading] = useState(true)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [statusFilter, setStatusFilter] = useState('all')
+  const [typeFilter, setTypeFilter] = useState('all')
 
   const loadOrders = async () => {
     setLoading(true)
@@ -10308,8 +12043,10 @@ function ResellerSales({ me, onOpenCase }) {
         _type: 'auto',
         id_display: `AUT-${o.id || o.order_id}`,
         raw_id: o.id || o.order_id,
-        date_display: o.created_at ? new Date(o.created_at * 1000).toLocaleString() : 'N/A',
-        product_name: o.product_name || 'Recarga Automática',
+        date_display: o.created_at
+          ? new Date(o.created_at * 1000).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) + ' ' + new Date(o.created_at * 1000).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false })
+          : 'N/A',
+        product_name: o.product || o.product_name || 'Recarga Automática',
         price_display: `$${Number(o.price || 0).toFixed(2)}`,
         status_display: o.status || 'Completado'
       }))
@@ -10319,8 +12056,10 @@ function ResellerSales({ me, onOpenCase }) {
         _type: 'manual',
         id_display: `MAN-${o.id || o.order_id}`,
         raw_id: o.id || o.order_id,
-        date_display: o.created_at ? new Date(o.created_at * 1000).toLocaleString() : 'N/A',
-        product_name: o.product_name || 'Producto Manual',
+        date_display: o.created_at
+          ? new Date(o.created_at * 1000).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) + ' ' + new Date(o.created_at * 1000).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit', hour12: false })
+          : 'N/A',
+        product_name: o.product || o.product_name || 'Producto Manual',
         price_display: `$${Number(o.price || 0).toFixed(2)}`,
         status_display: o.status || 'Pendiente'
       }))
@@ -10337,6 +12076,26 @@ function ResellerSales({ me, onOpenCase }) {
     loadOrders()
   }, [])
 
+  const filteredOrders = useMemo(() => {
+    return orders.filter(o => {
+      const q = searchQuery.toLowerCase().trim()
+      const matchesSearch = !q || 
+        String(o.id_display).toLowerCase().includes(q) ||
+        String(o.raw_id).toLowerCase().includes(q) ||
+        String(o.product_name).toLowerCase().includes(q);
+      
+      const status = String(o.status_display).toLowerCase()
+      const matchesStatus = statusFilter === 'all' ||
+        (statusFilter === 'completed' && (status === 'completado' || status === 'completed')) ||
+        (statusFilter === 'pending' && (status === 'pendiente' || status === 'pending')) ||
+        (statusFilter === 'cancelled' && (status === 'cancelado' || status === 'cancelled' || status === 'failed' || status === 'rechazado'));
+      
+      const matchesType = typeFilter === 'all' || o._type === typeFilter;
+      
+      return matchesSearch && matchesStatus && matchesType;
+    })
+  }, [orders, searchQuery, statusFilter, typeFilter])
+
   if (loading) return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-accent" /></div>
 
   return (
@@ -10351,50 +12110,90 @@ function ResellerSales({ me, onOpenCase }) {
         </button>
       </div>
 
-      {orders.length === 0 ? (
-        <div className="text-center p-12 text-white/35">No has realizado ninguna compra en el panel.</div>
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3 border-b border-white/5 pb-3">
+        <div className="relative">
+          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-white/40" />
+          <input
+            type="text"
+            placeholder="Buscar ID o Producto..."
+            value={searchQuery}
+            onChange={e => setSearchQuery(e.target.value)}
+            className="w-full bg-bg border border-white/10 rounded-lg py-1.5 pl-8 pr-3 text-xs outline-none focus:border-accent text-white"
+          />
+        </div>
+        <select
+          value={typeFilter}
+          onChange={e => setTypeFilter(e.target.value)}
+          className="bg-bg border border-white/10 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-accent text-white"
+        >
+          <option value="all">Todos los tipos (Auto/Manual)</option>
+          <option value="auto">🔌 Automáticos (Autocarga)</option>
+          <option value="manual">📦 Manuales (Cuentas/Servicios)</option>
+        </select>
+        <select
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value)}
+          className="bg-bg border border-white/10 rounded-lg px-2 py-1.5 text-xs outline-none focus:border-accent text-white"
+        >
+          <option value="all">Todos los estados</option>
+          <option value="completed">Completados</option>
+          <option value="pending">Pendientes</option>
+          <option value="cancelled">Cancelados / Fallidos</option>
+        </select>
+      </div>
+
+      {filteredOrders.length === 0 ? (
+        <div className="text-center p-12 text-white/35 text-xs">No se encontraron pedidos con los filtros aplicados.</div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+        <div className="overflow-x-auto [scrollbar-width:none]">
+          <table className="w-full text-left text-xs min-w-[500px]">
             <thead>
-              <tr className="border-b border-white/10 text-white/40 uppercase text-[10px] font-bold">
-                <th className="py-2.5">ID Pedido</th>
-                <th className="py-2.5">Fecha</th>
+              <tr className="border-b border-white/10 text-white/40 uppercase text-[9px] font-bold">
+                <th className="py-2.5 w-[90px]">ID Pedido</th>
+                <th className="py-2.5 w-[95px]">Fecha</th>
                 <th className="py-2.5">Producto</th>
-                <th className="py-2.5 text-right">Precio Neto</th>
-                <th className="py-2.5 text-center">Estado</th>
-                <th className="py-2.5 text-right">Soporte</th>
+                <th className="py-2.5 text-right w-[85px]">Precio Neto</th>
+                <th className="py-2.5 text-center w-[85px]">Estado</th>
+                <th className="py-2.5 text-right w-[95px]">Soporte</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-white/5">
-              {orders.map(o => (
-                <tr key={o.id_display} className="hover:bg-white/5 transition">
-                  <td className="py-3 font-mono font-bold text-accent">{o.id_display}</td>
-                  <td className="py-3 text-white/60">{o.date_display}</td>
-                  <td className="py-3 font-semibold">{o.product_name}</td>
-                  <td className="py-3 text-right font-black text-green-300">{o.price_display}</td>
-                  <td className="py-3 text-center">
-                    <span className={`inline-block rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-wider ${
+              {filteredOrders.map(o => (
+                <tr key={o.id_display} className="hover:bg-white/5 transition text-[11px]">
+                  <td className="py-2.5 font-mono font-bold text-accent text-[10px] tracking-tighter truncate max-w-[90px]" title={o.id_display}>
+                    {o.id_display}
+                  </td>
+                  <td className="py-2.5 text-white/50 text-[10px] leading-tight whitespace-nowrap">
+                    {o.date_display}
+                  </td>
+                  <td className="py-2.5 font-semibold text-white/85 max-w-[150px] truncate" title={o.product_name}>
+                    {o.product_name}
+                  </td>
+                  <td className="py-2.5 text-right font-black text-green-300 text-[10px]">
+                    {o.price_display}
+                  </td>
+                  <td className="py-2.5 text-center">
+                    <span className={`inline-block rounded-full px-1.5 py-0.5 text-[8px] font-black uppercase tracking-wider ${
                       o.status_display === 'Completado' || o.status_display === 'completed'
                         ? 'bg-emerald-500/10 text-emerald-400'
                         : o.status_display === 'Pendiente' || o.status_display === 'pending'
                         ? 'bg-yellow-500/10 text-yellow-400'
                         : 'bg-red-500/10 text-red-400'
                     }`}>
-                      {o.status_display}
+                      {o.status_display === 'completed' ? 'Completado' : o.status_display === 'pending' ? 'Pendiente' : o.status_display}
                     </span>
                   </td>
-                  <td className="py-3 text-right">
+                  <td className="py-2.5 text-right">
                     {o._type === 'manual' ? (
                       <button
                         onClick={() => onOpenCase(o.raw_id, false)}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-accent/10 border border-accent/25 px-2.5 py-1 text-[10px] font-bold text-accent hover:bg-accent/20 transition active:scale-95"
+                        className="inline-flex items-center gap-1 rounded bg-accent/15 border border-accent/20 px-1.5 py-0.5 text-[9px] font-bold text-accent hover:bg-accent/25 transition active:scale-95"
                       >
-                        <Headphones className="h-3.5 w-3.5" />
-                        Chat Soporte
+                        <Headphones className="h-3 w-3" />
+                        Soporte
                       </button>
                     ) : (
-                      <span className="text-[10px] text-white/30 italic">Autocarga</span>
+                      <span className="text-[9px] text-white/30 italic">Autocarga</span>
                     )}
                   </td>
                 </tr>
@@ -10411,9 +12210,13 @@ function ResellerPricing({ me }) {
   const [popularProducts, setPopularProducts] = useState([])
   const [loading, setLoading] = useState(true)
 
-  const retailMarkup = me?.retail_markup ?? 20.0
-  const resellerMarkup = me?.reseller_markup ?? 8.0
+  const retailMarkup = Number(me?.retail_markup ?? 20.0)
+  const resellerMarkup = Number(me?.reseller_markup ?? 8.0)
+  const minDeposit = Number(me?.reseller_min_deposit || 50)
+  const discountActive = !!me?.reseller_discount_active
   const factor = (1 + retailMarkup / 100) / (1 + resellerMarkup / 100)
+  const directDiff = Math.max(0, retailMarkup - resellerMarkup)
+  const relativeBenefit = Math.max(0, (1 - ((1 + resellerMarkup / 100) / (1 + retailMarkup / 100))) * 100)
 
   useEffect(() => {
     const loadSampleData = async () => {
@@ -10422,22 +12225,22 @@ function ResellerPricing({ me }) {
         const gamesList = await api.games()
         if (gamesList && gamesList.length > 0) {
           const samples = []
-          for (let i = 0; i < Math.min(3, gamesList.length); i++) {
+          for (let i = 0; i < Math.min(4, gamesList.length); i++) {
             const g = gamesList[i]
             const regs = await api.regions(g.name).catch(() => [])
             const region = regs && regs.length > 0 ? regs[0].serverName : '__standard__'
             const prods = await api.products(g.name, region).catch(() => [])
             if (prods && prods.length > 0) {
-              prods.slice(0, 3).forEach(p => {
+              prods.slice(0, 2).forEach(p => {
                 samples.push({
-                  game_title: g.title,
+                  game_title: g.title || g.name,
                   product_name: p.name,
-                  reseller_price: p.price,
+                  reseller_price: Number(p.price || 0),
                 })
               })
             }
           }
-          setPopularProducts(samples)
+          setPopularProducts(samples.filter(p => p.reseller_price > 0).slice(0, 8))
         }
       } catch (e) {
         console.error(e)
@@ -10448,63 +12251,94 @@ function ResellerPricing({ me }) {
   }, [])
 
   return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="card p-3 sm:p-4 border-white/10 bg-card/45">
-          <span className="text-[10px] text-white/40 block uppercase font-bold tracking-wider">Tasa General Cliente</span>
-          <span className="text-xl font-black mt-1 block">+{retailMarkup.toFixed(1)}%</span>
-          <p className="text-[10px] text-white/50 mt-1">Margen aplicado a compras directas de usuarios.</p>
-        </div>
-        <div className="card p-3 sm:p-4 border-accent/25 bg-accent/5">
-          <span className="text-[10px] text-accent block uppercase font-bold tracking-wider">Tasa Preferencial Revendedor</span>
-          <span className="text-xl font-black mt-1 block text-accent">+{resellerMarkup.toFixed(1)}%</span>
-          <p className="text-[10px] text-white/50 mt-1">Margen reducido que pagas en todas tus recargas.</p>
-        </div>
-        <div className="card p-3 sm:p-4 border-emerald-500/25 bg-emerald-500/5">
-          <span className="text-[10px] text-emerald-400 block uppercase font-bold tracking-wider">Tu Beneficio / Descuento</span>
-          <span className="text-xl font-black mt-1 block text-emerald-400">{(retailMarkup - resellerMarkup).toFixed(1)}% directo</span>
-          <p className="text-[10px] text-white/50 mt-1">Tu ganancia neta estimada al revender a precio público.</p>
+    <div className="space-y-5">
+      <div className="rounded-2xl border border-accent/20 bg-gradient-to-br from-accent/10 via-card to-card p-4 sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.18em] text-accent">Precios preferenciales</p>
+            <h2 className="mt-1 text-lg font-black text-white">Compra más barato para revender por fuera</h2>
+            <p className="mt-2 max-w-2xl text-xs leading-relaxed text-white/55">
+              El cliente normal compra con la tasa general. El revendedor aprobado compra con una tasa menor cuando tiene el beneficio activo. La diferencia entre ambos precios es tu espacio para ganar al revender.
+            </p>
+          </div>
+          <span className={`rounded-full px-3 py-1.5 text-[10px] font-black ${discountActive ? 'bg-emerald-500/15 text-emerald-300' : 'bg-yellow-500/15 text-yellow-200'}`}>
+            {discountActive ? 'Beneficio activo' : 'Pendiente de recarga'}
+          </span>
         </div>
       </div>
 
-      <div className="card p-3.5 sm:p-5 border-white/10 space-y-4">
-        <div>
-          <h2 className="text-sm font-black uppercase tracking-wide">Muestra Comparativa de Precios</h2>
-          <p className="text-xs text-white/40">Comparación en tiempo real de precios de venta finales para el catálogo actual.</p>
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+        <div className="rounded-xl border border-white/10 bg-card/60 p-4">
+          <span className="block text-[10px] font-black uppercase tracking-wider text-white/40">Precio cliente</span>
+          <span className="mt-1 block text-2xl font-black text-white">+{retailMarkup.toFixed(1)}%</span>
+          <p className="mt-1 text-[11px] leading-relaxed text-white/50">Es el margen general aplicado a compradores normales de Francho Shop.</p>
+        </div>
+        <div className="rounded-xl border border-accent/25 bg-accent/10 p-4">
+          <span className="block text-[10px] font-black uppercase tracking-wider text-accent">Precio revendedor</span>
+          <span className="mt-1 block text-2xl font-black text-accent">+{resellerMarkup.toFixed(1)}%</span>
+          <p className="mt-1 text-[11px] leading-relaxed text-white/55">Es el margen reducido que pagas cuando tu beneficio está activo.</p>
+        </div>
+        <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/10 p-4">
+          <span className="block text-[10px] font-black uppercase tracking-wider text-emerald-300">Tu diferencia</span>
+          <span className="mt-1 block text-2xl font-black text-emerald-300">{directDiff.toFixed(1)} pts</span>
+          <p className="mt-1 text-[11px] leading-relaxed text-white/55">Equivale a un ahorro aproximado de {relativeBenefit.toFixed(1)}% frente al precio cliente.</p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+        <div className="rounded-xl border border-white/10 bg-card/55 p-4">
+          <p className="text-xs font-black uppercase tracking-wide text-white/75">Cómo se activa</p>
+          <div className="mt-3 space-y-2 text-xs leading-relaxed text-white/55">
+            <p>1. Tu cuenta debe tener rol revendedor.</p>
+            <p>2. Debes hacer una recarga individual de al menos ${minDeposit.toFixed(2)} USDT.</p>
+            <p>3. No se suman recargas pequeñas: 20 + 30 no activa el beneficio.</p>
+          </div>
+        </div>
+        <div className="rounded-xl border border-white/10 bg-card/55 p-4">
+          <p className="text-xs font-black uppercase tracking-wide text-white/75">Ejemplo rápido</p>
+          <div className="mt-3 space-y-2 text-xs leading-relaxed text-white/55">
+            <p>Si un producto cuesta $10.00 para cliente y a ti te sale $9.00, tienes $1.00 de diferencia para trabajar tu reventa.</p>
+            <p>Tu ganancia real depende del precio al que revendas por fuera y de los costos que asumas con tu cliente.</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-card p-3.5 sm:p-5">
+        <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-sm font-black uppercase tracking-wide">Comparativa de muestra</h2>
+            <p className="text-xs text-white/45">Ejemplos del catálogo actual para que veas la diferencia entre comprar como cliente y como revendedor.</p>
+          </div>
+          <span className="text-[10px] font-bold text-white/35">Los precios pueden variar por producto, región o tasa configurada.</span>
         </div>
 
         {loading ? (
           <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin text-accent" /></div>
         ) : popularProducts.length === 0 ? (
-          <div className="text-center p-8 text-white/40 text-xs">No hay productos suficientes en el catálogo para comparar.</div>
+          <div className="rounded-xl border border-dashed border-white/10 p-8 text-center text-xs text-white/40">No hay productos suficientes en el catálogo para comparar.</div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-white/10 text-white/40 uppercase text-[10px] font-bold">
-                  <th className="py-2.5">Juego</th>
-                  <th className="py-2.5">Producto</th>
-                  <th className="py-2.5 text-right">Precio Revendedor</th>
-                  <th className="py-2.5 text-right">Precio Público (Aprox)</th>
-                  <th className="py-2.5 text-right">Tu Ahorro Neto</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {popularProducts.map((p, idx) => {
-                  const pubPrice = p.reseller_price * factor
-                  const saving = pubPrice - p.reseller_price
-                  return (
-                    <tr key={idx} className="hover:bg-white/5 transition">
-                      <td className="py-3 text-white/60">{p.game_title}</td>
-                      <td className="py-3 font-semibold">{p.product_name}</td>
-                      <td className="py-3 text-right font-black text-green-300">${p.reseller_price.toFixed(2)}</td>
-                      <td className="py-3 text-right text-white/50">${pubPrice.toFixed(2)}</td>
-                      <td className="py-3 text-right text-emerald-400 font-bold">+${saving.toFixed(2)} ({((saving / pubPrice) * 100).toFixed(0)}%)</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
+          <div className="space-y-2">
+            {popularProducts.map((p, idx) => {
+              const publicPrice = p.reseller_price * factor
+              const saving = Math.max(0, publicPrice - p.reseller_price)
+              const marginPct = publicPrice > 0 ? (saving / publicPrice) * 100 : 0
+              return (
+                <div key={idx} className="rounded-xl border border-white/10 bg-bg/55 p-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-[10px] font-bold uppercase text-white/35">{p.game_title}</p>
+                      <p className="mt-0.5 text-sm font-black leading-tight text-white">{p.product_name}</p>
+                    </div>
+                    <span className="rounded-full bg-emerald-500/10 px-2 py-1 text-[10px] font-black text-emerald-300">+${saving.toFixed(2)}</span>
+                  </div>
+                  <div className="mt-3 grid grid-cols-3 gap-2 text-center text-[11px]">
+                    <div className="rounded-lg bg-black/20 p-2"><p className="text-white/35">Cliente</p><p className="font-black text-white">${publicPrice.toFixed(2)}</p></div>
+                    <div className="rounded-lg bg-black/20 p-2"><p className="text-white/35">Revendedor</p><p className="font-black text-accent">${p.reseller_price.toFixed(2)}</p></div>
+                    <div className="rounded-lg bg-black/20 p-2"><p className="text-white/35">Diferencia</p><p className="font-black text-emerald-300">{marginPct.toFixed(0)}%</p></div>
+                  </div>
+                </div>
+              )
+            })}
           </div>
         )}
       </div>
@@ -10513,7 +12347,10 @@ function ResellerPricing({ me }) {
 }
 
 function ResellerBalance({ me, onRefresh }) {
-  const [amount, setAmount] = useState('50')
+  const resellerMin = Number(me?.reseller_min_deposit || 50)
+  const remainingToUnlock = Number(me?.reseller_deposit_remaining || 0)
+  const discountActive = !!me?.reseller_discount_active
+  const [amount, setAmount] = useState(String(resellerMin || 50))
   const [invoice, setInvoice] = useState(null)
   const [loading, setLoading] = useState(false)
   const [checking, setChecking] = useState(false)
@@ -10555,7 +12392,7 @@ function ResellerBalance({ me, onRefresh }) {
     setChecking(false)
   }
 
-  const presets = [50, 100, 250, 500]
+  const presets = Array.from(new Set([resellerMin, 100, 250, 500].map(v => Number(v || 0)).filter(v => v > 0)))
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
@@ -10566,8 +12403,8 @@ function ResellerBalance({ me, onRefresh }) {
               <Crown className="h-6 w-6 animate-pulse" />
             </span>
             <div>
-              <h3 className="font-black text-sm uppercase">Nivel Revendedor</h3>
-              <p className="text-[10px] text-white/40">Descuentos comerciales activos</p>
+              <h3 className="font-black text-sm uppercase">Precios preferenciales</h3>
+              <p className="text-[10px] text-white/40">Compra productos Francho Shop para revender por fuera</p>
             </div>
           </div>
 
@@ -10577,27 +12414,35 @@ function ResellerBalance({ me, onRefresh }) {
               <span className="text-2xl font-black text-green-300">${me.balance.toFixed(2)}</span>
             </div>
             <div>
-              <span className="text-[10px] text-white/45 block uppercase font-bold tracking-wider">Depósito Mínimo Exigido:</span>
-              <span className="text-xs font-bold text-white/70">${me.reseller_min_deposit.toFixed(2)} USDT</span>
+              <span className="text-[10px] text-white/45 block uppercase font-bold tracking-wider">Mínimo por recarga:</span>
+              <span className="text-xs font-bold text-white/70">${resellerMin.toFixed(2)} USDT en una sola operación</span>
             </div>
           </div>
 
-          {me.reseller_deposit_remaining > 0 ? (
-            <div className="bg-yellow-500/10 border border-yellow-500/20 text-yellow-300 rounded-lg p-3 text-[10px] font-bold leading-relaxed">
-              ⚠ Faltan ${me.reseller_deposit_remaining.toFixed(2)} USDT de depósito acumulado para activar tus descuentos de revendedor.
+          {remainingToUnlock > 0 ? (
+            <div className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-3 text-[10px] font-bold leading-relaxed text-yellow-200">
+              <p className="text-yellow-100">Precio revendedor pendiente de activar.</p>
+              <p className="mt-1 text-yellow-200/80">Tu mayor recarga individual está ${remainingToUnlock.toFixed(2)} USDT por debajo del mínimo. Para comprar con precio preferencial debes hacer una recarga de al menos ${resellerMin.toFixed(2)} USDT en un solo pago.</p>
             </div>
           ) : (
-            <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 rounded-lg p-3 text-[10px] font-bold flex items-center gap-2">
-              <span className="text-xs">✓</span> Descuento comercial activo y desbloqueado.
+            <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-[10px] font-bold leading-relaxed text-emerald-300">
+              <p className="flex items-center gap-2 text-emerald-200"><span className="text-xs">✓</span> Precio revendedor activo.</p>
+              <p className="mt-1 text-emerald-200/75">Tus compras elegibles se calculan con margen comercial de revendedor.</p>
             </div>
           )}
+
+          <div className="rounded-xl border border-white/10 bg-black/20 p-3 text-[10px] leading-relaxed text-white/55">
+            <p className="font-black uppercase tracking-wide text-white/75">Regla importante</p>
+            <p className="mt-1">Cada vez que vayas a recargar para usar precios de revendedor, la recarga debe ser de al menos ${resellerMin.toFixed(2)} USDT en una sola operación.</p>
+            <p className="mt-1">No es acumulable: 20 + 30 no activa el beneficio. Tiene que ser ${resellerMin.toFixed(2)} o más en un solo pago.</p>
+          </div>
         </div>
       </div>
 
       <div className="md:col-span-2 card p-3.5 sm:p-5 border-white/10 space-y-4">
         <div>
-          <h2 className="text-sm font-black uppercase tracking-wide">Recargar Saldo (USDT)</h2>
-          <p className="text-xs text-white/40">Carga fondos al instante usando criptomonedas (TRC20, BEP20, etc.) vía OxaPay.</p>
+          <h2 className="text-sm font-black uppercase tracking-wide">Recargar saldo revendedor</h2>
+          <p className="text-xs text-white/45">Para mantener precios preferenciales, haz recargas individuales desde ${resellerMin.toFixed(2)} USDT. Puedes usar criptomonedas compatibles vía OxaPay.</p>
         </div>
 
         {err && (
@@ -10689,7 +12534,7 @@ function ResellerBalance({ me, onRefresh }) {
             </div>
             
             <p className="text-[10px] text-white/40 leading-relaxed">
-              * Nota: Los depósitos se acreditan de forma totalmente automática tras la primera confirmación en la red. Asegúrate de transferir el monto exacto indicado en la factura para evitar demoras.
+              * Nota: Los depósitos se acreditan automáticamente tras la confirmación en la red. Para precio revendedor, la recarga debe cumplir el mínimo en una sola factura; varias recargas pequeñas no se suman para activar el beneficio.
             </p>
           </div>
         )}

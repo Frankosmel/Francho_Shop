@@ -353,12 +353,16 @@ async def init_db():
                 user_id     INTEGER NOT NULL,
                 rating      INTEGER NOT NULL,
                 comment     TEXT,
+                product_id  INTEGER,
+                manual_product_id INTEGER,
+                source      TEXT DEFAULT 'order',
+                verified_label TEXT DEFAULT '',
                 created_at  REAL DEFAULT (unixepoch()),
                 UNIQUE(order_type, order_id, user_id)
             );
             CREATE INDEX IF NOT EXISTS idx_reviews_order ON order_reviews(order_type, order_id);
             CREATE INDEX IF NOT EXISTS idx_reviews_user ON order_reviews(user_id);
-
+            
             CREATE TABLE IF NOT EXISTS reseller_wallets (
                 tenant_id          INTEGER PRIMARY KEY,
                 available_balance  REAL DEFAULT 0,
@@ -474,6 +478,89 @@ async def init_db():
                 UNIQUE(item_type, item_key)
             );
 
+
+            -- ═══════════════════════════════════════
+            --   SERVICIOS SMM (SMMFOLLOWS)
+            -- ═══════════════════════════════════════
+            CREATE TABLE IF NOT EXISTS smm_services (
+                service_id          INTEGER PRIMARY KEY,
+                name                TEXT NOT NULL,
+                service_type        TEXT,
+                category            TEXT,
+                rate                REAL DEFAULT 0,
+                min_qty             INTEGER DEFAULT 1,
+                max_qty             INTEGER DEFAULT 1000,
+                refill              INTEGER DEFAULT 0,
+                cancel              INTEGER DEFAULT 0,
+                is_active           INTEGER DEFAULT 0,
+                display_name        TEXT,
+                icon_url            TEXT,
+                instructions        TEXT,
+                custom_markup       REAL,
+                min_price           REAL,
+                sort_order          INTEGER DEFAULT 100,
+                raw_json            TEXT,
+                synced_at           REAL DEFAULT (unixepoch()),
+                updated_at          REAL DEFAULT (unixepoch())
+            );
+            CREATE INDEX IF NOT EXISTS idx_smm_services_category ON smm_services(category, is_active);
+            CREATE INDEX IF NOT EXISTS idx_smm_services_active ON smm_services(is_active, sort_order);
+
+            CREATE TABLE IF NOT EXISTS smm_orders (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id             INTEGER NOT NULL,
+                provider_order_id   TEXT UNIQUE,
+                service_id          INTEGER NOT NULL,
+                service_name        TEXT,
+                category            TEXT,
+                link                TEXT NOT NULL,
+                quantity            INTEGER NOT NULL,
+                drip_feed           INTEGER DEFAULT 0,
+                runs                INTEGER DEFAULT 1,
+                interval            INTEGER DEFAULT 0,
+                total_quantity      INTEGER DEFAULT 0,
+                cost_price          REAL DEFAULT 0,
+                sell_price          REAL NOT NULL,
+                start_count         TEXT,
+                remains             TEXT,
+                provider_status     TEXT,
+                status              TEXT DEFAULT 'pending',
+                raw_response        TEXT,
+                error_message       TEXT,
+                created_at          REAL DEFAULT (unixepoch()),
+                updated_at          REAL DEFAULT (unixepoch()),
+                completed_at        REAL,
+                refunded_at         REAL,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_smm_orders_user ON smm_orders(user_id, created_at);
+            CREATE INDEX IF NOT EXISTS idx_smm_orders_status ON smm_orders(status);
+
+            CREATE TABLE IF NOT EXISTS fzr_orders (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id             INTEGER NOT NULL,
+                provider_order_id   TEXT,
+                product_type        TEXT NOT NULL,
+                product_name        TEXT,
+                target              TEXT NOT NULL,
+                quantity            INTEGER DEFAULT 0,
+                months              INTEGER DEFAULT 0,
+                cost_price          REAL DEFAULT 0,
+                sell_price          REAL NOT NULL,
+                provider_status     TEXT,
+                status              TEXT DEFAULT 'pending',
+                raw_response        TEXT,
+                error_message       TEXT,
+                created_at          REAL DEFAULT (unixepoch()),
+                updated_at          REAL DEFAULT (unixepoch()),
+                completed_at        REAL,
+                refunded_at         REAL,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_fzr_orders_user ON fzr_orders(user_id, created_at);
+            CREATE INDEX IF NOT EXISTS idx_fzr_orders_status ON fzr_orders(status);
+            CREATE INDEX IF NOT EXISTS idx_fzr_orders_provider ON fzr_orders(provider_order_id);
+
             -- ═══════════════════════════════════════
             --   SOPORTE Y CHATS UNIFICADOS
             -- ═══════════════════════════════════════
@@ -535,6 +622,35 @@ async def init_db():
                 FOREIGN KEY (user_id) REFERENCES users(user_id)
             );
             CREATE INDEX IF NOT EXISTS idx_room_reads_room ON chat_room_reads(room_id);
+
+            -- ═══════════════════════════════════════
+            --   ASISTENTE IA / SOPORTE HÍBRIDO
+            -- ═══════════════════════════════════════
+            CREATE TABLE IF NOT EXISTS ai_chat_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                status TEXT DEFAULT 'active',
+                handoff_ticket_id INTEGER,
+                handoff_room_id INTEGER,
+                last_intent TEXT,
+                created_at REAL DEFAULT (unixepoch()),
+                updated_at REAL DEFAULT (unixepoch()),
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_ai_chat_sessions_user ON ai_chat_sessions(user_id, updated_at);
+
+            CREATE TABLE IF NOT EXISTS ai_chat_messages (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                session_id INTEGER NOT NULL,
+                user_id INTEGER NOT NULL,
+                sender_role TEXT NOT NULL,
+                message_text TEXT NOT NULL,
+                metadata TEXT,
+                created_at REAL DEFAULT (unixepoch()),
+                FOREIGN KEY (session_id) REFERENCES ai_chat_sessions(id) ON DELETE CASCADE,
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_ai_chat_messages_session ON ai_chat_messages(session_id, created_at);
         """)
         await db.commit()
 
@@ -995,6 +1111,24 @@ async def get_order_by_buffpin_id(buffpin_order_id: str) -> dict | None:
             return dict(r) if r else None
 
 
+
+
+async def ensure_reviews_schema():
+    async with aiosqlite.connect(DB) as db:
+        async with db.execute("PRAGMA table_info(order_reviews)") as c:
+            cols = {row[1] for row in await c.fetchall()}
+        required = {
+            "product_id": "INTEGER",
+            "manual_product_id": "INTEGER",
+            "source": "TEXT DEFAULT 'order'",
+            "verified_label": "TEXT DEFAULT ''",
+        }
+        for col, definition in required.items():
+            if col not in cols:
+                await db.execute(f"ALTER TABLE order_reviews ADD COLUMN {col} {definition}")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_reviews_product ON order_reviews(product_id, manual_product_id)")
+        await db.commit()
+
 async def get_review(order_type: str, order_id: str, user_id: int) -> dict | None:
     async with aiosqlite.connect(DB) as db:
         db.row_factory = aiosqlite.Row
@@ -1007,15 +1141,42 @@ async def get_review(order_type: str, order_id: str, user_id: int) -> dict | Non
 
 
 async def add_order_review(order_type: str, order_id: str, user_id: int, rating: int, comment: str = "") -> int:
+    await ensure_reviews_schema()
     async with aiosqlite.connect(DB) as db:
         cur = await db.execute("""
-            INSERT INTO order_reviews (order_type, order_id, user_id, rating, comment)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO order_reviews (order_type, order_id, user_id, rating, comment, source)
+            VALUES (?, ?, ?, ?, ?, 'order')
             ON CONFLICT(order_type, order_id, user_id) DO UPDATE SET
                 rating=excluded.rating,
                 comment=excluded.comment,
+                source='order',
                 created_at=excluded.created_at
         """, (order_type, str(order_id), user_id, int(rating), comment or ""))
+        await db.commit()
+        return cur.lastrowid
+
+
+async def add_legacy_review(user_id: int, rating: int, comment: str = "", product_id: int | None = None, manual_product_id: int | None = None) -> int:
+    await ensure_reviews_schema()
+    product_id = int(product_id or 0) or None
+    manual_product_id = int(manual_product_id or 0) or None
+    if not product_id and not manual_product_id:
+        raise ValueError("product_id or manual_product_id required")
+    order_type = "legacy_manual" if manual_product_id else "legacy_auto"
+    order_id = f"legacy:{manual_product_id or product_id}"
+    async with aiosqlite.connect(DB) as db:
+        cur = await db.execute("""
+            INSERT INTO order_reviews (order_type, order_id, user_id, rating, comment, product_id, manual_product_id, source, verified_label)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'legacy', 'Cliente verificado por Francho Shop')
+            ON CONFLICT(order_type, order_id, user_id) DO UPDATE SET
+                rating=excluded.rating,
+                comment=excluded.comment,
+                product_id=excluded.product_id,
+                manual_product_id=excluded.manual_product_id,
+                source='legacy',
+                verified_label='Cliente verificado por Francho Shop',
+                created_at=excluded.created_at
+        """, (order_type, order_id, int(user_id), int(rating), comment or "", product_id, manual_product_id))
         await db.commit()
         return cur.lastrowid
 
@@ -1036,23 +1197,25 @@ async def get_recent_reviews(limit: int = 100) -> list[dict]:
 
 
 async def get_public_reviews(product_id: int = None, manual_product_id: int = None, product_ids: list[int] = None, limit: int = 10) -> dict:
+    await ensure_reviews_schema()
     async with aiosqlite.connect(DB) as db:
         db.row_factory = aiosqlite.Row
-        where = []
+        clauses = []
         params = []
         if product_ids:
             clean_ids = [int(pid) for pid in product_ids if int(pid or 0) > 0]
             if clean_ids:
                 placeholders = ",".join("?" for _ in clean_ids)
-                where.append(f"r.order_type='auto' AND o.product_id IN ({placeholders})")
+                clauses.append(f"((r.order_type='auto' AND o.product_id IN ({placeholders})) OR (r.order_type='legacy_auto' AND r.product_id IN ({placeholders})))")
+                params.extend(clean_ids)
                 params.extend(clean_ids)
         elif product_id is not None:
-            where.append("r.order_type='auto' AND o.product_id=?")
-            params.append(product_id)
+            clauses.append("((r.order_type='auto' AND o.product_id=?) OR (r.order_type='legacy_auto' AND r.product_id=?))")
+            params.extend([int(product_id), int(product_id)])
         if manual_product_id is not None:
-            where.append("r.order_type='manual' AND mo.product_id=?")
-            params.append(manual_product_id)
-        where_sql = "WHERE " + " AND ".join(where) if where else ""
+            clauses.append("((r.order_type='manual' AND mo.product_id=?) OR (r.order_type='legacy_manual' AND r.manual_product_id=?))")
+            params.extend([int(manual_product_id), int(manual_product_id)])
+        where_sql = "WHERE " + " OR ".join(f"({c})" for c in clauses) if clauses else ""
         async with db.execute(f"""
             SELECT COUNT(*) as count, COALESCE(AVG(r.rating),0) as avg_rating
             FROM order_reviews r
@@ -1063,13 +1226,15 @@ async def get_public_reviews(product_id: int = None, manual_product_id: int = No
             stats = dict(await c.fetchone())
         async with db.execute(f"""
             SELECT r.id, r.order_type, r.order_id, r.rating, r.comment, r.created_at,
+                   r.source, r.verified_label,
                    u.first_name, u.username,
-                   COALESCE(o.product_name, mp.name) as product_name
+                   COALESCE(o.product_name, mp.name, mp_legacy.name) as product_name
             FROM order_reviews r
             LEFT JOIN users u ON u.user_id = r.user_id
             LEFT JOIN orders o ON r.order_type='auto' AND r.order_id=o.merchant_order_id
             LEFT JOIN manual_orders mo ON r.order_type='manual' AND r.order_id=CAST(mo.id AS TEXT)
             LEFT JOIN manual_products mp ON mo.product_id=mp.id
+            LEFT JOIN manual_products mp_legacy ON r.manual_product_id=mp_legacy.id
             {where_sql}
             ORDER BY r.created_at DESC
             LIMIT ?
@@ -1087,6 +1252,8 @@ async def get_public_reviews(product_id: int = None, manual_product_id: int = No
             "customer_name": name,
             "product_name": row.get("product_name") or "Producto",
             "order_type": row.get("order_type"),
+            "source": row.get("source") or "order",
+            "verified_label": row.get("verified_label") or ("Compra verificada" if (row.get("source") or "order") == "order" else "Cliente verificado por Francho Shop"),
         })
     return {
         "count": int(stats.get("count") or 0),
@@ -1810,6 +1977,67 @@ async def init_manual_products():
                 FOREIGN KEY (order_id) REFERENCES manual_orders(id)
             );
             CREATE INDEX IF NOT EXISTS idx_delivery_events_order ON delivery_events(order_id, created_at);
+
+            CREATE TABLE IF NOT EXISTS referral_campaigns (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                product_id          INTEGER NOT NULL UNIQUE,
+                seller_id           INTEGER,
+                reward_amount_usdt  REAL NOT NULL DEFAULT 0,
+                payer_type          TEXT NOT NULL DEFAULT 'platform',
+                status              TEXT NOT NULL DEFAULT 'disabled',
+                min_order_amount_usdt REAL DEFAULT 0,
+                created_at          REAL DEFAULT (unixepoch()),
+                updated_at          REAL DEFAULT (unixepoch()),
+                FOREIGN KEY (product_id) REFERENCES manual_products(id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_referral_campaigns_product ON referral_campaigns(product_id);
+            CREATE INDEX IF NOT EXISTS idx_referral_campaigns_seller ON referral_campaigns(seller_id, status);
+
+            CREATE TABLE IF NOT EXISTS referral_links (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id         INTEGER NOT NULL,
+                product_id      INTEGER NOT NULL,
+                campaign_id     INTEGER NOT NULL,
+                referral_code   TEXT NOT NULL UNIQUE,
+                created_at      REAL DEFAULT (unixepoch()),
+                UNIQUE(user_id, product_id, campaign_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_referral_links_user_product ON referral_links(user_id, product_id);
+
+            CREATE TABLE IF NOT EXISTS referral_attributions (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                referral_code       TEXT NOT NULL,
+                referrer_user_id    INTEGER NOT NULL,
+                visitor_user_id     INTEGER,
+                product_id          INTEGER NOT NULL,
+                campaign_id         INTEGER NOT NULL,
+                clicked_at          REAL DEFAULT (unixepoch()),
+                expires_at          REAL,
+                ip_hash             TEXT,
+                user_agent_hash     TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_referral_attr_code ON referral_attributions(referral_code);
+            CREATE INDEX IF NOT EXISTS idx_referral_attr_visitor ON referral_attributions(visitor_user_id, product_id, clicked_at);
+
+            CREATE TABLE IF NOT EXISTS referral_commissions (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                order_id            INTEGER NOT NULL UNIQUE,
+                product_id          INTEGER NOT NULL,
+                campaign_id         INTEGER NOT NULL,
+                referrer_user_id    INTEGER NOT NULL,
+                buyer_user_id       INTEGER NOT NULL,
+                seller_id           INTEGER,
+                reward_amount_usdt  REAL NOT NULL,
+                payer_type          TEXT NOT NULL,
+                status              TEXT NOT NULL DEFAULT 'pending',
+                created_at          REAL DEFAULT (unixepoch()),
+                approved_at         REAL,
+                paid_at             REAL,
+                canceled_reason     TEXT
+            );
+            CREATE INDEX IF NOT EXISTS idx_referral_comm_referrer ON referral_commissions(referrer_user_id, status);
+            CREATE INDEX IF NOT EXISTS idx_referral_comm_seller ON referral_commissions(seller_id, status);
+            CREATE INDEX IF NOT EXISTS idx_referral_comm_campaign ON referral_commissions(campaign_id, status);
         """)
         async with db.execute("PRAGMA table_info(manual_orders)") as c:
             order_cols = {r[1] for r in await c.fetchall()}
@@ -2220,6 +2448,356 @@ async def complete_manual_order(order_id: int, delivery_data: str, admin_note: s
         """, (delivery_data, admin_note, completed_by, __import__("time").time(), order_id))
         await db.commit()
     await add_delivery_event(order_id, event_type, completed_by or 0, delivery_data, admin_note)
+
+
+
+async def get_active_referral_campaign(product_id: int) -> dict | None:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT * FROM referral_campaigns
+            WHERE product_id=? AND status='active' AND reward_amount_usdt > 0
+            LIMIT 1
+        """, (product_id,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+
+async def get_referral_campaign(product_id: int) -> dict | None:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM referral_campaigns WHERE product_id=?", (product_id,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+
+async def list_referral_campaigns(seller_id: int | None = None) -> list[dict]:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        q = """
+            SELECT rc.*, mp.name AS product_name, mp.icon_url, mp.category,
+                   u.username AS seller_username, u.first_name AS seller_name
+            FROM referral_campaigns rc
+            JOIN manual_products mp ON mp.id = rc.product_id
+            LEFT JOIN users u ON u.user_id = rc.seller_id
+            WHERE 1=1
+        """
+        params = []
+        if seller_id is not None:
+            q += " AND rc.seller_id=?"
+            params.append(seller_id)
+        q += " ORDER BY rc.updated_at DESC, rc.id DESC"
+        async with db.execute(q, params) as c:
+            return [dict(r) for r in await c.fetchall()]
+
+
+async def upsert_referral_campaign(product_id: int, seller_id: int | None, reward_amount: float, payer_type: str, status: str, min_order_amount: float = 0.0) -> dict:
+    now = time.time()
+    reward = round(max(0.0, float(reward_amount or 0)), 8)
+    payer = payer_type if payer_type in {"platform", "seller"} else "platform"
+    clean_status = status if status in {"active", "paused", "disabled"} else "disabled"
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        await db.execute("""
+            INSERT INTO referral_campaigns
+            (product_id, seller_id, reward_amount_usdt, payer_type, status, min_order_amount_usdt, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(product_id) DO UPDATE SET
+                seller_id=excluded.seller_id,
+                reward_amount_usdt=excluded.reward_amount_usdt,
+                payer_type=excluded.payer_type,
+                status=excluded.status,
+                min_order_amount_usdt=excluded.min_order_amount_usdt,
+                updated_at=excluded.updated_at
+        """, (product_id, seller_id, reward, payer, clean_status, max(0.0, float(min_order_amount or 0)), now, now))
+        await db.commit()
+        async with db.execute("SELECT * FROM referral_campaigns WHERE product_id=?", (product_id,)) as c:
+            row = await c.fetchone()
+            return dict(row)
+
+
+def _referral_code(user_id: int, product_id: int, campaign_id: int) -> str:
+    raw = f"rp_{int(user_id):x}_{int(product_id):x}_{int(campaign_id):x}_{uuid.uuid4().hex[:8]}"
+    return raw[:64]
+
+
+async def get_or_create_referral_link(user_id: int, product_id: int, campaign_id: int) -> dict:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT * FROM referral_links
+            WHERE user_id=? AND product_id=? AND campaign_id=?
+            LIMIT 1
+        """, (user_id, product_id, campaign_id)) as c:
+            row = await c.fetchone()
+            if row:
+                return dict(row)
+        for _ in range(5):
+            code = _referral_code(user_id, product_id, campaign_id)
+            try:
+                cur = await db.execute("""
+                    INSERT INTO referral_links (user_id, product_id, campaign_id, referral_code)
+                    VALUES (?, ?, ?, ?)
+                """, (user_id, product_id, campaign_id, code))
+                await db.commit()
+                async with db.execute("SELECT * FROM referral_links WHERE id=?", (cur.lastrowid,)) as c:
+                    return dict(await c.fetchone())
+            except aiosqlite.IntegrityError:
+                continue
+        raise RuntimeError("No se pudo generar código de referido")
+
+
+async def get_referral_link_by_code(referral_code: str) -> dict | None:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT rl.*, rc.status AS campaign_status, rc.reward_amount_usdt, rc.payer_type, rc.seller_id, rc.min_order_amount_usdt
+            FROM referral_links rl
+            JOIN referral_campaigns rc ON rc.id = rl.campaign_id
+            WHERE rl.referral_code=?
+            LIMIT 1
+        """, (referral_code,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+
+async def create_referral_attribution(referral_code: str, visitor_user_id: int | None = None, expires_at: float | None = None, ip_hash: str = "", user_agent_hash: str = "") -> dict | None:
+    link = await get_referral_link_by_code(referral_code)
+    if not link or link.get("campaign_status") != "active":
+        return None
+    referrer = int(link["user_id"])
+    visitor = int(visitor_user_id) if visitor_user_id else None
+    if visitor and visitor == referrer:
+        return None
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute("""
+            INSERT INTO referral_attributions
+            (referral_code, referrer_user_id, visitor_user_id, product_id, campaign_id, clicked_at, expires_at, ip_hash, user_agent_hash)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (referral_code, referrer, visitor, int(link["product_id"]), int(link["campaign_id"]), time.time(), expires_at, ip_hash, user_agent_hash))
+        await db.commit()
+        async with db.execute("SELECT * FROM referral_attributions WHERE id=?", (cur.lastrowid,)) as c:
+            return dict(await c.fetchone())
+
+
+async def create_pending_referral_commission(order_id: int, product_id: int, buyer_user_id: int, referral_code: str | None, order_amount: float) -> dict | None:
+    code = (referral_code or "").strip()
+    if not code:
+        return None
+    link = await get_referral_link_by_code(code)
+    if not link or link.get("campaign_status") != "active":
+        return None
+    if int(link.get("product_id") or 0) != int(product_id):
+        return None
+    referrer_id = int(link.get("user_id") or 0)
+    buyer_id = int(buyer_user_id or 0)
+    if referrer_id <= 0 or buyer_id <= 0 or referrer_id == buyer_id:
+        return None
+    reward = round(float(link.get("reward_amount_usdt") or 0), 8)
+    if reward <= 0:
+        return None
+    min_order = float(link.get("min_order_amount_usdt") or 0)
+    if min_order > 0 and float(order_amount or 0) + 1e-9 < min_order:
+        return None
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        try:
+            cur = await db.execute("""
+                INSERT INTO referral_commissions
+                (order_id, product_id, campaign_id, referrer_user_id, buyer_user_id, seller_id, reward_amount_usdt, payer_type, status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?)
+            """, (order_id, product_id, int(link["campaign_id"]), referrer_id, buyer_id, link.get("seller_id"), reward, link.get("payer_type") or "platform", time.time()))
+            await db.commit()
+        except aiosqlite.IntegrityError:
+            return None
+        async with db.execute("SELECT * FROM referral_commissions WHERE id=?", (cur.lastrowid,)) as c:
+            return dict(await c.fetchone())
+
+
+async def debit_seller_referral_reward(seller_id: int, order_id: int, commission_id: int, amount: float) -> bool:
+    amount = round(max(0.0, float(amount or 0)), 8)
+    if amount <= 0 or int(seller_id or 0) <= 0:
+        return False
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        await db.execute("BEGIN IMMEDIATE")
+        await db.execute("""
+            INSERT INTO seller_wallets (user_id, currency, network, updated_at)
+            VALUES (?, 'USDT', 'BEP20', ?)
+            ON CONFLICT(user_id) DO NOTHING
+        """, (seller_id, now))
+        async with db.execute("SELECT available_balance FROM seller_wallets WHERE user_id=?", (seller_id,)) as c:
+            wallet = await c.fetchone()
+        available = float(wallet["available_balance"] or 0) if wallet else 0.0
+        if available + 1e-9 < amount:
+            await db.rollback()
+            return False
+        await db.execute("""
+            UPDATE seller_wallets
+            SET available_balance = MAX(0, available_balance - ?), updated_at=?
+            WHERE user_id=?
+        """, (amount, now, seller_id))
+        await db.execute("""
+            INSERT INTO seller_wallet_movements
+            (seller_id, order_id, movement_type, status, amount, gross_amount, platform_fee, currency, network, note, created_at, updated_at)
+            VALUES (?, ?, 'referral_reward', 'paid', ?, ?, 0, 'USDT', 'BEP20', ?, ?, ?)
+        """, (seller_id, order_id, -amount, amount, f"Recompensa compartido comisión #{commission_id}", now, now))
+        await db.commit()
+        return True
+
+
+async def pay_referral_commission(order_id: int) -> dict | None:
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM referral_commissions WHERE order_id=?", (order_id,)) as c:
+            row = await c.fetchone()
+        if not row:
+            return None
+        commission = dict(row)
+        if commission.get("status") == "paid":
+            return commission
+        if commission.get("status") not in {"pending", "approved"}:
+            return commission
+    if commission.get("payer_type") == "seller":
+        ok = await debit_seller_referral_reward(int(commission.get("seller_id") or 0), int(order_id), int(commission["id"]), float(commission.get("reward_amount_usdt") or 0))
+        if not ok:
+            async with aiosqlite.connect(DB) as db:
+                await db.execute("UPDATE referral_campaigns SET status='paused', updated_at=? WHERE id=?", (now, commission["campaign_id"]))
+                await db.commit()
+            return commission
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        await db.execute("BEGIN IMMEDIATE")
+        async with db.execute("SELECT * FROM referral_commissions WHERE id=?", (commission["id"],)) as c:
+            current = await c.fetchone()
+        if not current or current["status"] == "paid":
+            await db.rollback()
+            return dict(current) if current else None
+        if current["status"] not in ("pending", "approved"):
+            await db.rollback()
+            return dict(current)
+        amount = round(float(current["reward_amount_usdt"] or 0), 8)
+        await db.execute("UPDATE users SET balance = balance + ? WHERE user_id=?", (amount, int(current["referrer_user_id"])))
+        await db.execute("""
+            INSERT INTO balance_log (user_id, amount, type, ref_id, note)
+            VALUES (?, ?, 'referral_reward', ?, ?)
+        """, (int(current["referrer_user_id"]), amount, str(order_id), f"Recompensa por compartir producto #{current['product_id']}"))
+        await db.execute("""
+            UPDATE referral_commissions
+            SET status='paid', approved_at=COALESCE(approved_at, ?), paid_at=?
+            WHERE id=?
+        """, (now, now, int(current["id"])))
+        await db.commit()
+    return await get_referral_commission_by_order(order_id)
+
+
+async def get_referral_commission_by_order(order_id: int) -> dict | None:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM referral_commissions WHERE order_id=?", (order_id,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+
+async def cancel_referral_commission(order_id: int, reason: str = "") -> dict | None:
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM referral_commissions WHERE order_id=?", (order_id,)) as c:
+            row = await c.fetchone()
+        if not row:
+            return None
+        if row["status"] == "paid":
+            return dict(row)
+        await db.execute("""
+            UPDATE referral_commissions
+            SET status='canceled', canceled_reason=?
+            WHERE order_id=? AND status IN ('pending', 'approved')
+        """, (reason or "Pedido cancelado o reembolsado", order_id))
+        await db.commit()
+    return await get_referral_commission_by_order(order_id)
+
+
+async def reverse_referral_commission(commission_id: int, reason: str = "") -> dict | None:
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        await db.execute("BEGIN IMMEDIATE")
+        async with db.execute("SELECT * FROM referral_commissions WHERE id=?", (commission_id,)) as c:
+            row = await c.fetchone()
+        if not row:
+            await db.rollback()
+            return None
+        commission = dict(row)
+        if commission["status"] == "paid":
+            amount = round(float(commission["reward_amount_usdt"] or 0), 8)
+            await db.execute("UPDATE users SET balance = MAX(0, balance - ?) WHERE user_id=?", (amount, int(commission["referrer_user_id"])))
+            await db.execute("""
+                INSERT INTO balance_log (user_id, amount, type, ref_id, note)
+                VALUES (?, ?, 'referral_reward_reversal', ?, ?)
+            """, (int(commission["referrer_user_id"]), -amount, str(commission["order_id"]), reason or "Reversión de recompensa"))
+        await db.execute("UPDATE referral_commissions SET status='reversed', canceled_reason=? WHERE id=?", (reason or "Reversada por admin", commission_id))
+        await db.commit()
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM referral_commissions WHERE id=?", (commission_id,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+
+async def list_referral_commissions(status: str = "", referrer_user_id: int | None = None, seller_id: int | None = None, limit: int = 100) -> list[dict]:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        q = """
+            SELECT rc.*, mp.name AS product_name,
+                   ru.username AS referrer_username, ru.first_name AS referrer_name,
+                   bu.username AS buyer_username, bu.first_name AS buyer_name
+            FROM referral_commissions rc
+            JOIN manual_products mp ON mp.id = rc.product_id
+            LEFT JOIN users ru ON ru.user_id = rc.referrer_user_id
+            LEFT JOIN users bu ON bu.user_id = rc.buyer_user_id
+            WHERE 1=1
+        """
+        params = []
+        if status:
+            q += " AND rc.status=?"
+            params.append(status)
+        if referrer_user_id is not None:
+            q += " AND rc.referrer_user_id=?"
+            params.append(referrer_user_id)
+        if seller_id is not None:
+            q += " AND rc.seller_id=?"
+            params.append(seller_id)
+        q += " ORDER BY rc.created_at DESC LIMIT ?"
+        params.append(max(1, min(int(limit or 100), 500)))
+        async with db.execute(q, params) as c:
+            return [dict(r) for r in await c.fetchall()]
+
+
+async def get_user_referral_dashboard(user_id: int) -> dict:
+    links = []
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT rl.*, mp.name AS product_name, mp.icon_url, rc.reward_amount_usdt, rc.status AS campaign_status
+            FROM referral_links rl
+            JOIN manual_products mp ON mp.id = rl.product_id
+            JOIN referral_campaigns rc ON rc.id = rl.campaign_id
+            WHERE rl.user_id=?
+            ORDER BY rl.created_at DESC
+        """, (user_id,)) as c:
+            links = [dict(r) for r in await c.fetchall()]
+    commissions = await list_referral_commissions(referrer_user_id=user_id, limit=500)
+    return {
+        "links": links,
+        "commissions": commissions,
+        "pending_total": round(sum(float(c.get("reward_amount_usdt") or 0) for c in commissions if c.get("status") in {"pending", "approved"}), 2),
+        "paid_total": round(sum(float(c.get("reward_amount_usdt") or 0) for c in commissions if c.get("status") == "paid"), 2),
+        "canceled_total": round(sum(float(c.get("reward_amount_usdt") or 0) for c in commissions if c.get("status") in {"canceled", "reversed"}), 2),
+    }
 
 
 async def update_manual_order_delivery(order_id: int, delivery_data: str, admin_note: str = "", actor_id: int = 0):
@@ -3312,6 +3890,148 @@ async def set_sms_catalog_override(item_type: str, item_key: str, display_name: 
         await db.commit()
 
 
+# ══════════════════════════════════════
+#  SERVICIOS SMM
+# ══════════════════════════════════════
+
+async def upsert_smm_service(service: dict):
+    now = time.time()
+    service_id = int(service.get("service") or service.get("service_id") or 0)
+    if not service_id:
+        return
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("""
+            INSERT INTO smm_services (service_id, name, service_type, category, rate, min_qty, max_qty, refill, cancel, raw_json, synced_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(service_id) DO UPDATE SET
+                name = excluded.name,
+                service_type = excluded.service_type,
+                category = excluded.category,
+                rate = excluded.rate,
+                min_qty = excluded.min_qty,
+                max_qty = excluded.max_qty,
+                refill = excluded.refill,
+                cancel = excluded.cancel,
+                raw_json = excluded.raw_json,
+                synced_at = excluded.synced_at,
+                updated_at = excluded.updated_at
+        """, (
+            service_id,
+            str(service.get("name") or "").strip(),
+            str(service.get("type") or service.get("service_type") or "").strip(),
+            str(service.get("category") or "General").strip(),
+            float(service.get("rate") or 0),
+            int(float(service.get("min") or service.get("min_qty") or 1)),
+            int(float(service.get("max") or service.get("max_qty") or 1000)),
+            1 if service.get("refill") else 0,
+            1 if service.get("cancel") else 0,
+            json.dumps(service, ensure_ascii=False),
+            now,
+            now,
+        ))
+        await db.commit()
+
+async def list_smm_services(active_only: bool = False, category: str = None, include_hidden: bool = False) -> list[dict]:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        q = "SELECT * FROM smm_services WHERE 1=1"
+        params = []
+        if active_only:
+            q += " AND is_active=1"
+        if category:
+            q += " AND category=?"
+            params.append(category)
+        if not include_hidden:
+            q += " AND COALESCE(is_active,0) >= 0"
+        q += " ORDER BY sort_order ASC, category ASC, name ASC"
+        async with db.execute(q, params) as c:
+            return [dict(r) for r in await c.fetchall()]
+
+async def get_smm_service(service_id: int) -> dict | None:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM smm_services WHERE service_id=?", (service_id,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+async def update_smm_service_config(service_id: int, data: dict):
+    allowed = {"is_active", "display_name", "icon_url", "instructions", "custom_markup", "min_price", "sort_order"}
+    keys = [k for k in data.keys() if k in allowed]
+    if not keys:
+        return
+    parts = [f"{k}=?" for k in keys] + ["updated_at=?"]
+    vals = [data[k] for k in keys] + [time.time(), int(service_id)]
+    async with aiosqlite.connect(DB) as db:
+        await db.execute(f"UPDATE smm_services SET {', '.join(parts)} WHERE service_id=?", vals)
+        await db.commit()
+
+async def create_smm_order(user_id: int, provider_order_id: str, service_id: int, service_name: str, category: str, link: str, quantity: int, cost_price: float, sell_price: float, raw_response: str, drip_feed: bool = False, runs: int = 1, interval: int = 0, total_quantity: int = 0) -> int:
+    total_quantity = int(total_quantity or quantity)
+    async with aiosqlite.connect(DB) as db:
+        cur = await db.execute("""
+            INSERT INTO smm_orders (user_id, provider_order_id, service_id, service_name, category, link, quantity, drip_feed, runs, interval, total_quantity, cost_price, sell_price, raw_response, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+        """, (user_id, provider_order_id, service_id, service_name, category, link, quantity, 1 if drip_feed else 0, runs, interval, total_quantity, cost_price, sell_price, raw_response))
+        await db.commit()
+        return int(cur.lastrowid)
+
+async def get_smm_order(order_id: int) -> dict | None:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM smm_orders WHERE id=?", (order_id,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+async def get_user_smm_orders(user_id: int, limit: int = 50) -> list[dict]:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM smm_orders WHERE user_id=? ORDER BY created_at DESC LIMIT ?", (user_id, limit)) as c:
+            return [dict(r) for r in await c.fetchall()]
+
+async def list_smm_orders(limit: int = 100) -> list[dict]:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT o.*, u.username, u.first_name
+            FROM smm_orders o
+            LEFT JOIN users u ON u.user_id=o.user_id
+            ORDER BY o.created_at DESC
+            LIMIT ?
+        """, (limit,)) as c:
+            return [dict(r) for r in await c.fetchall()]
+
+async def update_smm_order_status(order_id: int, status: str, provider_status: str = None, start_count: str = None, remains: str = None, raw_response: str = None, error_message: str = None):
+    now = time.time()
+    completed_at = now if status == 'completed' else None
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("""
+            UPDATE smm_orders
+            SET status=?, provider_status=COALESCE(?, provider_status), start_count=COALESCE(?, start_count), remains=COALESCE(?, remains), raw_response=COALESCE(?, raw_response), error_message=COALESCE(?, error_message), completed_at=COALESCE(?, completed_at), updated_at=?
+            WHERE id=?
+        """, (status, provider_status, start_count, remains, raw_response, error_message, completed_at, now, order_id))
+        await db.commit()
+
+async def refund_smm_order(order_id: int, amount: float = None, reason: str = "Reembolso SMM") -> bool:
+    order = await get_smm_order(order_id)
+    if not order or order.get("refunded_at"):
+        return False
+    refund_amount = float(amount if amount is not None else order["sell_price"])
+    if refund_amount <= 0:
+        return False
+    now = time.time()
+    user_id = int(order["user_id"])
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("UPDATE users SET balance = balance + ? WHERE user_id=?", (refund_amount, user_id))
+        await db.execute("INSERT INTO balance_log (user_id, amount, type, ref_id, note) VALUES (?, ?, ?, ?, ?)", (user_id, refund_amount, "refund", f"smm_{order_id}", f"Reembolso SMM: {reason}"))
+        await db.execute("UPDATE smm_orders SET refunded_at=?, status='refunded', updated_at=? WHERE id=?", (now, now, order_id))
+        await db.commit()
+    try:
+        await create_notification(user_id=user_id, type="refund", title="Reembolso SMM", message=f"Se han reembolsado ${refund_amount:.2f} USDT por tu pedido SMM.")
+    except Exception:
+        pass
+    return True
+
+
 # ═════════════════════════════════════════════════════════════════════════
 #  SOPORTE Y CHATS UNIFICADOS (HELPERS)
 # ═════════════════════════════════════════════════════════════════════════
@@ -3680,4 +4400,119 @@ async def update_support_ticket_status(ticket_id: int, status: str):
         """, (status, now, ticket_id))
         await db.commit()
 
+async def get_or_create_ai_chat_session(user_id: int) -> dict:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT * FROM ai_chat_sessions
+            WHERE user_id=? AND status IN ('active', 'handoff')
+            ORDER BY updated_at DESC LIMIT 1
+        """, (user_id,)) as c:
+            row = await c.fetchone()
+            if row:
+                return dict(row)
+        now = time.time()
+        cur = await db.execute("""
+            INSERT INTO ai_chat_sessions (user_id, status, created_at, updated_at)
+            VALUES (?, 'active', ?, ?)
+        """, (user_id, now, now))
+        await db.commit()
+        async with db.execute("SELECT * FROM ai_chat_sessions WHERE id=?", (cur.lastrowid,)) as c:
+            return dict(await c.fetchone())
+
+async def get_ai_chat_session(session_id: int, user_id: int | None = None) -> dict | None:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        if user_id is None:
+            params = (session_id,)
+            query = "SELECT * FROM ai_chat_sessions WHERE id=?"
+        else:
+            params = (session_id, user_id)
+            query = "SELECT * FROM ai_chat_sessions WHERE id=? AND user_id=?"
+        async with db.execute(query, params) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+async def list_ai_chat_messages(session_id: int, limit: int = 60) -> list[dict]:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT * FROM ai_chat_messages
+            WHERE session_id=?
+            ORDER BY created_at DESC LIMIT ?
+        """, (session_id, limit)) as c:
+            rows = [dict(r) for r in await c.fetchall()]
+            return list(reversed(rows))
+
+async def add_ai_chat_message(session_id: int, user_id: int, sender_role: str, message_text: str, metadata: dict | None = None) -> dict:
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute("""
+            INSERT INTO ai_chat_messages (session_id, user_id, sender_role, message_text, metadata, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (session_id, user_id, sender_role, message_text, json.dumps(metadata or {}, ensure_ascii=False), now))
+        await db.execute("UPDATE ai_chat_sessions SET updated_at=? WHERE id=?", (now, session_id))
+        await db.commit()
+        async with db.execute("SELECT * FROM ai_chat_messages WHERE id=?", (cur.lastrowid,)) as c:
+            return dict(await c.fetchone())
+
+async def mark_ai_chat_handoff(session_id: int, ticket_id: int, room_id: int, last_intent: str = 'human_support'):
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("""
+            UPDATE ai_chat_sessions
+            SET status='handoff', handoff_ticket_id=?, handoff_room_id=?, last_intent=?, updated_at=?
+            WHERE id=?
+        """, (ticket_id, room_id, last_intent, now, session_id))
+        await db.commit()
+
+# ═════════════════════════════════════════════════════════════════════════
+#  FZR CARDS / TELEGRAM HELPERS
+# ═════════════════════════════════════════════════════════════════════════
+
+async def create_fzr_order(user_id: int, provider_order_id: str | None, product_type: str, product_name: str, target: str, quantity: int = 0, months: int = 0, cost_price: float = 0.0, sell_price: float = 0.0, raw_response: str = "", provider_status: str | None = None) -> int:
+    async with aiosqlite.connect(DB) as db:
+        cur = await db.execute("""
+            INSERT INTO fzr_orders (user_id, provider_order_id, product_type, product_name, target, quantity, months, cost_price, sell_price, raw_response, provider_status, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+        """, (user_id, provider_order_id, product_type, product_name, target, int(quantity or 0), int(months or 0), float(cost_price or 0), float(sell_price or 0), raw_response, provider_status))
+        await db.commit()
+        return int(cur.lastrowid)
+
+async def get_fzr_order(order_id: int) -> dict | None:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM fzr_orders WHERE id=?", (order_id,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+async def get_user_fzr_orders(user_id: int, limit: int = 50) -> list[dict]:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM fzr_orders WHERE user_id=? ORDER BY created_at DESC LIMIT ?", (user_id, limit)) as c:
+            return [dict(r) for r in await c.fetchall()]
+
+async def list_fzr_orders(limit: int = 100) -> list[dict]:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT o.*, u.username, u.first_name
+            FROM fzr_orders o
+            LEFT JOIN users u ON u.user_id=o.user_id
+            ORDER BY o.created_at DESC
+            LIMIT ?
+        """, (limit,)) as c:
+            return [dict(r) for r in await c.fetchall()]
+
+async def update_fzr_order_status(order_id: int, status: str, provider_status: str | None = None, raw_response: str | None = None, error_message: str | None = None):
+    now = time.time()
+    completed_at = now if status == 'completed' else None
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("""
+            UPDATE fzr_orders
+            SET status=?, provider_status=COALESCE(?, provider_status), raw_response=COALESCE(?, raw_response), error_message=COALESCE(?, error_message), completed_at=COALESCE(?, completed_at), updated_at=?
+            WHERE id=?
+        """, (status, provider_status, raw_response, error_message, completed_at, now, order_id))
+        await db.commit()
 

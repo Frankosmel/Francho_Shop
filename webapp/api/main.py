@@ -1398,9 +1398,7 @@ def clean_product_name(product: dict, game: str) -> str:
     name = clean_name(product.get("goods_name", "?"), game)
     if game == "🩸 Blood Strike":
         raw = clean_chinese(product.get("goods_name", "") or name)
-        if re.search(r"pass\s+elite\+", raw, flags=re.IGNORECASE):
-            return "Pase Elite+"
-        if re.search(r"strike\s+pass\s+premium|pass\s+premium", raw, flags=re.IGNORECASE):
+        if re.search(r"pass\s+elite\+|strike\s+pass\s+premium|pass\s+premium", raw, flags=re.IGNORECASE):
             return "Pase Premium"
         if re.search(r"pass\s+elite\b|strike\s+pass\s+elite", raw, flags=re.IGNORECASE):
             return "Pase Elite"

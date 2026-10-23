@@ -71,20 +71,30 @@ except ImportError:
 
 class SmmFollowsClient:
     def __init__(self):
-        self.default_url = "https://justanotherpanel.com/api/v2"
+        self.smmfollows_url = "https://smmfollows.com/api/v2"
+        self.smmfollows_default_key = "3329443362bd085c0d27bf94d9d8d601"
+        self.jap_url = "https://justanotherpanel.com/api/v2"
+        self.jap_default_key = "02de130d28029aedf6a1896948724276"
 
-    async def _base_url(self) -> str:
+    async def _resolve_provider(self, provider: str = "smmfollows") -> tuple[str, str]:
+        p = (provider or "smmfollows").strip().lower()
+        if p == "jap":
+            url = (await settings.get("jap_api_url", "")).strip() or self.jap_url
+            key = (await settings.get("jap_api_key", "")).strip() or self.jap_default_key
+            return url, key
+        # Default / general social media: SMMFollows
         url = (await settings.get("smm_api_url", "")).strip()
-        return url or self.default_url
+        if not url or "justanotherpanel" in url:
+            url = self.smmfollows_url
+        key = (await settings.get("smm_api_key", "")).strip()
+        if not key or key == self.jap_default_key:
+            key = (await settings.get("smmfollows_api_key", "")).strip() or self.smmfollows_default_key
+        return url, key
 
-    async def _key(self) -> str:
-        return (await settings.get("smm_api_key", "")).strip()
-
-    async def request(self, action: str, **params):
-        key = await self._key()
+    async def request(self, action: str, provider: str = "smmfollows", **params):
+        base_url, key = await self._resolve_provider(provider)
         if not key:
             raise HTTPException(400, "Configura primero la API key del proveedor externo")
-        base_url = await self._base_url()
         import aiohttp
         payload = {"key": key, "action": action, **params}
         async with aiohttp.ClientSession() as session:
@@ -98,23 +108,34 @@ class SmmFollowsClient:
                     raise HTTPException(400, str(data.get("error")))
                 return data
 
-    async def services(self):
-        return await self.request("services")
+    async def services(self, provider: str = "smmfollows"):
+        return await self.request("services", provider=provider)
 
-    async def add_order(self, service: int, link: str, quantity: int, runs: int | None = None, interval: int | None = None):
+    async def add_order(self, service: int, link: str, quantity: int, runs: int | None = None, interval: int | None = None, provider: str = "smmfollows"):
         params = {"service": service, "link": link, "quantity": quantity}
         if runs is not None and interval is not None:
             params["runs"] = runs
             params["interval"] = interval
-        return await self.request("add", **params)
+        return await self.request("add", provider=provider, **params)
 
-    async def status(self, order: str):
-        return await self.request("status", order=order)
+    async def status(self, order: str, provider: str = "smmfollows"):
+        return await self.request("status", provider=provider, order=order)
 
-    async def balance(self):
-        return await self.request("balance")
+    async def balance(self, provider: str = "smmfollows"):
+        return await self.request("balance", provider=provider)
 
 smmfollows = SmmFollowsClient()
+
+
+def resolve_smm_provider(service_id: int | None = None, category: str = "", name: str = "", provider: str | None = None) -> str:
+    if provider and provider.lower() in ("jap", "smmfollows"):
+        return provider.lower()
+    cat_lower = (category or "").lower()
+    name_lower = (name or "").lower()
+    combined = f"{cat_lower} {name_lower}"
+    if "whatsapp channel" in combined or "whatsapp" in combined or (service_id and 9278 <= int(service_id) <= 9296):
+        return "jap"
+    return "smmfollows"
 
 
 class FzrCardsClient:
@@ -6625,8 +6646,10 @@ async def streamzone_webhook_receiver(request: Request):
 
 
 class SmmSettingsUpdate(BaseModel):
-    smm_api_url: str | None = "https://justanotherpanel.com/api/v2"
+    smm_api_url: str | None = "https://smmfollows.com/api/v2"
     smm_api_key: str | None = ""
+    jap_api_url: str | None = "https://justanotherpanel.com/api/v2"
+    jap_api_key: str | None = ""
     smm_default_markup: str = "1.80"
     smm_min_price_usd: str = "0"
     smm_catalog_image_url: str = ""
@@ -7038,7 +7061,13 @@ def smm_status_to_local(status: str) -> str:
 
 async def sync_smm_order_status(order: dict) -> dict:
     try:
-        data = await smmfollows.status(str(order["provider_order_id"]))
+        provider_name = resolve_smm_provider(
+            order.get("service_id"),
+            order.get("category", ""),
+            order.get("service_name", ""),
+            order.get("provider")
+        )
+        data = await smmfollows.status(str(order["provider_order_id"]), provider=provider_name)
         local_status = smm_status_to_local(data.get("status"))
         await db.update_smm_order_status(
             int(order["id"]),
@@ -7112,8 +7141,22 @@ async def smm_order_create(req: SmmOrderCreate, user: dict = Depends(get_current
     balance = await db.get_balance(user_id)
     if balance < sell_price:
         raise HTTPException(400, f"Saldo insuficiente. Necesitas ${sell_price:.2f} USDT y tu saldo es ${balance:.2f} USDT")
+    
+    provider_name = resolve_smm_provider(
+        req.service_id,
+        service.get("category", ""),
+        service.get("name", ""),
+        service.get("provider")
+    )
     try:
-        provider = await smmfollows.add_order(req.service_id, link, quantity, runs if drip_feed else None, interval if drip_feed else None)
+        provider = await smmfollows.add_order(
+            req.service_id,
+            link,
+            quantity,
+            runs if drip_feed else None,
+            interval if drip_feed else None,
+            provider=provider_name
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -7140,6 +7183,7 @@ async def smm_order_create(req: SmmOrderCreate, user: dict = Depends(get_current
         runs=runs,
         interval=interval,
         total_quantity=total_quantity,
+        provider=provider_name,
     )
     try:
         await db.create_notification(user_id=user_id, type="order_status", title="Pedido SMM creado", message=f"Tu pedido de {public_row['name']} fue enviado y está pendiente de procesamiento.")
@@ -7164,20 +7208,28 @@ async def smm_my_orders(limit: int = 50, user: dict = Depends(get_current_user))
 async def admin_smm_settings(user: dict = Depends(get_current_user)):
     if user["id"] not in config.ADMIN_IDS:
         raise HTTPException(403, "Solo admin")
-    balance = None
+    balance_smm = None
+    balance_jap = None
     try:
-        balance = await smmfollows.balance() if await settings.get("smm_api_key", "") else None
+        balance_smm = await smmfollows.balance(provider="smmfollows")
     except Exception as e:
-        balance = {"error": str(e)}
+        balance_smm = {"error": str(e)}
+    try:
+        balance_jap = await smmfollows.balance(provider="jap")
+    except Exception as e:
+        balance_jap = {"error": str(e)}
     return {
         "ok": True,
-        "smm_api_url": await settings.get("smm_api_url", "https://justanotherpanel.com/api/v2"),
-        "smm_api_key": await settings.get("smm_api_key", ""),
+        "smm_api_url": await settings.get("smm_api_url", "https://smmfollows.com/api/v2"),
+        "smm_api_key": await settings.get("smm_api_key", "3329443362bd085c0d27bf94d9d8d601"),
+        "jap_api_url": await settings.get("jap_api_url", "https://justanotherpanel.com/api/v2"),
+        "jap_api_key": await settings.get("jap_api_key", "02de130d28029aedf6a1896948724276"),
         "smm_default_markup": await settings.get("smm_default_markup", "1.80"),
         "smm_min_price_usd": await settings.get("smm_min_price_usd", "0"),
         "smm_catalog_image_url": await settings.get("smm_catalog_image_url", "https://images.unsplash.com/photo-1611162617474-5b21e879e113?auto=format&fit=crop&w=900&q=75"),
         "smm_terms_and_conditions": await settings.get("smm_terms_and_conditions", ""),
-        "provider_balance": balance,
+        "provider_balance": balance_smm,
+        "jap_balance": balance_jap,
     }
 
 
@@ -7186,8 +7238,13 @@ async def admin_update_smm_settings(req: SmmSettingsUpdate, user: dict = Depends
     if user["id"] not in config.ADMIN_IDS:
         raise HTTPException(403, "Solo admin")
     if req.smm_api_url is not None:
-        await settings.set_value("smm_api_url", req.smm_api_url.strip() or "https://justanotherpanel.com/api/v2", user["id"])
-    await settings.set_value("smm_api_key", req.smm_api_key or "", user["id"])
+        await settings.set_value("smm_api_url", req.smm_api_url.strip() or "https://smmfollows.com/api/v2", user["id"])
+    if req.smm_api_key is not None:
+        await settings.set_value("smm_api_key", req.smm_api_key.strip(), user["id"])
+    if req.jap_api_url is not None:
+        await settings.set_value("jap_api_url", req.jap_api_url.strip() or "https://justanotherpanel.com/api/v2", user["id"])
+    if req.jap_api_key is not None:
+        await settings.set_value("jap_api_key", req.jap_api_key.strip(), user["id"])
     await settings.set_value("smm_default_markup", req.smm_default_markup or "1.80", user["id"])
     await settings.set_value("smm_min_price_usd", req.smm_min_price_usd or "0", user["id"])
     await settings.set_value("smm_catalog_image_url", req.smm_catalog_image_url or "", user["id"])
@@ -7197,15 +7254,34 @@ async def admin_update_smm_settings(req: SmmSettingsUpdate, user: dict = Depends
 
 
 @app.post("/api/admin/smm/sync")
-async def admin_smm_sync(user: dict = Depends(get_current_user)):
+async def admin_smm_sync(provider: str = Query("all"), user: dict = Depends(get_current_user)):
     if user["id"] not in config.ADMIN_IDS:
         raise HTTPException(403, "Solo admin")
-    data = await smmfollows.services()
-    if not isinstance(data, list):
-        raise HTTPException(400, "El proveedor externo no devolvió una lista de servicios")
-    await db.upsert_smm_services_bulk(data)
-    await audit_json(user["id"], "smm.services_sync", "smm_service", "all", {"count": len(data)})
-    return {"ok": True, "count": len(data), "message": f"{len(data)} servicios sincronizados"}
+    total_count = 0
+    synced_parts = []
+    if provider in ("all", "smmfollows"):
+        try:
+            smmf_data = await smmfollows.services(provider="smmfollows")
+            if isinstance(smmf_data, list):
+                await db.upsert_smm_services_bulk(smmf_data, provider="smmfollows")
+                total_count += len(smmf_data)
+                synced_parts.append(f"SMMFollows: {len(smmf_data)}")
+        except Exception as e:
+            log.warning("Error sincronizando servicios de SMMFollows: %s", e)
+    if provider in ("all", "jap"):
+        try:
+            jap_data = await smmfollows.services(provider="jap")
+            if isinstance(jap_data, list):
+                # Filter only WhatsApp services so non-WhatsApp JAP services don't overwrite SMMFollows
+                wa_services = [s for s in jap_data if "whatsapp" in (str(s.get("category", "")) + " " + str(s.get("name", ""))).lower()]
+                await db.upsert_smm_services_bulk(wa_services, provider="jap")
+                total_count += len(wa_services)
+                synced_parts.append(f"WhatsApp (JAP): {len(wa_services)}")
+        except Exception as e:
+            log.warning("Error sincronizando servicios de WhatsApp (JAP): %s", e)
+    await audit_json(user["id"], "smm.services_sync", "smm_service", provider, {"count": total_count})
+    msg = f"Sincronizados ({', '.join(synced_parts)})" if synced_parts else f"{total_count} servicios sincronizados"
+    return {"ok": True, "count": total_count, "message": msg}
 
 
 @app.get("/api/admin/smm/services")
@@ -16160,11 +16236,11 @@ def product_name_matches_amount(name: str, amount: int) -> bool:
 
 def is_catalog_price_question(msg: str) -> bool:
     n = _norm_ai_intent_text(msg)
-    return bool(re.search(r"\b(cuanto\s+(vale|cuesta)|precio|valor|a\s+cuanto)\b", n))
+    return bool(re.search(r"\b(cuanto\s+(vale|valen|cuesta|cuestan)|precio|precios|valor|valores|cotiza|cotizacion|cotizar|a\s+cuanto)\b", n))
 
 async def catalog_price_quote_answer(msg: str) -> tuple[str, bool, str]:
     query = normalize_ai_query(msg)
-    stop = {"cuanto", "cuesta", "vale", "precio", "valor", "cuanto", "de", "del", "la", "el", "un", "una", "en", "para", "quiero", "comprar"}
+    stop = {"cuanto", "cuantos", "cuesta", "cuestan", "vale", "valen", "precio", "precios", "valor", "valores", "de", "del", "la", "las", "el", "los", "un", "una", "unos", "unas", "en", "para", "quiero", "comprar"}
     tokens = [t for t in query.split() if t not in stop and not t.isdigit()]
     amounts = [int(x) for x in re.findall(r"\b\d+\b", query)]
     if not tokens and not amounts:
@@ -16197,8 +16273,8 @@ async def catalog_price_quote_answer(msg: str) -> tuple[str, bool, str]:
             log.warning("AI catalog streaming price quote failed: %s", e)
 
     # Check SMM services (seguidores, vistas, likes, WhatsApp, TikTok, etc.)
-    smm_keys = ["seguidor", "seguidores", "like", "likes", "vista", "vistas", "miembro", "miembros", "suscriptor", "suscriptores", "reaccion", "reacciones", "tiktok", "whatsapp"]
-    if any(k in query for k in smm_keys) and not any(k in query for k in ["netflix", "disney", "max", "prime", "spotify", "paramount", "crunchyroll"]):
+    smm_keys = ["seguidor", "seguidores", "like", "likes", "vista", "vistas", "miembro", "miembros", "suscriptor", "suscriptores", "reaccion", "reacciones", "canal", "canales", "tiktok", "whatsapp"]
+    if any(k in query for k in smm_keys) and not any(k in query for k in ["netflix", "disney", "max", "prime", "paramount", "crunchyroll"]):
         try:
             global_smm_markup = await settings.get_float("smm_default_markup", 1.80)
             global_smm_min = await settings.get_float("smm_min_price_usd", 0.0)
@@ -16207,12 +16283,16 @@ async def catalog_price_quote_answer(msg: str) -> tuple[str, bool, str]:
             for s in active_smm:
                 s_name = (s.get("display_name") or s.get("name") or "").lower()
                 s_cat = (s.get("category") or "").lower()
-                if any(t in s_name or t in s_cat for t in tokens if t in smm_keys):
+                combined_s = f"{s_name} {s_cat}"
+                match_count = sum(1 for t in tokens if t in combined_s)
+                if match_count > 0:
                     row_info = smm_public_service_row(s, global_smm_markup, global_smm_min)
                     rate_per_k = round(row_info["unit_price"] * 1000, 2)
-                    matches_smm.append(f"{row_info['name']}: ${rate_per_k:.2f} USDT por 1,000 (Mín: {row_info['min']}, Máx: {row_info['max']})")
+                    matches_smm.append((match_count, f"{row_info['name']}: ${rate_per_k:.2f} USDT por 1,000 (Mín: {row_info['min']}, Máx: {row_info['max']})"))
             if matches_smm:
-                return "Servicios SMM disponibles:\n" + "\n".join(f"• {m}" for m in matches_smm[:4]) + "\nPuedes ordenar pegando el enlace de tu canal o publicación en la sección SMM.", False, "smm_price_quote"
+                matches_smm.sort(key=lambda x: -x[0])
+                lines = [m[1] for m in matches_smm[:4]]
+                return "Servicios SMM disponibles:\n" + "\n".join(f"• {m}" for m in lines) + "\nPuedes ordenar pegando el enlace de tu canal o publicación en la sección SMM.", False, "smm_price_quote"
         except Exception as e:
             log.warning("AI catalog SMM price quote failed: %s", e)
 
@@ -16335,6 +16415,9 @@ def detect_sms_service(msg: str) -> str | None:
     return None
 
 def is_sms_price_question(msg: str) -> bool:
+    smm_terms = ["seguidor", "seguidores", "like", "likes", "vista", "vistas", "miembro", "miembros", "suscriptor", "suscriptores", "reaccion", "reacciones", "canal", "canales"]
+    if any(t in msg for t in smm_terms) and not any(w in msg for w in ["numero", "número", "numeros", "números", "sms"]):
+        return False
     price_words = ["cuanto vale", "cuánto vale", "cuanto cuesta", "cuánto cuesta", "precio", "valor", "a cuanto", "a cuánto"]
     number_words = ["numero", "número", "numeros", "números", "sms", "verificacion", "verificación"]
     return any(w in msg for w in price_words) and (detect_sms_service(msg) is not None or any(w in msg for w in number_words))

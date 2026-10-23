@@ -480,7 +480,7 @@ async def init_db():
 
 
             -- ═══════════════════════════════════════
-            --   SERVICIOS SMM (SMMFOLLOWS)
+            --   SERVICIOS SMM (SMMFOLLOWS & JAP DUAL)
             -- ═══════════════════════════════════════
             CREATE TABLE IF NOT EXISTS smm_services (
                 service_id          INTEGER PRIMARY KEY,
@@ -499,6 +499,7 @@ async def init_db():
                 custom_markup       REAL,
                 min_price           REAL,
                 sort_order          INTEGER DEFAULT 100,
+                provider            TEXT DEFAULT 'smmfollows',
                 raw_json            TEXT,
                 synced_at           REAL DEFAULT (unixepoch()),
                 updated_at          REAL DEFAULT (unixepoch())
@@ -527,6 +528,7 @@ async def init_db():
                 status              TEXT DEFAULT 'pending',
                 raw_response        TEXT,
                 error_message       TEXT,
+                provider            TEXT DEFAULT 'smmfollows',
                 created_at          REAL DEFAULT (unixepoch()),
                 updated_at          REAL DEFAULT (unixepoch()),
                 completed_at        REAL,
@@ -728,6 +730,18 @@ async def init_db():
             if cm_cols and col not in cm_cols:
                 await db.execute(f"ALTER TABLE chat_messages ADD COLUMN {col} {defn}")
         await db.commit()
+
+        async with db.execute("PRAGMA table_info(smm_services)") as c:
+            smm_svc_cols = {r[1] for r in await c.fetchall()}
+        if smm_svc_cols and "provider" not in smm_svc_cols:
+            await db.execute("ALTER TABLE smm_services ADD COLUMN provider TEXT DEFAULT 'smmfollows'")
+            await db.commit()
+
+        async with db.execute("PRAGMA table_info(smm_orders)") as c:
+            smm_ord_cols = {r[1] for r in await c.fetchall()}
+        if smm_ord_cols and "provider" not in smm_ord_cols:
+            await db.execute("ALTER TABLE smm_orders ADD COLUMN provider TEXT DEFAULT 'smmfollows'")
+            await db.commit()
 
     log.info("✅ DB inicializada")
 
@@ -3932,7 +3946,7 @@ async def upsert_smm_service(service: dict):
         await db.commit()
 
 
-async def upsert_smm_services_bulk(services: list[dict]):
+async def upsert_smm_services_bulk(services: list[dict], provider: str = "smmfollows"):
     if not services:
         return
     now = time.time()
@@ -3941,6 +3955,7 @@ async def upsert_smm_services_bulk(services: list[dict]):
         sid = int(s.get("service") or s.get("service_id") or 0)
         if not sid:
             continue
+        p = str(s.get("provider") or provider or "smmfollows").strip().lower()
         params.append((
             sid,
             str(s.get("name") or "").strip(),
@@ -3951,6 +3966,7 @@ async def upsert_smm_services_bulk(services: list[dict]):
             int(float(s.get("max") or s.get("max_qty") or 1000)),
             1 if s.get("refill") else 0,
             1 if s.get("cancel") else 0,
+            p,
             json.dumps(s, ensure_ascii=False),
             now,
             now,
@@ -3959,8 +3975,8 @@ async def upsert_smm_services_bulk(services: list[dict]):
         return
     async with aiosqlite.connect(DB) as db:
         await db.executemany("""
-            INSERT INTO smm_services (service_id, name, service_type, category, rate, min_qty, max_qty, refill, cancel, raw_json, synced_at, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO smm_services (service_id, name, service_type, category, rate, min_qty, max_qty, refill, cancel, provider, raw_json, synced_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(service_id) DO UPDATE SET
                 name = excluded.name,
                 service_type = excluded.service_type,
@@ -3970,6 +3986,7 @@ async def upsert_smm_services_bulk(services: list[dict]):
                 max_qty = excluded.max_qty,
                 refill = excluded.refill,
                 cancel = excluded.cancel,
+                provider = excluded.provider,
                 raw_json = excluded.raw_json,
                 synced_at = excluded.synced_at,
                 updated_at = excluded.updated_at
@@ -3977,7 +3994,7 @@ async def upsert_smm_services_bulk(services: list[dict]):
         await db.commit()
 
 
-async def list_smm_services(active_only: bool = False, category: str = None, include_hidden: bool = False) -> list[dict]:
+async def list_smm_services(active_only: bool = False, category: str = None, provider: str = None, include_hidden: bool = False) -> list[dict]:
     async with aiosqlite.connect(DB) as db:
         db.row_factory = aiosqlite.Row
         q = "SELECT * FROM smm_services WHERE 1=1"
@@ -3987,6 +4004,9 @@ async def list_smm_services(active_only: bool = False, category: str = None, inc
         if category:
             q += " AND category=?"
             params.append(category)
+        if provider:
+            q += " AND provider=?"
+            params.append(provider)
         if not include_hidden:
             q += " AND COALESCE(is_active,0) >= 0"
         q += " ORDER BY sort_order ASC, category ASC, name ASC"
@@ -4011,13 +4031,14 @@ async def update_smm_service_config(service_id: int, data: dict):
         await db.execute(f"UPDATE smm_services SET {', '.join(parts)} WHERE service_id=?", vals)
         await db.commit()
 
-async def create_smm_order(user_id: int, provider_order_id: str, service_id: int, service_name: str, category: str, link: str, quantity: int, cost_price: float, sell_price: float, raw_response: str, drip_feed: bool = False, runs: int = 1, interval: int = 0, total_quantity: int = 0) -> int:
+async def create_smm_order(user_id: int, provider_order_id: str, service_id: int, service_name: str, category: str, link: str, quantity: int, cost_price: float, sell_price: float, raw_response: str, drip_feed: bool = False, runs: int = 1, interval: int = 0, total_quantity: int = 0, provider: str = "smmfollows") -> int:
     total_quantity = int(total_quantity or quantity)
+    provider_val = str(provider or "smmfollows").strip().lower()
     async with aiosqlite.connect(DB) as db:
         cur = await db.execute("""
-            INSERT INTO smm_orders (user_id, provider_order_id, service_id, service_name, category, link, quantity, drip_feed, runs, interval, total_quantity, cost_price, sell_price, raw_response, status)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
-        """, (user_id, provider_order_id, service_id, service_name, category, link, quantity, 1 if drip_feed else 0, runs, interval, total_quantity, cost_price, sell_price, raw_response))
+            INSERT INTO smm_orders (user_id, provider_order_id, service_id, service_name, category, link, quantity, drip_feed, runs, interval, total_quantity, cost_price, sell_price, raw_response, provider, status)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')
+        """, (user_id, provider_order_id, service_id, service_name, category, link, quantity, 1 if drip_feed else 0, runs, interval, total_quantity, cost_price, sell_price, raw_response, provider_val))
         await db.commit()
         return int(cur.lastrowid)
 

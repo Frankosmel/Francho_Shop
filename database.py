@@ -3931,6 +3931,52 @@ async def upsert_smm_service(service: dict):
         ))
         await db.commit()
 
+
+async def upsert_smm_services_bulk(services: list[dict]):
+    if not services:
+        return
+    now = time.time()
+    params = []
+    for s in services:
+        sid = int(s.get("service") or s.get("service_id") or 0)
+        if not sid:
+            continue
+        params.append((
+            sid,
+            str(s.get("name") or "").strip(),
+            str(s.get("type") or s.get("service_type") or "").strip(),
+            str(s.get("category") or "General").strip(),
+            float(s.get("rate") or 0),
+            int(float(s.get("min") or s.get("min_qty") or 1)),
+            int(float(s.get("max") or s.get("max_qty") or 1000)),
+            1 if s.get("refill") else 0,
+            1 if s.get("cancel") else 0,
+            json.dumps(s, ensure_ascii=False),
+            now,
+            now,
+        ))
+    if not params:
+        return
+    async with aiosqlite.connect(DB) as db:
+        await db.executemany("""
+            INSERT INTO smm_services (service_id, name, service_type, category, rate, min_qty, max_qty, refill, cancel, raw_json, synced_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(service_id) DO UPDATE SET
+                name = excluded.name,
+                service_type = excluded.service_type,
+                category = excluded.category,
+                rate = excluded.rate,
+                min_qty = excluded.min_qty,
+                max_qty = excluded.max_qty,
+                refill = excluded.refill,
+                cancel = excluded.cancel,
+                raw_json = excluded.raw_json,
+                synced_at = excluded.synced_at,
+                updated_at = excluded.updated_at
+        """, params)
+        await db.commit()
+
+
 async def list_smm_services(active_only: bool = False, category: str = None, include_hidden: bool = False) -> list[dict]:
     async with aiosqlite.connect(DB) as db:
         db.row_factory = aiosqlite.Row
@@ -4516,3 +4562,1911 @@ async def update_fzr_order_status(order_id: int, status: str, provider_status: s
         """, (status, provider_status, raw_response, error_message, completed_at, now, order_id))
         await db.commit()
 
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SECCIÓN RESTAURADA: STREAMING (STREAMZONE B2B)
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def get_streaming_catalog_overrides() -> list[dict]:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM streaming_catalog_overrides ORDER BY sort_order ASC, product_id ASC") as c:
+            return [dict(r) for r in await c.fetchall()]
+
+async def get_streaming_catalog_override(product_id: str) -> dict | None:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM streaming_catalog_overrides WHERE product_id = ?", (str(product_id).strip(),)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+async def set_streaming_catalog_override(
+    product_id: str,
+    custom_name: str = None,
+    custom_image_url: str = None,
+    custom_description: str = None,
+    custom_terms: str = None,
+    retail_price_usd: float = None,
+    reseller_price_usd: float = None,
+    markup_percent: float = None,
+    is_hidden: int = 0,
+    is_featured: int = 0,
+    sort_order: int = 100
+):
+    now = time.time()
+    pid = str(product_id).strip()
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("""
+            INSERT INTO streaming_catalog_overrides (
+                product_id, custom_name, custom_image_url, custom_description, custom_terms,
+                retail_price_usd, reseller_price_usd, markup_percent, is_hidden, is_featured, sort_order, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(product_id) DO UPDATE SET
+                custom_name = excluded.custom_name,
+                custom_image_url = excluded.custom_image_url,
+                custom_description = excluded.custom_description,
+                custom_terms = excluded.custom_terms,
+                retail_price_usd = excluded.retail_price_usd,
+                reseller_price_usd = excluded.reseller_price_usd,
+                markup_percent = excluded.markup_percent,
+                is_hidden = excluded.is_hidden,
+                is_featured = excluded.is_featured,
+                sort_order = excluded.sort_order,
+                updated_at = excluded.updated_at
+        """, (
+            pid, custom_name, custom_image_url, custom_description, custom_terms,
+            retail_price_usd, reseller_price_usd, markup_percent, is_hidden, is_featured, sort_order, now
+        ))
+        await db.commit()
+
+async def record_streaming_order(
+    user_id: int,
+    streamzone_order_id: str,
+    product_id: str,
+    product_name: str,
+    quantity: int = 1,
+    cost_price_cop: float = 0.0,
+    cost_price_usd: float = 0.0,
+    sell_price_usd: float = 0.0,
+    credentials_json: str = "[]",
+    status: str = "completed",
+    error_message: str = None,
+    raw_response: str = "{}"
+) -> int:
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        cursor = await db.execute("""
+            INSERT INTO streaming_orders (
+                user_id, streamzone_order_id, product_id, product_name, quantity,
+                cost_price_cop, cost_price_usd, sell_price_usd, credentials_json,
+                status, error_message, raw_response, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            user_id, streamzone_order_id, product_id, product_name, quantity,
+            cost_price_cop, cost_price_usd, sell_price_usd, credentials_json,
+            status, error_message, raw_response, now, now
+        ))
+        await db.commit()
+        return cursor.lastrowid
+
+async def get_streaming_orders(limit: int = 100, user_id: int = None) -> list[dict]:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        if user_id:
+            q = "SELECT o.*, u.username, u.first_name FROM streaming_orders o LEFT JOIN users u ON u.user_id = o.user_id WHERE o.user_id = ? ORDER BY o.created_at DESC LIMIT ?"
+            params = (user_id, limit)
+        else:
+            q = "SELECT o.*, u.username, u.first_name FROM streaming_orders o LEFT JOIN users u ON u.user_id = o.user_id ORDER BY o.created_at DESC LIMIT ?"
+            params = (limit,)
+        async with db.execute(q, params) as c:
+            return [dict(r) for r in await c.fetchall()]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SECCIÓN RESTAURADA: CATÁLOGO FZR
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _fzr_json(value, fallback):
+    try:
+        return json.dumps(value if value is not None else fallback, ensure_ascii=False, default=str)
+    except Exception:
+        return json.dumps(fallback, ensure_ascii=False)
+
+async def upsert_fzr_catalog_categories(provider_type: str, categories: list[dict]) -> int:
+    now = time.time()
+    rows = []
+    for item in categories:
+        category_id = str(item.get("category_id") or "").strip()
+        name = str(item.get("name") or category_id).strip()
+        if not category_id or not name:
+            continue
+        rows.append((
+            provider_type, category_id, name, item.get("image_url"),
+            int(bool(item.get("is_available", True))), _fzr_json(item.get("raw"), {}), now, now,
+        ))
+    if not rows:
+        return 0
+    async with aiosqlite.connect(DB) as conn:
+        await conn.executemany("""
+            INSERT INTO fzr_catalog_categories
+                (provider_type, category_id, name, image_url, is_available, raw_json, synced_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(provider_type, category_id) DO UPDATE SET
+                name=excluded.name,
+                image_url=COALESCE(excluded.image_url, fzr_catalog_categories.image_url),
+                is_available=excluded.is_available,
+                raw_json=excluded.raw_json,
+                synced_at=excluded.synced_at,
+                updated_at=excluded.updated_at
+        """, rows)
+        await conn.commit()
+    return len(rows)
+
+async def upsert_fzr_catalog_offers(provider_type: str, category_id: str, offers: list[dict]) -> int:
+    now = time.time()
+    rows = []
+    for item in offers:
+        offer_id = str(item.get("offer_id") or "").strip()
+        name = str(item.get("name") or offer_id).strip()
+        if not offer_id or not name:
+            continue
+        rows.append((
+            provider_type, category_id, offer_id, name, item.get("cost_usdt"), item.get("currency"),
+            item.get("stock"), item.get("min_quantity"), item.get("max_quantity"),
+            _fzr_json(item.get("required_fields"), []), int(bool(item.get("is_available", True))),
+            _fzr_json(item.get("raw"), {}), now, now,
+        ))
+    if not rows:
+        return 0
+    async with aiosqlite.connect(DB) as conn:
+        await conn.executemany("""
+            INSERT INTO fzr_catalog_offers
+                (provider_type, category_id, offer_id, name, cost_usdt, currency, stock, min_quantity,
+                 max_quantity, required_fields, is_available, raw_json, synced_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(provider_type, category_id, offer_id) DO UPDATE SET
+                name=excluded.name,
+                cost_usdt=excluded.cost_usdt,
+                currency=excluded.currency,
+                stock=excluded.stock,
+                min_quantity=excluded.min_quantity,
+                max_quantity=excluded.max_quantity,
+                required_fields=excluded.required_fields,
+                is_available=excluded.is_available,
+                raw_json=excluded.raw_json,
+                synced_at=excluded.synced_at,
+                updated_at=excluded.updated_at
+        """, rows)
+        await conn.commit()
+    return len(rows)
+
+async def list_fzr_catalog_categories(provider_type: str | None = None) -> list[dict]:
+    async with aiosqlite.connect(DB) as conn:
+        conn.row_factory = aiosqlite.Row
+        sql = """
+            SELECT c.*, m.game_name, m.region_key, m.display_name, m.icon_url AS mapping_icon_url,
+                   m.description, m.instructions, m.retail_markup, m.reseller_markup,
+                   COALESCE(m.is_active, 0) AS mapping_active
+            FROM fzr_catalog_categories c
+            LEFT JOIN fzr_catalog_mappings m
+              ON m.provider_type=c.provider_type AND m.category_id=c.category_id
+        """
+        params = []
+        if provider_type:
+            sql += " WHERE c.provider_type=?"
+            params.append(provider_type)
+        sql += " ORDER BY c.name COLLATE NOCASE"
+        async with conn.execute(sql, params) as cur:
+            return [dict(row) for row in await cur.fetchall()]
+
+async def update_fzr_catalog_category_image(provider_type: str, category_id: str, image_url: str) -> None:
+    async with aiosqlite.connect(DB) as conn:
+        await conn.execute("UPDATE fzr_catalog_categories SET image_url=?, updated_at=? WHERE provider_type=? AND category_id=?", (image_url, time.time(), provider_type, category_id))
+        await conn.commit()
+
+async def update_fzr_catalog_category_available(provider_type: str, category_id: str, is_available: bool) -> None:
+    async with aiosqlite.connect(DB) as conn:
+        await conn.execute("UPDATE fzr_catalog_categories SET is_available=?, updated_at=? WHERE provider_type=? AND category_id=?", (1 if is_available else 0, time.time(), provider_type, category_id))
+        await conn.commit()
+
+async def get_fzr_catalog_category(provider_type: str, category_id: str) -> dict | None:
+    async with aiosqlite.connect(DB) as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute("""
+            SELECT c.*, m.game_name, m.region_key, m.display_name, m.icon_url AS mapping_icon_url,
+                   m.description, m.instructions, m.retail_markup, m.reseller_markup,
+                   COALESCE(m.is_active, 0) AS mapping_active
+            FROM fzr_catalog_categories c
+            LEFT JOIN fzr_catalog_mappings m
+              ON m.provider_type=c.provider_type AND m.category_id=c.category_id
+            WHERE c.provider_type=? AND c.category_id=?
+        """, (provider_type, category_id)) as cur:
+            row = await cur.fetchone()
+            return dict(row) if row else None
+
+async def list_fzr_catalog_offers(provider_type: str, category_id: str) -> list[dict]:
+    async with aiosqlite.connect(DB) as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute("""
+            SELECT * FROM fzr_catalog_offers
+            WHERE provider_type=? AND category_id=?
+            ORDER BY name COLLATE NOCASE
+        """, (provider_type, category_id)) as cur:
+            return [dict(row) for row in await cur.fetchall()]
+
+async def upsert_fzr_catalog_mapping(provider_type: str, category_id: str, values: dict, approved_by: int) -> dict:
+    now = time.time()
+    async with aiosqlite.connect(DB) as conn:
+        await conn.execute("""
+            INSERT INTO fzr_catalog_mappings
+                (provider_type, category_id, game_name, region_key, display_name, icon_url, description,
+                 instructions, retail_markup, reseller_markup, is_active, approved_at, approved_by, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(provider_type, category_id) DO UPDATE SET
+                game_name=excluded.game_name,
+                region_key=excluded.region_key,
+                display_name=excluded.display_name,
+                icon_url=excluded.icon_url,
+                description=excluded.description,
+                instructions=excluded.instructions,
+                retail_markup=excluded.retail_markup,
+                reseller_markup=excluded.reseller_markup,
+                is_active=excluded.is_active,
+                approved_at=excluded.approved_at,
+                approved_by=excluded.approved_by,
+                updated_at=excluded.updated_at
+        """, (
+            provider_type, category_id, values["game_name"], values.get("region_key") or "__standard__",
+            values.get("display_name"), values.get("icon_url"), values.get("description"), values.get("instructions"),
+            values.get("retail_markup"), values.get("reseller_markup"), int(bool(values.get("is_active"))),
+            now if values.get("is_active") else None, approved_by, now, now,
+        ))
+        await conn.commit()
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute("SELECT * FROM fzr_catalog_mappings WHERE provider_type=? AND category_id=?", (provider_type, category_id)) as cur:
+            return dict(await cur.fetchone())
+
+async def refund_fzr_order(order_id: int, reason: str = "Cancelada / Reembolsada por el proveedor") -> bool:
+    order = await get_fzr_order(order_id)
+    if not order or str(order.get("status") or "").lower() in {"refunded", "cancelled", "canceled"}:
+        return False
+    user_id = order["user_id"]
+    sell_price = float(order.get("sell_price") or 0.0)
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        if sell_price > 0:
+            await db.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (sell_price, user_id))
+            await db.execute("""
+                INSERT INTO balance_log (user_id, amount, type, ref_id, note)
+                VALUES (?, ?, 'refund', ?, ?)
+            """, (user_id, sell_price, f"fzr_{order_id}", f"Reembolso FZR: {reason}"))
+        await db.execute("UPDATE fzr_orders SET status='refunded', error_message=?, updated_at=? WHERE id=?", (reason, now, order_id))
+        await db.commit()
+    try:
+        await create_notification(user_id=user_id, type="refund", title="Reembolso de Pedido", message=f"Tu pedido #{order_id} ({order.get('product_name')}) ha sido reembolsado (${sell_price:.2f} USDT).")
+    except Exception:
+        pass
+    return True
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SECCIÓN RESTAURADA: PEDIDOS CUP & VERIFICACIÓN
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def create_cup_order(
+    *, user_id: int, user_role: str, product_id: int, product_name: str,
+    cost_price: float, public_sell_price: float, markup_pct: float,
+    recharge_config: str, payment_method: str, payment_amount: int,
+    cup_usdt_purchase_price: float, cup_sale_factor: float, cup_sale_rate: float,
+) -> str:
+    """Crea una orden por CUP sin tocar el monedero ni enviar al proveedor."""
+    mid = gen_order_id()
+    now = time.time()
+    async with aiosqlite.connect(DB) as conn:
+        await conn.execute("""
+            INSERT INTO orders (
+                merchant_order_id, user_id, user_role, product_id, product_name,
+                quantity, cost_price, sell_price, platform_fee, markup_pct,
+                recharge_config, currency, sales_channel,
+                payment_method, payment_status, payment_currency, payment_amount,
+                provider_cost_usdt_snapshot, cup_usdt_purchase_price_snapshot,
+                cup_sale_factor_snapshot, cup_sale_rate_snapshot, cup_amount_snapshot,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, 'USDT', 'direct',
+                      ?, 'awaiting_proof', 'CUP', ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            mid, user_id, user_role, product_id, product_name,
+            cost_price, public_sell_price, round(public_sell_price - cost_price, 4), markup_pct,
+            recharge_config, payment_method, int(payment_amount), cost_price,
+            cup_usdt_purchase_price, cup_sale_factor, cup_sale_rate, int(payment_amount), now, now,
+        ))
+        await conn.commit()
+    return mid
+
+async def create_fzr_cup_order(
+    *, user_id: int, user_role: str, provider_type: str, category_id: str, offer_id: str,
+    product_name: str, cost_price: float, public_sell_price: float, markup_pct: float,
+    fields: dict, quantity: int, payment_method: str, payment_amount: int,
+    cup_usdt_purchase_price: float, cup_sale_factor: float, cup_sale_rate: float,
+    items: list[dict] | None = None
+) -> str:
+    """Crea una orden CUP FZR. El proveedor se llama únicamente tras verificar el pago."""
+    mid = gen_order_id()
+    now = time.time()
+    payload = {"fields": fields, "quantity": int(quantity)}
+    if items:
+        payload["items"] = items
+    recharge_config = json.dumps(payload, ensure_ascii=False, default=str)
+    async with aiosqlite.connect(DB) as conn:
+        await conn.execute("""
+            INSERT INTO orders (
+                merchant_order_id, user_id, user_role, product_id, product_name,
+                quantity, cost_price, sell_price, platform_fee, markup_pct,
+                recharge_config, currency, sales_channel,
+                payment_method, payment_status, payment_currency, payment_amount,
+                provider_cost_usdt_snapshot, cup_usdt_purchase_price_snapshot,
+                cup_sale_factor_snapshot, cup_sale_rate_snapshot, cup_amount_snapshot,
+                provider_code, provider_type, provider_category_id, provider_offer_id,
+                created_at, updated_at
+            ) VALUES (?, ?, ?, 0, ?, ?, ?, ?, ?, ?, ?, 'USDT', 'fzr_cup',
+                      ?, 'awaiting_proof', 'CUP', ?, ?, ?, ?, ?, ?, 'fzr', ?, ?, ?, ?, ?)
+        """, (
+            mid, user_id, user_role, product_name, int(quantity), cost_price, public_sell_price,
+            round(public_sell_price - cost_price, 4), markup_pct, recharge_config,
+            payment_method, int(payment_amount), cost_price, cup_usdt_purchase_price,
+            cup_sale_factor, cup_sale_rate, int(payment_amount), provider_type, category_id,
+            offer_id, now, now,
+        ))
+        await conn.commit()
+    return mid
+
+async def create_manual_cup_order(
+    *, user_id: int, user_role: str, product_id: int, product_name: str,
+    cost_price: float, public_sell_price: float,
+    recharge_config: str, payment_method: str, payment_amount: int,
+    cup_usdt_purchase_price: float, cup_sale_factor: float, cup_sale_rate: float,
+    seller_id: int = None,
+) -> str:
+    """Crea una orden CUP para producto manual sin tocar monedero."""
+    mid = gen_order_id()
+    now = time.time()
+    async with aiosqlite.connect(DB) as conn:
+        await conn.execute("""
+            INSERT INTO orders (
+                merchant_order_id, user_id, user_role, product_id, product_name,
+                quantity, cost_price, sell_price, platform_fee, markup_pct,
+                recharge_config, currency, sales_channel,
+                payment_method, payment_status, payment_currency, payment_amount,
+                provider_cost_usdt_snapshot, cup_usdt_purchase_price_snapshot,
+                cup_sale_factor_snapshot, cup_sale_rate_snapshot, cup_amount_snapshot,
+                seller_id, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, 0, ?, 'USDT', 'manual_cup',
+                      ?, 'awaiting_proof', 'CUP', ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, (
+            mid, user_id, user_role, product_id, product_name,
+            cost_price, public_sell_price, round(public_sell_price - cost_price, 4),
+            recharge_config, payment_method, int(payment_amount), cost_price,
+            cup_usdt_purchase_price, cup_sale_factor, cup_sale_rate, int(payment_amount),
+            seller_id, now, now,
+        ))
+        await conn.commit()
+    return mid
+
+async def list_cup_orders(payment_status: str | None = None, limit: int = 100) -> list[dict]:
+    async with aiosqlite.connect(DB) as conn:
+        conn.row_factory = aiosqlite.Row
+        query = "SELECT * FROM orders WHERE payment_method IN ('cup_card_transfer', 'cup_mobile_balance')"
+        params = []
+        if payment_status:
+            query += " AND payment_status=?"
+            params.append(payment_status)
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(max(1, min(int(limit), 300)))
+        async with conn.execute(query, params) as c:
+            return [dict(row) for row in await c.fetchall()]
+
+async def claim_cup_order_verification(merchant_order_id: str, admin_id: int) -> dict | None:
+    now = time.time()
+    async with aiosqlite.connect(DB) as conn:
+        conn.row_factory = aiosqlite.Row
+        await conn.execute("BEGIN IMMEDIATE")
+        cur = await conn.execute("""
+            UPDATE orders
+            SET payment_status='verifying', cup_payment_verified_by=?, updated_at=?
+            WHERE merchant_order_id=? AND payment_status='pending_verification'
+              AND payment_method IN ('cup_card_transfer', 'cup_mobile_balance')
+        """, (admin_id, now, merchant_order_id))
+        if cur.rowcount != 1:
+            await conn.rollback()
+            return None
+        async with conn.execute("SELECT * FROM orders WHERE merchant_order_id=?", (merchant_order_id,)) as c:
+            row = await c.fetchone()
+        await conn.commit()
+        return dict(row) if row else None
+
+async def finish_cup_order_verification(merchant_order_id: str, provider_order_id: str, order_status: int, admin_id: int) -> None:
+    now = time.time()
+    async with aiosqlite.connect(DB) as conn:
+        await conn.execute("""
+            UPDATE orders
+            SET payment_status='verified', cup_payment_verified_by=?, cup_payment_verified_at=?,
+                buffpin_order_id=?, order_status=?, updated_at=?
+            WHERE merchant_order_id=? AND payment_status='verifying'
+        """, (admin_id, now, provider_order_id, order_status, now, merchant_order_id))
+        await conn.commit()
+
+async def finish_fzr_cup_order_verification(merchant_order_id: str, provider_order_id: str, provider_status: str, admin_id: int) -> None:
+    now = time.time()
+    normalized = str(provider_status or "processing").lower()
+    completed = normalized in {"completed", "complete", "delivered", "success"}
+    failed = normalized in {"failed", "rejected", "cancelled", "canceled", "refunded", "refund"}
+    order_status = 2 if completed else (4 if failed else 1)
+    async with aiosqlite.connect(DB) as conn:
+        await conn.execute("""
+            UPDATE orders
+            SET cup_payment_verified_by=?, cup_payment_verified_at=?, buffpin_order_id=?,
+                provider_status=?, order_status=?, updated_at=?
+            WHERE merchant_order_id=? AND payment_status='verifying' AND provider_code='fzr'
+        """, (admin_id, now, provider_order_id, normalized, order_status, now, merchant_order_id))
+        await conn.commit()
+
+async def mark_cup_order_provider_failed(merchant_order_id: str, error_message: str) -> None:
+    now = time.time()
+    async with aiosqlite.connect(DB) as conn:
+        await conn.execute("""
+            UPDATE orders
+            SET payment_status='provider_failed', order_status=4, error_message=?, updated_at=?
+            WHERE merchant_order_id=? AND payment_status='verifying'
+        """, (str(error_message)[:1000], now, merchant_order_id))
+        await conn.commit()
+
+async def reject_cup_order_payment(merchant_order_id: str, admin_id: int, reason: str) -> dict | None:
+    now = time.time()
+    async with aiosqlite.connect(DB) as conn:
+        conn.row_factory = aiosqlite.Row
+        cur = await conn.execute("""
+            UPDATE orders
+            SET payment_status='rejected', cup_payment_verified_by=?, cup_payment_verified_at=?,
+                cup_payment_rejection_reason=?, updated_at=?
+            WHERE merchant_order_id=? AND payment_status IN ('awaiting_proof', 'pending_verification')
+              AND payment_method IN ('cup_card_transfer', 'cup_mobile_balance')
+        """, (admin_id, now, reason.strip()[:1000], now, merchant_order_id))
+        if cur.rowcount != 1:
+            await conn.rollback()
+            return None
+        async with conn.execute("SELECT * FROM orders WHERE merchant_order_id=?", (merchant_order_id,)) as c:
+            row = await c.fetchone()
+        await conn.commit()
+        return dict(row) if row else None
+
+async def submit_cup_payment_proof(merchant_order_id: str, user_id: int, proof_url: str, reference: str = "") -> dict | None:
+    now = time.time()
+    async with aiosqlite.connect(DB) as conn:
+        conn.row_factory = aiosqlite.Row
+        cur = await conn.execute("""
+            UPDATE orders
+            SET cup_payment_proof_url=?, cup_payment_reference=?, cup_payment_submitted_at=?,
+                payment_status='pending_verification', updated_at=?
+            WHERE merchant_order_id=? AND user_id=?
+              AND payment_method IN ('cup_card_transfer', 'cup_mobile_balance')
+              AND payment_status IN ('awaiting_proof', 'pending_verification')
+        """, (proof_url, reference.strip()[:200], now, now, merchant_order_id, user_id))
+        if cur.rowcount != 1:
+            await conn.rollback()
+            return None
+        async with conn.execute("SELECT * FROM orders WHERE merchant_order_id=?", (merchant_order_id,)) as c:
+            row = await c.fetchone()
+        await conn.commit()
+        return dict(row) if row else None
+
+async def update_fzr_cup_order_provider_status(merchant_order_id: str, provider_status: str, raw_response: str = "") -> None:
+    normalized = str(provider_status or "processing").lower()
+    completed = normalized in {"completed", "complete", "delivered", "success"}
+    failed = normalized in {"failed", "rejected", "cancelled", "canceled", "refunded", "refund"}
+    order_status = 2 if completed else (4 if failed else 1)
+    async with aiosqlite.connect(DB) as conn:
+        await conn.execute("""
+            UPDATE orders
+            SET provider_status=?, order_status=?, updated_at=?
+            WHERE merchant_order_id=? AND provider_code='fzr' AND payment_status='verified'
+        """, (normalized, order_status, time.time(), merchant_order_id))
+        await conn.commit()
+
+async def _enqueue_reseller_order_event(conn, merchant_order_id: str, event_type: str):
+    try:
+        async with conn.execute("SELECT user_id FROM orders WHERE merchant_order_id=?", (merchant_order_id,)) as cur:
+            row = await cur.fetchone()
+        if not row:
+            return
+        user_id = row[0]
+        event_id = f"evt_{int(time.time()*1000)}_{merchant_order_id[:8]}"
+        await conn.execute(
+            "INSERT OR IGNORE INTO reseller_webhook_events (event_id, user_id, event_type, order_id) VALUES (?, ?, ?, ?)",
+            (event_id, user_id, event_type, merchant_order_id)
+        )
+        async with conn.execute(
+            "SELECT id, event_types FROM reseller_webhook_endpoints WHERE user_id=? AND status='active'",
+            (user_id,)
+        ) as cur:
+            endpoints = await cur.fetchall()
+        now = time.time()
+        for ep in endpoints:
+            await conn.execute(
+                "INSERT OR IGNORE INTO reseller_webhook_deliveries (event_id, endpoint_id, status, next_attempt_at) VALUES (?, ?, 'pending', ?)",
+                (event_id, ep[0], now)
+            )
+    except Exception:
+        pass
+
+async def refund_order_balance(merchant_order_id: str, user_id: int, amount: float, note: str = "Reembolso de pedido") -> bool:
+    amount = round(float(amount), 4)
+    if not merchant_order_id or amount <= 0:
+        return False
+    now = time.time()
+    async with aiosqlite.connect(DB) as conn:
+        await conn.execute("BEGIN IMMEDIATE")
+        cur = await conn.execute(
+            "UPDATE orders SET refund_status=1, updated_at=? WHERE merchant_order_id=? AND COALESCE(refund_status,0)=0",
+            (now, merchant_order_id),
+        )
+        if cur.rowcount != 1:
+            await conn.rollback()
+            return False
+        await conn.execute("UPDATE users SET balance=balance+? WHERE user_id=?", (amount, user_id))
+        await conn.execute(
+            "INSERT INTO balance_log (user_id, amount, type, ref_id, note) VALUES (?, ?, 'refund', ?, ?)",
+            (user_id, amount, merchant_order_id, note),
+        )
+        await _enqueue_reseller_order_event(conn, merchant_order_id, "order.refunded")
+        await conn.commit()
+    try:
+        await create_notification(
+            user_id=int(user_id), type="balance", title="Saldo reembolsado",
+            message=f"Se devolvieron {amount:.2f} USDT a tu saldo.", url="/pedidos",
+        )
+    except Exception as exc:
+        log.warning("Error creating refund notification: %s", exc)
+    return True
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SECCIÓN RESTAURADA: VIP, KYC & RETIROS DE USUARIOS
+# ══════════════════════════════════════════════════════════════════════════════
+
+VIP_PLANS = {
+    "vip_standard": {"id": "vip_standard", "name": "VIP Francho", "price_usd": 4.99, "badge": "⭐ VIP", "fee_discount": 0.50, "priority_support": True},
+    "vip_pro": {"id": "vip_pro", "name": "VIP Pro", "price_usd": 9.99, "badge": "👑 VIP Pro", "fee_discount": 1.00, "priority_support": True},
+}
+
+async def get_user_vip_status(user_id: int) -> dict:
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT * FROM user_vip_subscriptions
+            WHERE user_id = ? AND status = 'active' AND expires_at > ?
+            ORDER BY expires_at DESC LIMIT 1
+        """, (user_id, now)) as c:
+            row = await c.fetchone()
+            if row:
+                d = dict(row)
+                d["is_vip"] = True
+                d["days_remaining"] = max(0, int((d["expires_at"] - now) // 86400))
+                return d
+            return {"is_vip": False, "plan_id": None, "badge": None, "expires_at": None, "days_remaining": 0}
+
+async def subscribe_user_vip(user_id: int, plan_id: str, months: int = 1) -> dict:
+    if plan_id not in VIP_PLANS:
+        raise ValueError("Plan VIP inválido")
+    plan = VIP_PLANS[plan_id]
+    cost = round(plan["price_usd"] * max(1, months), 2)
+    now = time.time()
+    duration_seconds = max(1, months) * 30 * 86400
+
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT balance FROM users WHERE user_id = ?", (user_id,)) as c:
+            u = await c.fetchone()
+            if not u or float(u["balance"]) < cost:
+                raise ValueError("Saldo insuficiente en tu monedero Francho")
+
+        cur_status = await get_user_vip_status(user_id)
+        if cur_status["is_vip"]:
+            new_expires = cur_status["expires_at"] + duration_seconds
+        else:
+            new_expires = now + duration_seconds
+
+        await db.execute("UPDATE users SET balance = balance - ? WHERE user_id = ?", (cost, user_id))
+        await db.execute("""
+            INSERT INTO balance_log (user_id, amount, type, ref_id, note)
+            VALUES (?, ?, 'vip_subscription', ?, ?)
+        """, (user_id, -cost, plan_id, f"Suscripción {plan['name']} ({months} mes(es))"))
+
+        cursor = await db.execute("""
+            INSERT INTO user_vip_subscriptions (user_id, plan_id, price_paid, starts_at, expires_at, status, created_at)
+            VALUES (?, ?, ?, ?, ?, 'active', ?)
+        """, (user_id, plan_id, cost, now, new_expires, now))
+        await db.commit()
+        return {"ok": True, "subscription_id": cursor.lastrowid, "plan_id": plan_id, "expires_at": new_expires}
+
+async def get_user_kyc(user_id: int) -> dict | None:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM user_kyc WHERE user_id = ? ORDER BY id DESC LIMIT 1", (user_id,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+async def submit_user_kyc(
+    user_id: int,
+    full_name: str,
+    doc_type: str,
+    doc_number: str,
+    front_url: str,
+    back_url: str = None,
+    selfie_url: str = None
+) -> dict:
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM user_kyc WHERE user_id = ? AND status IN ('pending', 'approved')", (user_id,)) as c:
+            existing = await c.fetchone()
+            if existing:
+                if existing["status"] == "approved":
+                    raise ValueError("Tu identidad ya ha sido verificada y aprobada.")
+                raise ValueError("Ya tienes una solicitud de verificación KYC en proceso.")
+
+        cursor = await db.execute("""
+            INSERT INTO user_kyc (user_id, full_name, doc_type, doc_number, doc_front_url, doc_back_url, selfie_url, status, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+        """, (user_id, full_name.strip(), doc_type.strip(), doc_number.strip(), front_url.strip(), (back_url or "").strip(), (selfie_url or "").strip(), now, now))
+        await db.commit()
+        return {"ok": True, "kyc_id": cursor.lastrowid, "status": "pending"}
+
+async def admin_list_kyc(status: str = "pending", limit: int = 50) -> list[dict]:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        q = "SELECT k.*, u.username, u.first_name, u.email FROM user_kyc k LEFT JOIN users u ON u.user_id = k.user_id"
+        params = []
+        if status and status != "all":
+            q += " WHERE k.status = ?"
+            params.append(status)
+        q += " ORDER BY k.created_at ASC LIMIT ?"
+        params.append(limit)
+        async with db.execute(q, params) as c:
+            return [dict(r) for r in await c.fetchall()]
+
+async def admin_review_kyc(user_id: int, status: str, admin_id: int, note: str = "") -> dict:
+    if status not in ("approved", "rejected"):
+        raise ValueError("Estado de revisión inválido")
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("""
+            UPDATE user_kyc
+            SET status = ?, reviewed_by = ?, rejection_reason = ?, updated_at = ?
+            WHERE user_id = ? AND status = 'pending'
+        """, (status, admin_id, note, now, user_id))
+        await db.commit()
+    try:
+        title = "Verificación KYC Aprobada ✅" if status == "approved" else "Verificación KYC Rechazada ⚠️"
+        msg = "¡Tu identidad ha sido verificada exitosamente!" if status == "approved" else f"Tu solicitud no fue aprobada: {note}"
+        await create_notification(user_id=user_id, type="kyc", title=title, message=msg, url="/perfil")
+    except Exception:
+        pass
+    return {"ok": True, "status": status}
+
+async def create_user_wallet_withdrawal(
+    user_id: int,
+    amount: float,
+    method: str,
+    payout_details: str
+) -> dict:
+    amount = round(float(amount), 2)
+    if amount < 5.0:
+        raise ValueError("El monto mínimo de retiro es de 5.00 USDT")
+
+    now = time.time()
+    vip_status = await get_user_vip_status(user_id)
+    fee_percent = 0.0 if vip_status["is_vip"] else 0.03
+    fee_amount = round(amount * fee_percent, 2)
+    net_payout = round(amount - fee_amount, 2)
+
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT balance FROM users WHERE user_id = ?", (user_id,)) as c:
+            u = await c.fetchone()
+            if not u or float(u["balance"]) < amount:
+                raise ValueError("Saldo insuficiente en tu monedero Francho")
+
+        await db.execute("UPDATE users SET balance = balance - ? WHERE user_id = ?", (amount, user_id))
+        await db.execute("""
+            INSERT INTO balance_log (user_id, amount, type, ref_id, note)
+            VALUES (?, ?, 'wallet_withdrawal', '', ?)
+        """, (user_id, -amount, f"Retiro solicitado por {method}"))
+
+        cursor = await db.execute("""
+            INSERT INTO user_wallet_withdrawals (
+                user_id, amount, fee, net_amount, method, payout_details, status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+        """, (user_id, amount, fee_amount, net_payout, method.strip(), payout_details.strip(), now, now))
+        await db.commit()
+        return {
+            "ok": True,
+            "withdrawal_id": cursor.lastrowid,
+            "amount": amount,
+            "fee": fee_amount,
+            "net_amount": net_payout,
+            "status": "pending"
+        }
+
+async def list_user_wallet_withdrawals(user_id: int = None, limit: int = 50) -> list[dict]:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        if user_id:
+            q = "SELECT w.*, u.username, u.first_name FROM user_wallet_withdrawals w LEFT JOIN users u ON u.user_id = w.user_id WHERE w.user_id = ? ORDER BY w.created_at DESC LIMIT ?"
+            params = (user_id, limit)
+        else:
+            q = "SELECT w.*, u.username, u.first_name, u.email FROM user_wallet_withdrawals w LEFT JOIN users u ON u.user_id = w.user_id ORDER BY w.created_at DESC LIMIT ?"
+            params = (limit,)
+        async with db.execute(q, params) as c:
+            return [dict(r) for r in await c.fetchall()]
+
+async def admin_decide_user_withdrawal(
+    withdrawal_id: int,
+    action: str,
+    admin_id: int,
+    tx_id: str = "",
+    note: str = ""
+) -> dict:
+    if action not in ("approve", "reject"):
+        raise ValueError("Acción inválida")
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM user_wallet_withdrawals WHERE id = ? AND status = 'pending'", (withdrawal_id,)) as c:
+            w = await c.fetchone()
+            if not w:
+                raise ValueError("Retiro no encontrado o ya procesado")
+
+        uid = w["user_id"]
+        amt = float(w["amount"])
+
+        if action == "approve":
+            await db.execute("""
+                UPDATE user_wallet_withdrawals
+                SET status = 'completed', tx_id = ?, admin_note = ?, reviewed_by = ?, updated_at = ?
+                WHERE id = ?
+            """, (tx_id.strip(), note.strip(), admin_id, now, withdrawal_id))
+            await db.commit()
+            try:
+                await create_notification(user_id=uid, type="withdrawal", title="Retiro Completado 💸", message=f"Tu retiro de ${w['net_amount']:.2f} USDT ha sido transferido.", url="/perfil")
+            except Exception:
+                pass
+            return {"ok": True, "status": "completed"}
+        else:
+            await db.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (amt, uid))
+            await db.execute("""
+                INSERT INTO balance_log (user_id, amount, type, ref_id, note)
+                VALUES (?, ?, 'withdrawal_refund', ?, ?)
+            """, (uid, amt, str(withdrawal_id), f"Reembolso por retiro rechazado: {note}"))
+            await db.execute("""
+                UPDATE user_wallet_withdrawals
+                SET status = 'rejected', admin_note = ?, reviewed_by = ?, updated_at = ?
+                WHERE id = ?
+            """, (note.strip(), admin_id, now, withdrawal_id))
+            await db.commit()
+            try:
+                await create_notification(user_id=uid, type="withdrawal", title="Retiro Rechazado ❌", message=f"Tu solicitud de retiro fue rechazada y tu saldo reembolsado: {note}", url="/perfil")
+            except Exception:
+                pass
+            return {"ok": True, "status": "rejected"}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SECCIÓN RESTAURADA: SWAPS DE CRIPTOMONEDAS
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def create_swap_order(
+    user_id: int,
+    from_currency: str,
+    to_currency: str,
+    from_amount: float,
+    to_amount: float,
+    deposit_address: str,
+    payout_address: str,
+    rate: float
+) -> int:
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        cursor = await db.execute("""
+            INSERT INTO user_crypto_swaps (
+                user_id, from_currency, to_currency, from_amount, to_amount,
+                deposit_address, payout_address, rate, status, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+        """, (
+            user_id, from_currency.upper(), to_currency.upper(), from_amount, to_amount,
+            deposit_address, payout_address, rate, now, now
+        ))
+        await db.commit()
+        return cursor.lastrowid
+
+async def update_swap_order(swap_id: int, status: str, tx_hash: str = None, error: str = None):
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("""
+            UPDATE user_crypto_swaps
+            SET status = ?, tx_hash = COALESCE(?, tx_hash), error_message = COALESCE(?, error_message), updated_at = ?
+            WHERE id = ?
+        """, (status, tx_hash, error, now, swap_id))
+        await db.commit()
+
+async def get_swap_order(swap_id: int) -> dict | None:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM user_crypto_swaps WHERE id = ?", (swap_id,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+async def list_user_swap_orders(user_id: int, limit: int = 20) -> list[dict]:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM user_crypto_swaps WHERE user_id = ? ORDER BY created_at DESC LIMIT ?", (user_id, limit)) as c:
+            return [dict(r) for r in await c.fetchall()]
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SECCIÓN RESTAURADA: TIENDAS WEB DE REVENDEDORES (WHITE-LABEL)
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def get_web_store_by_slug(slug: str) -> dict | None:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM reseller_web_stores WHERE store_slug = ?", (slug.lower().strip(),)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+async def get_web_store_by_domain(domain: str) -> dict | None:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        clean_domain = domain.lower().strip().replace("http://", "").replace("https://", "").split("/")[0]
+        async with db.execute("SELECT * FROM reseller_web_stores WHERE custom_domain = ?", (clean_domain,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+async def get_web_store_by_user(user_id: int) -> dict | None:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM reseller_web_stores WHERE user_id = ?", (user_id,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+async def upsert_web_store(user_id: int, store_data: dict) -> dict:
+    now = time.time()
+    slug = store_data.get("store_slug", "").lower().strip()
+    name = store_data.get("store_name", "").strip()
+    tagline = store_data.get("tagline", "")
+    logo = store_data.get("logo_url", "")
+    banner = store_data.get("banner_url", "")
+    p_color = store_data.get("primary_color", "#22c55e")
+    s_color = store_data.get("secondary_color", "#10b981")
+    bg_style = store_data.get("bg_style", "dark")
+    domain = store_data.get("custom_domain", "").lower().strip() if store_data.get("custom_domain") else None
+    markup = float(store_data.get("profit_markup_percent", 5.0))
+    game_markup = float(store_data.get("game_markup_percent", markup))
+    theme_cfg = store_data.get("theme_config", "{}")
+    contact = store_data.get("contact_info", "{}")
+    status = store_data.get("status", "active")
+    plan = store_data.get("subscription_plan", "standard")
+    expires = store_data.get("subscription_expires_at", now + 30 * 86400)
+
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM reseller_web_stores WHERE user_id = ?", (user_id,)) as c:
+            existing = await c.fetchone()
+
+        if existing:
+            await db.execute("""
+                UPDATE reseller_web_stores SET
+                    store_slug = ?, store_name = ?, tagline = ?, logo_url = ?, banner_url = ?,
+                    primary_color = ?, secondary_color = ?, bg_style = ?, custom_domain = ?,
+                    profit_markup_percent = ?, game_markup_percent = ?, theme_config = ?,
+                    contact_info = ?, updated_at = ?
+                WHERE user_id = ?
+            """, (slug, name, tagline, logo, banner, p_color, s_color, bg_style, domain, markup, game_markup, theme_cfg, contact, now, user_id))
+        else:
+            await db.execute("""
+                INSERT INTO reseller_web_stores (
+                    user_id, store_slug, store_name, tagline, logo_url, banner_url,
+                    primary_color, secondary_color, bg_style, custom_domain,
+                    profit_markup_percent, game_markup_percent, theme_config, contact_info,
+                    status, subscription_plan, subscription_expires_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (user_id, slug, name, tagline, logo, banner, p_color, s_color, bg_style, domain, markup, game_markup, theme_cfg, contact, status, plan, expires, now, now))
+        await db.commit()
+
+        async with db.execute("SELECT * FROM reseller_web_stores WHERE user_id = ?", (user_id,)) as c:
+            return dict(await c.fetchone())
+
+async def record_web_store_subscription(store_id: int, user_id: int, plan: str, months: int):
+    now = time.time()
+    add_seconds = months * 30 * 86400
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("""
+            UPDATE reseller_web_stores
+            SET subscription_plan = ?,
+                subscription_expires_at = MAX(COALESCE(subscription_expires_at, ?), ?) + ?,
+                status = 'active',
+                updated_at = ?
+            WHERE id = ?
+        """, (plan, now, now, add_seconds, now, store_id))
+        await db.commit()
+
+async def list_all_web_stores(limit: int = 100) -> list[dict]:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM reseller_web_stores ORDER BY created_at DESC LIMIT ?", (limit,)) as c:
+            return [dict(r) for r in await c.fetchall()]
+
+async def update_user_balance(user_id: int, amount: float, reason: str = ""):
+    tx_type = "reseller_profit" if amount > 0 else "debit"
+    return await add_balance(user_id=int(user_id), amount=float(amount), tx_type=tx_type, note=reason)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SECCIÓN RESTAURADA: AUTH, GOOGLE & SOPORTE
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def link_google(user_id: int, google_id: str, email: str = None) -> bool:
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("UPDATE users SET google_id = ?, email = COALESCE(?, email) WHERE user_id = ?", (google_id, email, user_id))
+        await db.commit()
+    return True
+
+async def create_google_user(email: str, google_id: str, name: str = "", photo_url: str = "") -> dict:
+    now = time.time()
+    clean_email = email.lower().strip()
+    first_name = name.split()[0] if name else clean_email.split('@')[0]
+    username = clean_email.split('@')[0]
+    generated_id = int(str(uuid.uuid4().int)[:9])
+
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        await db.execute("""
+            INSERT INTO users (
+                user_id, username, first_name, email, google_id, photo_url,
+                role, balance, created_at, last_seen
+            ) VALUES (?, ?, ?, ?, ?, ?, 'user', 0.0, ?, ?)
+        """, (generated_id, username, first_name, clean_email, google_id, photo_url, now, now))
+        await db.commit()
+        async with db.execute("SELECT * FROM users WHERE user_id = ?", (generated_id,)) as c:
+            return dict(await c.fetchone())
+
+async def update_google_user_profile(user_id: int, name: str = None, photo_url: str = None):
+    now = time.time()
+    first_name = name.split()[0] if name else None
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("""
+            UPDATE users
+            SET first_name = COALESCE(?, first_name),
+                photo_url = COALESCE(?, photo_url),
+                last_seen = ?
+            WHERE user_id = ?
+        """, (first_name, photo_url, now, user_id))
+        await db.commit()
+
+async def get_user_by_username(username: str) -> dict | None:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        clean_user = username.lower().replace("@", "").strip()
+        async with db.execute("SELECT * FROM users WHERE lower(username) = ?", (clean_user,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+async def transfer_balance(sender_id: int, recipient_id: int, amount: float, note: str = "") -> dict:
+    amount = round(float(amount), 2)
+    if amount <= 0:
+        raise ValueError("El monto a transferir debe ser mayor a 0")
+    if sender_id == recipient_id:
+        raise ValueError("No puedes transferirte saldo a ti mismo")
+
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        await db.execute("BEGIN IMMEDIATE")
+
+        async with db.execute("SELECT balance, username, first_name FROM users WHERE user_id = ?", (sender_id,)) as c:
+            sender = await c.fetchone()
+            if not sender:
+                await db.rollback()
+                raise ValueError("Usuario remitente no encontrado")
+            if float(sender["balance"]) < amount:
+                await db.rollback()
+                raise ValueError("Saldo insuficiente")
+
+        async with db.execute("SELECT balance, username, first_name FROM users WHERE user_id = ?", (recipient_id,)) as c:
+            recipient = await c.fetchone()
+            if not recipient:
+                await db.rollback()
+                raise ValueError("Usuario destinatario no encontrado")
+
+        await db.execute("UPDATE users SET balance = balance - ? WHERE user_id = ?", (amount, sender_id))
+        await db.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (amount, recipient_id))
+
+        rec_name = recipient["first_name"] or recipient["username"] or f"ID {recipient_id}"
+        snd_name = sender["first_name"] or sender["username"] or f"ID {sender_id}"
+
+        await db.execute("""
+            INSERT INTO balance_log (user_id, amount, type, ref_id, note)
+            VALUES (?, ?, 'transfer_out', ?, ?)
+        """, (sender_id, -amount, str(recipient_id), f"Transferencia enviada a {rec_name}. {note}".strip()))
+
+        await db.execute("""
+            INSERT INTO balance_log (user_id, amount, type, ref_id, note)
+            VALUES (?, ?, 'transfer_in', ?, ?)
+        """, (recipient_id, amount, str(sender_id), f"Transferencia recibida de {snd_name}. {note}".strip()))
+
+        await db.commit()
+
+    try:
+        await create_notification(
+            user_id=recipient_id,
+            type="balance",
+            title="Saldo Recibido 💰",
+            message=f"Has recibido ${amount:.2f} USDT de {snd_name}.",
+            url="/perfil"
+        )
+    except Exception:
+        pass
+
+    return {
+        "ok": True,
+        "transferred": amount,
+        "sender_id": sender_id,
+        "recipient_id": recipient_id,
+        "recipient_name": rec_name
+    }
+
+async def get_or_create_user_support_room(user_id: int) -> dict:
+    """Obtiene o crea una sala de chat de soporte dedicada para el usuario (incluso sin pedidos)."""
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT * FROM chat_rooms 
+            WHERE customer_id = ? AND room_type = 'support' AND status = 'active'
+            ORDER BY id DESC LIMIT 1
+        """, (user_id,)) as c:
+            row = await c.fetchone()
+            if row:
+                return dict(row)
+                
+        now = time.time()
+        cursor = await db.execute("""
+            INSERT INTO chat_rooms (ticket_id, customer_id, seller_id, room_type, status, last_message_at, created_at)
+            VALUES (NULL, ?, NULL, 'support', 'active', ?, ?)
+        """, (user_id, now, now))
+        room_id = cursor.lastrowid
+        
+        welcome_msg = "¡Hola! Bienvenido al soporte de Francho Shop 24/7. ¿En qué podemos ayudarte hoy?"
+        await db.execute("""
+            INSERT INTO chat_messages (room_id, sender_id, sender_role, message_text, created_at)
+            VALUES (?, 0, 'admin', ?, ?)
+        """, (room_id, welcome_msg, now))
+        await db.commit()
+        
+        async with db.execute("SELECT * FROM chat_rooms WHERE id = ?", (room_id,)) as c:
+            return dict(await c.fetchone())
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SECCIÓN RESTAURADA: PAGINACIÓN DE PEDIDOS, MATCH & AUDITORÍA
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def get_user_orders_page(
+    user_id: int, limit: int, before_created_at: float | None = None, before_id: int | None = None,
+) -> list[dict]:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        query = "SELECT * FROM orders WHERE user_id=?"
+        params = [user_id]
+        if before_created_at is not None and before_id is not None:
+            query += " AND (created_at < ? OR (created_at = ? AND id < ?))"
+            params.extend([before_created_at, before_created_at, before_id])
+        query += " ORDER BY created_at DESC, id DESC LIMIT ?"
+        params.append(limit)
+        async with db.execute(query, params) as c:
+            return [dict(r) for r in await c.fetchall()]
+
+async def get_completed_orders_with_account_value(account_id: str, owner_user_id: int | None = None) -> list[dict]:
+    clean_account = str(account_id or "").strip()
+    if not clean_account:
+        return []
+    async with aiosqlite.connect(DB) as conn:
+        conn.row_factory = aiosqlite.Row
+        sql = """
+            SELECT o.*, p.goods_name, p.type, p.pay_price, p.cost_currency, p.platform_config, p.raw_json
+            FROM orders o
+            LEFT JOIN products_cache p ON p.id = o.product_id
+            WHERE o.order_status = 2 AND o.recharge_config LIKE ?
+        """
+        params = [f"%{clean_account}%"]
+        if owner_user_id:
+            sql += " AND o.user_id = ?"
+            params.append(owner_user_id)
+        sql += " ORDER BY o.id DESC LIMIT 50"
+        async with conn.execute(sql, params) as cur:
+            return [dict(r) for r in await cur.fetchall()]
+
+async def list_admin_automatic_orders(
+    *, limit: int = 100, status: str = "", query: str = "", user_id: str = "", seller_id: str = "",
+) -> list[dict]:
+    """Pedidos automáticos de la tienda: saldo USDT, CUP y FZR, con datos del comprador."""
+    safe_limit = max(1, min(int(limit or 100), 300))
+    import re
+    async with aiosqlite.connect(DB) as conn:
+        conn.row_factory = aiosqlite.Row
+        sql = """
+            SELECT o.*, u.first_name AS customer_name, u.username AS customer_username, u.email AS customer_email
+            FROM orders o LEFT JOIN users u ON u.user_id=o.user_id
+            WHERE NOT (o.payment_method IN ('cup_card_transfer','cup_mobile_balance') AND o.payment_status='awaiting_proof')
+        """
+        params: list = []
+        if user_id and str(user_id).isdigit():
+            sql += " AND o.user_id=?"; params.append(int(user_id))
+        if seller_id and str(seller_id).isdigit():
+            sql += " AND o.seller_id=?"; params.append(int(seller_id))
+        if query.strip():
+            like = f"%{query.strip()}%"
+            sql += " AND (o.merchant_order_id LIKE ? OR o.product_name LIKE ? OR CAST(o.user_id AS TEXT) LIKE ? OR u.username LIKE ? OR u.email LIKE ?)"
+            params.extend([like, like, like, like, like])
+        status_map = {"completed": 2, "processing": 1, "failed": 4, "partial": 3}
+        if status in status_map:
+            sql += " AND o.order_status=?"; params.append(status_map[status])
+        elif status == "pending":
+            sql += " AND (o.order_status=0 OR (o.payment_method IN ('cup_card_transfer','cup_mobile_balance') AND o.payment_status IN ('awaiting_proof','pending_verification','verifying')))"
+        sql += " ORDER BY o.created_at DESC LIMIT ?"; params.append(safe_limit)
+        async with conn.execute(sql, params) as cur:
+            normal = [dict(row) for row in await cur.fetchall()]
+        async with conn.execute("""
+            SELECT f.*, u.first_name AS customer_name, u.username AS customer_username, u.email AS customer_email
+            FROM fzr_orders f LEFT JOIN users u ON u.user_id=f.user_id
+            ORDER BY f.created_at DESC LIMIT ?
+        """, (safe_limit,)) as cur:
+            fzr = [dict(row) for row in await cur.fetchall()]
+
+        cat_map = {}
+        async with conn.execute("SELECT category_id, name, image_url FROM fzr_catalog_categories") as cur:
+            for r in await cur.fetchall():
+                cat_map[str(r["category_id"]).lower()] = {"name": r["name"], "image_url": r["image_url"]}
+
+        icon_map = {}
+        try:
+            async with conn.execute("SELECT game_name, icon_url, display_name FROM game_icons") as cur:
+                for r in await cur.fetchall():
+                    disp = str(r["display_name"] or r["game_name"] or "")
+                    clean = re.sub(r'[^a-zA-Z0-9]', '', disp.lower())
+                    if clean:
+                        icon_map[clean] = r["icon_url"]
+        except Exception:
+            pass
+
+    def enrich_auto_order(row: dict, is_fzr: bool = False) -> dict:
+        raw_name = str(row.get("product_name") or "").strip()
+        cat_id = str(row.get("provider_category_id") or "").lower().strip()
+        formatted_name = raw_name
+        image_url = None
+
+        if cat_id and cat_id in cat_map:
+            cinfo = cat_map[cat_id]
+            image_url = cinfo.get("image_url")
+            if "·" in raw_name:
+                suffix = raw_name.split("·", 1)[1].strip()
+                formatted_name = f"{cinfo['name']} · {suffix}"
+            elif not raw_name or raw_name.lower() == cat_id:
+                formatted_name = cinfo["name"]
+        elif "·" in raw_name:
+            prefix, suffix = [x.strip() for x in raw_name.split("·", 1)]
+            prefix_key = prefix.lower()
+            if prefix_key in cat_map:
+                cinfo = cat_map[prefix_key]
+                image_url = cinfo.get("image_url")
+                formatted_name = f"{cinfo['name']} · {suffix}"
+            else:
+                pretty_prefix = prefix.replace("_", " ").title()
+                pretty_prefix = re.sub(r'(?i)\(?latam\)?', '(LATAM)', pretty_prefix)
+                formatted_name = f"{pretty_prefix} · {suffix}"
+        elif raw_name.lower() in cat_map:
+            cinfo = cat_map[raw_name.lower()]
+            formatted_name = cinfo["name"]
+            image_url = cinfo.get("image_url")
+
+        if not image_url:
+            clean_name = re.sub(r'[^a-zA-Z0-9]', '', formatted_name.lower())
+            for k, v in icon_map.items():
+                if k in clean_name or clean_name.startswith(k):
+                    image_url = v
+                    break
+
+        created_at = float(row.get("created_at") or 0)
+        completed_at = None
+        if is_fzr:
+            comp_raw = row.get("completed_at") or (row.get("updated_at") if str(row.get("status") or "").lower() == "completed" else None)
+            if comp_raw:
+                completed_at = float(comp_raw)
+        else:
+            comp_raw = row.get("cup_payment_verified_at") or (row.get("updated_at") if int(row.get("order_status") or 0) == 2 else None)
+            if comp_raw:
+                completed_at = float(comp_raw)
+
+        duration_seconds = None
+        duration_formatted = None
+        if completed_at and created_at and completed_at >= created_at:
+            diff = completed_at - created_at
+            duration_seconds = round(diff, 1)
+            if diff < 60:
+                duration_formatted = f"{int(diff)}s"
+            elif diff < 3600:
+                m = int(diff // 60)
+                s = int(diff % 60)
+                duration_formatted = f"{m}m {s}s" if s > 0 else f"{m}m"
+            else:
+                h = int(diff // 3600)
+                m = int((diff % 3600) // 60)
+                duration_formatted = f"{h}h {m}m"
+
+        player_id = None
+        raw_target = row.get("target")
+        if raw_target:
+            try:
+                t_obj = json.loads(raw_target) if isinstance(raw_target, str) else raw_target
+                if isinstance(t_obj, dict):
+                    player_id = t_obj.get("player_id") or t_obj.get("userid") or t_obj.get("account_id") or t_obj.get("id")
+                elif isinstance(t_obj, (str, int)):
+                    player_id = str(t_obj)
+            except Exception:
+                player_id = str(raw_target)
+        if not player_id and row.get("recharge_config"):
+            try:
+                r_obj = json.loads(row["recharge_config"]) if isinstance(row["recharge_config"], str) else row["recharge_config"]
+                if isinstance(r_obj, dict):
+                    fields = r_obj.get("fields", {})
+                    player_id = fields.get("player_id") or fields.get("userid") or fields.get("id")
+            except Exception:
+                pass
+
+        row["player_id"] = str(player_id) if player_id else None
+        row["product_name"] = formatted_name
+        row["product_name_formatted"] = formatted_name
+        row["image_url"] = image_url
+        row["icon_url"] = image_url
+        row["created_at"] = created_at
+        row["completed_at"] = completed_at
+        row["duration_seconds"] = duration_seconds
+        row["duration_formatted"] = duration_formatted
+        return row
+
+    items = []
+    status_labels = {0: "pending", 1: "processing", 2: "completed", 3: "partial", 4: "failed"}
+    seen_prov_ids = set()
+    for row in normal:
+        prov_id = str(row.get("provider_order_id") or "").strip()
+        if prov_id:
+            seen_prov_ids.add(prov_id)
+        is_cup = row.get("payment_method") in {"cup_card_transfer", "cup_mobile_balance"}
+        display_status = status_labels.get(int(row.get("order_status") or 0), "pending")
+        if is_cup and str(row.get("payment_status") or "") in {"awaiting_proof", "pending_verification", "verifying", "rejected", "provider_failed"}:
+            display_status = str(row["payment_status"])
+        enriched = enrich_auto_order(row, is_fzr=False)
+        items.append({**enriched, "source": "automatic", "id": row.get("merchant_order_id"), "display_status": display_status, "is_cup": is_cup})
+    for row in fzr:
+        prov_id = str(row.get("provider_order_id") or "").strip()
+        if prov_id and prov_id in seen_prov_ids:
+            continue
+        display_status = str(row.get("status") or "pending").lower()
+        if status and status not in {"", "pending"} and display_status != status:
+            continue
+        if query.strip():
+            needle = query.strip().lower()
+            haystack = " ".join(str(row.get(k) or "") for k in ("id", "provider_order_id", "product_name", "user_id", "customer_username", "customer_email")).lower()
+            if needle not in haystack:
+                continue
+        if user_id and str(user_id).isdigit() and int(row.get("user_id") or 0) != int(user_id):
+            continue
+        if seller_id:
+            continue
+        enriched = enrich_auto_order(row, is_fzr=True)
+        items.append({**enriched, "source": "fzr", "id": f"fzr-{row.get('id')}", "display_status": display_status, "is_cup": False})
+    return sorted(items, key=lambda item: float(item.get("created_at") or 0), reverse=True)[:safe_limit]
+
+async def search_audit(query="", actor_id=None, target_type="", category="", date_from=None, date_to=None, limit=50, offset=0):
+    """Consulta paginada e inmutable del registro de auditoría."""
+    groups={
+      "accounts":("user.","profile.","seller.","account_seller.","reseller."),
+      "orders":("manual_order.","game_account.","order."),
+      "payments":("oxapay.","deposit.","seller.withdrawal"),
+      "catalog":("manual_product.","product_override.","buffpin.","smm.","fzr."),
+      "support":("manual_order.case","ai_chat.","email_campaign."),
+      "system":("buffpin.callback","oxapay.","manual_order.auto","manual_order.digital")}
+    where=["1=1"]; params=[]; clean=(query or "").strip()
+    if clean:
+      like=f"%{clean}%"; where.append("(a.action LIKE ? OR a.target_type LIKE ? OR a.target_id LIKE ? OR a.details LIKE ? OR CAST(a.admin_id AS TEXT) LIKE ? OR u.username LIKE ? OR u.first_name LIKE ? OR u.email LIKE ?)"); params.extend([like]*8)
+    if actor_id is not None: where.append("a.admin_id=?"); params.append(int(actor_id))
+    if target_type: where.append("a.target_type=?"); params.append(target_type)
+    prefixes=groups.get(category)
+    if prefixes: where.append("("+" OR ".join("a.action LIKE ?" for _ in prefixes)+")"); params.extend([x+"%" for x in prefixes])
+    if date_from is not None: where.append("a.created_at>=?"); params.append(float(date_from))
+    if date_to is not None: where.append("a.created_at<=?"); params.append(float(date_to))
+    limit=max(1,min(int(limit or 50),500)); offset=max(0,int(offset or 0)); clause=" AND ".join(where)
+    async with aiosqlite.connect(DB) as conn:
+      conn.row_factory=aiosqlite.Row
+      async with conn.execute(f"SELECT COUNT(*) FROM audit_log a LEFT JOIN users u ON u.user_id=a.admin_id WHERE {clause}",params) as c: total=int((await c.fetchone())[0] or 0)
+      async with conn.execute(f"SELECT a.*,u.username actor_username,u.first_name actor_name,u.email actor_email,u.photo_url actor_photo FROM audit_log a LEFT JOIN users u ON u.user_id=a.admin_id WHERE {clause} ORDER BY a.created_at DESC,a.id DESC LIMIT ? OFFSET ?",[*params,limit,offset]) as c: items=[dict(x) for x in await c.fetchall()]
+      async with conn.execute("SELECT a.admin_id,u.username,u.first_name,u.email,COUNT(*) event_count FROM audit_log a LEFT JOIN users u ON u.user_id=a.admin_id GROUP BY a.admin_id ORDER BY event_count DESC") as c: actors=[dict(x) for x in await c.fetchall()]
+      async with conn.execute("SELECT COUNT(*) total,SUM(CASE WHEN created_at>=unixepoch('now','start of day') THEN 1 ELSE 0 END) today,SUM(CASE WHEN admin_id=0 THEN 1 ELSE 0 END) system_events,COUNT(DISTINCT CASE WHEN admin_id<>0 THEN admin_id END) actor_count FROM audit_log") as c: stats=dict(await c.fetchone())
+      async with conn.execute("SELECT DISTINCT target_type FROM audit_log WHERE target_type IS NOT NULL AND trim(target_type)<>'' ORDER BY target_type") as c: types=[x[0] for x in await c.fetchall()]
+    return {"items":items,"total":total,"limit":limit,"offset":offset,"actors":actors,"target_types":types,"stats":stats}
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SECCIÓN RESTAURADA: CAMPAÑAS DE CORREO (EMAIL MARKETING)
+# ══════════════════════════════════════════════════════════════════════════════
+
+def _email_audience_clause(audience: str = "all") -> tuple[str, list]:
+    aud = str(audience or "all").lower()
+    if aud == "users":
+        return " AND role='user'", []
+    elif aud == "resellers":
+        return " AND role='reseller'", []
+    elif aud == "sellers":
+        return " AND (role='seller' OR role='account_seller')", []
+    return "", []
+
+async def count_email_campaign_recipients(audience: str = "all") -> int:
+    role_sql, params = _email_audience_clause(audience)
+    async with aiosqlite.connect(DB) as conn:
+        sql = """
+            SELECT COUNT(*) FROM users
+            WHERE COALESCE(is_banned, 0)=0
+              AND COALESCE(email_marketing_opt_out, 0)=0
+              AND email IS NOT NULL AND trim(email)<>'' AND instr(email, '@')>1
+        """ + role_sql
+        async with conn.execute(sql, params) as cur:
+            row = await cur.fetchone()
+            return int(row[0]) if row else 0
+
+async def create_email_campaign(admin_id: int, payload: dict) -> int:
+    now = time.time()
+    async with aiosqlite.connect(DB) as conn:
+        cur = await conn.execute("""
+            INSERT INTO email_campaigns (
+                admin_id, subject, title, body_text, image_url, button_text, button_url,
+                audience, status, recipient_count, sent_count, failed_count, skipped_count, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'draft', 0, 0, 0, 0, ?)
+        """, (
+            admin_id, payload.get("subject", ""), payload.get("title", ""), payload.get("body_text", ""),
+            payload.get("image_url", ""), payload.get("button_text", ""), payload.get("button_url", ""),
+            payload.get("audience", "all"), now
+        ))
+        await conn.commit()
+        return cur.lastrowid
+
+async def list_email_campaigns(limit: int = 50) -> list[dict]:
+    async with aiosqlite.connect(DB) as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute("SELECT * FROM email_campaigns ORDER BY id DESC LIMIT ?", (limit,)) as cur:
+            return [dict(r) for r in await cur.fetchall()]
+
+async def queue_email_campaign(campaign_id: int) -> int:
+    import secrets
+    now = time.time()
+    async with aiosqlite.connect(DB) as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute("SELECT * FROM email_campaigns WHERE id=?", (campaign_id,)) as cur:
+            campaign = await cur.fetchone()
+        if not campaign or campaign["status"] not in ("draft", "paused"):
+            raise ValueError("La campaña no está disponible para enviar")
+        role_sql, params = _email_audience_clause(campaign["audience"])
+        sql = """
+            SELECT user_id, trim(email) AS email FROM users
+            WHERE COALESCE(is_banned, 0)=0
+              AND COALESCE(email_marketing_opt_out, 0)=0
+              AND email IS NOT NULL AND trim(email)<>'' AND instr(email, '@')>1
+        """ + role_sql
+        async with conn.execute(sql, params) as cur:
+            recipients = await cur.fetchall()
+        if not recipients:
+            raise ValueError("No hay destinatarios disponibles para esta audiencia")
+        rows = [
+            (campaign_id, r["user_id"], r["email"], secrets.token_urlsafe(24), "pending", 0, None, now, None)
+            for r in recipients
+        ]
+        await conn.execute("DELETE FROM email_campaign_recipients WHERE campaign_id=? AND status='pending'", (campaign_id,))
+        await conn.executemany("""
+            INSERT INTO email_campaign_recipients (
+                campaign_id, user_id, email, unsubscribe_token, status, attempts, last_error, created_at, sent_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """, rows)
+        total = len(rows)
+        await conn.execute("""
+            UPDATE email_campaigns
+            SET status='queued', recipient_count=?, queued_at=COALESCE(queued_at, unixepoch()), completed_at=NULL
+            WHERE id=?
+        """, (total, campaign_id))
+        await conn.commit()
+        return total
+
+async def get_next_email_recipient() -> dict | None:
+    async with aiosqlite.connect(DB) as conn:
+        conn.row_factory = aiosqlite.Row
+        await conn.execute("BEGIN IMMEDIATE")
+        await conn.execute("""
+            UPDATE email_campaigns AS c
+            SET status=CASE WHEN NOT EXISTS (
+                    SELECT 1 FROM email_campaign_recipients r
+                    WHERE r.campaign_id=c.id AND r.status IN ('pending','sending')
+                ) THEN 'completed' ELSE c.status END,
+                completed_at=CASE WHEN NOT EXISTS (
+                    SELECT 1 FROM email_campaign_recipients r
+                    WHERE r.campaign_id=c.id AND r.status IN ('pending','sending')
+                ) THEN unixepoch() ELSE c.completed_at END
+            WHERE c.status IN ('queued','sending')
+        """)
+        async with conn.execute("""
+            SELECT r.*, c.subject, c.title, c.body_text, c.image_url, c.button_text, c.button_url
+            FROM email_campaign_recipients r
+            JOIN email_campaigns c ON c.id=r.campaign_id
+            JOIN users u ON u.user_id=r.user_id
+            WHERE c.status IN ('queued','sending') AND r.status='pending'
+              AND COALESCE(u.is_banned, 0)=0 AND COALESCE(u.email_marketing_opt_out, 0)=0
+            ORDER BY c.queued_at ASC, r.id ASC LIMIT 1
+        """) as cur:
+            row = await cur.fetchone()
+        if not row:
+            await conn.commit()
+            return None
+        await conn.execute("UPDATE email_campaign_recipients SET status='sending', attempts=attempts+1 WHERE id=? AND status='pending'", (row["id"],))
+        await conn.execute("UPDATE email_campaigns SET status='sending' WHERE id=? AND status='queued'", (row["campaign_id"],))
+        await conn.commit()
+        return dict(row)
+
+async def finish_email_recipient(recipient_id: int, sent: bool, error: str = ""):
+    async with aiosqlite.connect(DB) as conn:
+        status = "sent" if sent else "failed"
+        await conn.execute("""
+            UPDATE email_campaign_recipients
+            SET status=?, last_error=?, sent_at=CASE WHEN ? THEN unixepoch() ELSE sent_at END
+            WHERE id=?
+        """, (status, (error or "")[:500], 1 if sent else 0, recipient_id))
+        await conn.commit()
+
+async def refresh_email_campaign_stats(campaign_id: int):
+    async with aiosqlite.connect(DB) as conn:
+        async with conn.execute("""
+            SELECT COUNT(*),
+                   SUM(CASE WHEN status='sent' THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN status='failed' THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN status='skipped' THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN status IN ('pending','sending') THEN 1 ELSE 0 END)
+            FROM email_campaign_recipients WHERE campaign_id=?
+        """, (campaign_id,)) as cur:
+            total, sent, failed, skipped, remaining = await cur.fetchone()
+        async with conn.execute("SELECT status FROM email_campaigns WHERE id=?", (campaign_id,)) as cur:
+            current = await cur.fetchone()
+        next_status = current[0] if current else "completed"
+        completed_at = None
+        if not remaining and next_status not in {"paused", "canceled"}:
+            next_status = "completed"
+            completed_at = time.time()
+        await conn.execute("""
+            UPDATE email_campaigns SET recipient_count=?, sent_count=?, failed_count=?, skipped_count=?,
+                status=?, completed_at=COALESCE(?, completed_at) WHERE id=?
+        """, (int(total or 0), int(sent or 0), int(failed or 0), int(skipped or 0), next_status, completed_at, campaign_id))
+        await conn.commit()
+
+async def set_email_campaign_status(campaign_id: int, status: str):
+    if status not in {"paused", "queued", "canceled"}:
+        raise ValueError("Estado no permitido")
+    async with aiosqlite.connect(DB) as conn:
+        if status == "canceled":
+            await conn.execute("UPDATE email_campaign_recipients SET status='skipped', last_error='Campaña cancelada' WHERE campaign_id=? AND status='pending'", (campaign_id,))
+        await conn.execute("UPDATE email_campaigns SET status=? WHERE id=? AND status IN ('queued','sending','paused')", (status, campaign_id))
+        await conn.commit()
+
+async def reset_interrupted_email_recipients():
+    async with aiosqlite.connect(DB) as conn:
+        await conn.execute("UPDATE email_campaign_recipients SET status='pending' WHERE status='sending'")
+        await conn.execute("UPDATE email_campaigns SET status='queued' WHERE status='sending'")
+        await conn.commit()
+
+async def unsubscribe_email_token(token: str) -> bool:
+    async with aiosqlite.connect(DB) as conn:
+        async with conn.execute("SELECT user_id FROM email_campaign_recipients WHERE unsubscribe_token=?", (token,)) as cur:
+            row = await cur.fetchone()
+        if not row:
+            return False
+        await conn.execute("UPDATE users SET email_marketing_opt_out=1 WHERE user_id=?", (row[0],))
+        await conn.execute("UPDATE email_campaign_recipients SET status='skipped', last_error='Usuario canceló suscripción' WHERE user_id=? AND status='pending'", (row[0],))
+        await conn.commit()
+        return True
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SECCIÓN RESTAURADA: RANKING DE COMUNIDAD, SCORES & RELEASES
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def get_seller_upcoming_releases(seller_id: int | None = None, limit: int = 15) -> list[dict]:
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        q = """
+            SELECT m.id, m.seller_id, m.order_id, m.movement_type, m.status,
+                   m.amount, m.gross_amount, m.platform_fee, m.currency, m.note,
+                   m.release_at, m.created_at,
+                   COALESCE(mp.name, 'Pedido #' || m.order_id) AS product_name
+            FROM seller_wallet_movements m
+            LEFT JOIN manual_orders mo ON mo.id = m.order_id
+            LEFT JOIN manual_products mp ON mp.id = mo.product_id
+            WHERE m.status = 'held'
+              AND COALESCE(m.release_at, 0) > 0
+        """
+        params = []
+        if seller_id is not None:
+            q += " AND m.seller_id = ?"
+            params.append(seller_id)
+        q += " ORDER BY m.release_at ASC LIMIT ?"
+        params.append(limit)
+        async with db.execute(q, params) as c:
+            return [dict(r) for r in await c.fetchall()]
+
+def get_cuba_period_bounds(period: str = None) -> tuple[str, float, float]:
+    """Retorna (period_str, start_ts, end_ts) para un periodo 'YYYY-MM' en America/Havana."""
+    from datetime import datetime, timedelta
+    try:
+        import zoneinfo
+        tz = zoneinfo.ZoneInfo("America/Havana")
+    except Exception:
+        tz = None
+
+    if tz:
+        now_cuba = datetime.now(tz)
+    else:
+        now_cuba = datetime.utcnow()
+
+    if not period or not isinstance(period, str) or "-" not in period:
+        period = now_cuba.strftime("%Y-%m")
+
+    try:
+        parts = period.split("-")
+        year = int(parts[0])
+        month = int(parts[1])
+        if tz:
+            start_dt = datetime(year, month, 1, 0, 0, 0, tzinfo=tz)
+            if month == 12:
+                next_month_dt = datetime(year + 1, 1, 1, 0, 0, 0, tzinfo=tz)
+            else:
+                next_month_dt = datetime(year, month + 1, 1, 0, 0, 0, tzinfo=tz)
+        else:
+            start_dt = datetime(year, month, 1, 0, 0, 0)
+            if month == 12:
+                next_month_dt = datetime(year + 1, 1, 1, 0, 0, 0)
+            else:
+                next_month_dt = datetime(year, month + 1, 1, 0, 0, 0)
+        end_dt = next_month_dt - timedelta(seconds=1)
+        return period, start_dt.timestamp(), end_dt.timestamp()
+    except Exception:
+        now_ts = time.time()
+        return period, now_ts - 2592000, now_ts
+
+async def compute_seller_monthly_score(seller_id: int, period: str = None) -> dict:
+    """Calcula y audita el puntaje mensual de un vendedor en base a SLA, reseñas, disputas y cancelaciones."""
+    if not seller_id:
+        return {}
+    period, start_ts, end_ts = get_cuba_period_bounds(period)
+    now = time.time()
+
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+
+        # 1. Órdenes manuales del vendedor en este periodo
+        q_orders = """
+            SELECT mo.*, mp.name as product_name
+            FROM manual_orders mo
+            JOIN manual_products mp ON mp.id = mo.product_id
+            WHERE COALESCE(mo.seller_id, mp.created_by) = ?
+              AND (
+                  (mo.completed_at IS NOT NULL AND mo.completed_at >= ? AND mo.completed_at <= ?)
+                  OR (mo.completed_at IS NULL AND mo.created_at >= ? AND mo.created_at <= ?)
+              )
+        """
+        async with db.execute(q_orders, (seller_id, start_ts, end_ts, start_ts, end_ts)) as cur:
+            orders = [dict(r) for r in await cur.fetchall()]
+
+        # 2. Reseñas / Valoraciones de clientes recibidas en este periodo
+        q_reviews = """
+            SELECT r.*
+            FROM order_reviews r
+            JOIN manual_orders mo ON mo.id = r.order_id AND r.order_type = 'manual'
+            JOIN manual_products mp ON mp.id = mo.product_id
+            WHERE COALESCE(mo.seller_id, mp.created_by) = ?
+              AND r.created_at >= ? AND r.created_at <= ?
+        """
+        async with db.execute(q_reviews, (seller_id, start_ts, end_ts)) as cur:
+            reviews = [dict(r) for r in await cur.fetchall()]
+
+        # 3. Casos / Disputas abiertas en este periodo
+        q_cases = """
+            SELECT c.*
+            FROM manual_order_cases c
+            JOIN manual_orders mo ON mo.id = c.order_id
+            JOIN manual_products mp ON mp.id = mo.product_id
+            WHERE COALESCE(mo.seller_id, mp.created_by, c.seller_id) = ?
+              AND c.created_at >= ? AND c.created_at <= ?
+        """
+        async with db.execute(q_cases, (seller_id, start_ts, end_ts)) as cur:
+            cases = [dict(r) for r in await cur.fetchall()]
+
+        points_earned = 0
+        points_penalized = 0
+        on_time_count = 0
+        delayed_count = 0
+        fast_delivery_count = 0
+        refunds_count = 0
+        disputes_count = len(cases)
+        events = []
+
+        # Procesar órdenes
+        for o in orders:
+            oid = o.get("id")
+            p_name = o.get("product_name") or f"Pedido #{oid}"
+            st = o.get("status")
+            sla_st = o.get("sla_status")
+            promised = int(o.get("sla_promised_seconds") or 0)
+            actual = int(o.get("sla_actual_seconds") or 0)
+            delay = int(o.get("sla_delay_seconds") or 0)
+
+            if st == "completed":
+                if sla_st == "on_time" or (promised > 0 and actual > 0 and actual <= promised):
+                    on_time_count += 1
+                    points_earned += 10
+                    events.append({
+                        "order_id": oid,
+                        "event_type": "on_time_delivery",
+                        "points": 10,
+                        "description": f"Entrega a tiempo en {p_name} (#{oid})",
+                        "created_at": o.get("completed_at") or now
+                    })
+                    if promised > 0 and actual > 0 and actual <= (promised * 0.5):
+                        fast_delivery_count += 1
+                        points_earned += 5
+                        events.append({
+                            "order_id": oid,
+                            "event_type": "fast_delivery_bonus",
+                            "points": 5,
+                            "description": f"Bono de entrega rápida en {p_name} (#{oid})",
+                            "created_at": o.get("completed_at") or now
+                        })
+                elif sla_st == "delayed" or (promised > 0 and actual > promised):
+                    delayed_count += 1
+                    pen = 10
+                    if delay > 3600:
+                        pen = 20
+                    points_penalized += pen
+                    events.append({
+                        "order_id": oid,
+                        "event_type": "delayed_delivery",
+                        "points": -pen,
+                        "description": f"Retraso de entrega en {p_name} (#{oid})",
+                        "created_at": o.get("completed_at") or now
+                    })
+            elif st in ("cancelled", "canceled", "refunded"):
+                refunds_count += 1
+                points_penalized += 15
+                events.append({
+                    "order_id": oid,
+                    "event_type": "order_refunded",
+                    "points": -15,
+                    "description": f"Cancelación o reembolso en {p_name} (#{oid})",
+                    "created_at": o.get("updated_at") or now
+                })
+
+        # Procesar reseñas
+        reviews_5_count = 0
+        reviews_4_count = 0
+        for r in reviews:
+            oid = r.get("order_id")
+            score = int(r.get("rating") or 5)
+            if score == 5:
+                reviews_5_count += 1
+                points_earned += 5
+                events.append({
+                    "order_id": oid,
+                    "event_type": "review_5_star",
+                    "points": 5,
+                    "description": f"Calificación de 5 estrellas en #{oid}",
+                    "created_at": r.get("created_at") or now
+                })
+            elif score == 4:
+                reviews_4_count += 1
+                points_earned += 2
+                events.append({
+                    "order_id": oid,
+                    "event_type": "review_4_star",
+                    "points": 2,
+                    "description": f"Calificación de 4 estrellas en #{oid}",
+                    "created_at": r.get("created_at") or now
+                })
+            elif score in (1, 2):
+                pen = 15 if score == 1 else 10
+                points_penalized += pen
+                events.append({
+                    "order_id": oid,
+                    "event_type": f"review_{score}_star",
+                    "points": -pen,
+                    "description": f"Calificación baja de {score} estrella(s) en #{oid}",
+                    "created_at": r.get("created_at") or now
+                })
+
+        # Procesar disputas
+        for c in cases:
+            points_penalized += 10
+            events.append({
+                "order_id": c.get("order_id"),
+                "event_type": "dispute_opened",
+                "points": -10,
+                "description": f"Disputa o caso abierto #{c.get('id')} en orden #{c.get('order_id')}",
+                "created_at": c.get("created_at") or now
+            })
+
+        net_score = max(0, min(100, 100 + points_earned - points_penalized))
+
+        await db.execute("""
+            INSERT INTO seller_monthly_scores (
+                seller_id, period, score, points_earned, points_penalized,
+                on_time_orders_count, delayed_orders_count, fast_delivery_count,
+                reviews_5_count, reviews_4_count, refunds_count, disputes_count,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(seller_id, period) DO UPDATE SET
+                score = excluded.score,
+                points_earned = excluded.points_earned,
+                points_penalized = excluded.points_penalized,
+                on_time_orders_count = excluded.on_time_orders_count,
+                delayed_orders_count = excluded.delayed_orders_count,
+                fast_delivery_count = excluded.fast_delivery_count,
+                reviews_5_count = excluded.reviews_5_count,
+                reviews_4_count = excluded.reviews_4_count,
+                refunds_count = excluded.refunds_count,
+                disputes_count = excluded.disputes_count,
+                updated_at = excluded.updated_at
+        """, (
+            seller_id, period, net_score, points_earned, points_penalized,
+            on_time_count, delayed_count, fast_delivery_count,
+            reviews_5_count, reviews_4_count, refunds_count, disputes_count,
+            now
+        ))
+
+        await db.execute("DELETE FROM seller_score_events WHERE seller_id=? AND period=?", (seller_id, period))
+        if events:
+            rows_ev = [
+                (seller_id, period, ev.get("order_id"), ev["event_type"], ev["points"], ev["description"], ev["created_at"])
+                for ev in events
+            ]
+            await db.executemany("""
+                INSERT INTO seller_score_events (seller_id, period, order_id, event_type, points, description, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, rows_ev)
+
+        await db.commit()
+
+        return {
+            "seller_id": seller_id,
+            "period": period,
+            "score": net_score,
+            "points_earned": points_earned,
+            "points_penalized": points_penalized,
+            "on_time_orders_count": on_time_count,
+            "delayed_orders_count": delayed_count,
+            "fast_delivery_count": fast_delivery_count,
+            "reviews_5_count": reviews_5_count,
+            "reviews_4_count": reviews_4_count,
+            "refunds_count": refunds_count,
+            "disputes_count": disputes_count,
+            "events_count": len(events)
+        }
+
+async def get_community_ranking(period: str = None) -> dict:
+    """Calcula y devuelve el ranking mensual completo de todas las tiendas de la comunidad."""
+    period, start_ts, end_ts = get_cuba_period_bounds(period)
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT user_id FROM account_seller_profiles WHERE status='active'") as cur:
+            active_sellers = [r["user_id"] for r in await cur.fetchall()]
+
+    for sid in active_sellers:
+        try:
+            await compute_seller_monthly_score(sid, period)
+        except Exception as e:
+            log.warning("Error computing score for seller %s: %s", sid, e)
+
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        q_scores = """
+            SELECT sms.*, asp.store_name, asp.store_slug, asp.store_image, asp.banner_image,
+                   asp.rating as profile_rating, asp.total_orders as lifetime_orders,
+                   asp.schedule_enabled, asp.schedule_days, asp.schedule_time_start,
+                   asp.schedule_time_end, asp.schedule_timezone
+            FROM seller_monthly_scores sms
+            JOIN account_seller_profiles asp ON asp.user_id = sms.seller_id
+            WHERE sms.period = ? AND asp.status = 'active'
+            ORDER BY sms.score DESC, sms.on_time_orders_count DESC, sms.points_earned DESC, asp.total_orders DESC
+        """
+        async with db.execute(q_scores, (period,)) as cur:
+            rows = [dict(r) for r in await cur.fetchall()]
+
+        leaderboard = []
+        for idx, row in enumerate(rows, start=1):
+            sid = row["seller_id"]
+            await db.execute("UPDATE seller_monthly_scores SET rank_position=? WHERE seller_id=? AND period=?", (idx, sid, period))
+            row["rank_position"] = idx
+
+            if idx == 1:
+                badge = {"type": "top1", "label": "Top 1 del Mes", "icon": "🥇", "medal": "gold", "border_class": "border-yellow-400/40 text-yellow-300 bg-yellow-400/10"}
+            elif idx == 2:
+                badge = {"type": "top2", "label": "Top 2 del Mes", "icon": "🥈", "medal": "silver", "border_class": "border-slate-300/40 text-slate-200 bg-slate-300/10"}
+            elif idx == 3:
+                badge = {"type": "top3", "label": "Top 3 del Mes", "icon": "🥉", "medal": "bronze", "border_class": "border-amber-600/40 text-amber-500 bg-amber-600/10"}
+            else:
+                badge = {"type": "rank", "label": f"Top #{idx}", "icon": "⭐", "medal": "standard", "border_class": "border-white/10 text-white/70 bg-white/5"}
+
+            tot_eval = (row.get("on_time_orders_count") or 0) + (row.get("delayed_orders_count") or 0)
+            on_time_rate = round(((row.get("on_time_orders_count") or 0) / tot_eval * 100), 1) if tot_eval > 0 else 100.0
+
+            row["badge"] = badge
+            row["on_time_rate"] = on_time_rate
+            row["total_eval_orders"] = tot_eval
+            leaderboard.append(row)
+
+        await db.commit()
+
+    return {
+        "period": period,
+        "total_sellers": len(leaderboard),
+        "ranking": leaderboard
+    }
+
+async def get_seller_score_breakdown(seller_id: int, period: str = None) -> dict:
+    """Devuelve el desglose detallado y auditable de puntos ganados y penalizados para un vendedor."""
+    if not seller_id:
+        return {}
+    period, start_ts, end_ts = get_cuba_period_bounds(period)
+    ranking_data = await get_community_ranking(period)
+    seller_rank = next((s for s in ranking_data.get("ranking", []) if s["seller_id"] == seller_id), None)
+
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT * FROM seller_score_events
+            WHERE seller_id=? AND period=?
+            ORDER BY created_at DESC LIMIT 100
+        """, (seller_id, period)) as cur:
+            events = [dict(r) for r in await cur.fetchall()]
+
+    return {
+        "seller_id": seller_id,
+        "period": period,
+        "summary": seller_rank or {
+            "score": 100,
+            "rank_position": ranking_data.get("total_sellers", 1) or 1,
+            "badge": {"type": "rank", "label": "Top Vendedor", "icon": "⭐", "medal": "standard", "border_class": "border-white/10 text-white/70 bg-white/5"},
+            "points_earned": 0,
+            "points_penalized": 0,
+            "on_time_orders_count": 0,
+            "delayed_orders_count": 0,
+            "fast_delivery_count": 0,
+            "reviews_5_count": 0,
+            "reviews_4_count": 0,
+            "refunds_count": 0,
+            "disputes_count": 0,
+        },
+        "total_sellers": ranking_data.get("total_sellers", 1),
+        "events": events
+    }

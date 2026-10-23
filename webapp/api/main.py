@@ -15869,6 +15869,46 @@ async def build_ai_user_context(user_id: int, user_message: str = "") -> dict:
                 except Exception as e:
                     log.warning("AI dynamic catalog streaming lookup failed: %s", e)
 
+            # Check SMM services (JustAnotherPanel: Canales de WhatsApp, TikTok, YouTube, Telegram, etc.)
+            smm_terms = [
+                "seguidor", "seguidores", "like", "likes", "vista", "vistas", "view", "views",
+                "reaccion", "reacciones", "miembro", "miembros", "suscriptor", "suscriptores",
+                "smm", "tiktok", "youtube", "whatsapp", "canal", "canales", "redes"
+            ]
+            if any(w in q_lower for w in smm_terms):
+                try:
+                    global_smm_markup = await settings.get_float("smm_default_markup", 1.80)
+                    global_smm_min = await settings.get_float("smm_min_price_usd", 0.0)
+                    active_smm = await db.list_smm_services(active_only=True)
+                    for s in active_smm:
+                        s_name = (s.get("display_name") or s.get("name") or "").lower()
+                        s_cat = (s.get("category") or "").lower()
+                        if any(term in s_name or term in s_cat for term in smm_terms if term in q_lower) or "smm" in q_lower or "seguidores" in q_lower:
+                            row_info = smm_public_service_row(s, global_smm_markup, global_smm_min)
+                            rate_per_k = round(row_info["unit_price"] * 1000, 2)
+                            ctx["catalog_prices"].append(f"• SMM: {row_info['name']} - ${rate_per_k:.2f} USDT por 1k (Mín: {row_info['min']}, Máx: {row_info['max']})")
+                            if len(ctx["catalog_prices"]) >= 15:
+                                break
+                except Exception as e:
+                    log.warning("AI dynamic catalog SMM lookup failed: %s", e)
+
+            # Check manual products (Reenvío Plus Bot, Gemini Pro, etc.)
+            manual_terms = ["reenvio", "reenvío", "plus bot", "gemini pro", "licencia"]
+            if any(w in q_lower for w in manual_terms):
+                try:
+                    async with conn.execute("""
+                        SELECT mp.name as prod_name, mpo.name as opt_name, mpo.price
+                        FROM manual_products mp
+                        JOIN manual_product_options mpo ON mpo.product_id = mp.id
+                        WHERE mp.is_active=1 AND mpo.is_active=1
+                        LIMIT 6
+                    """) as cur_man:
+                        for row in await cur_man.fetchall():
+                            r = dict(row)
+                            ctx["catalog_prices"].append(f"• Producto: {r['prod_name']} ({r['opt_name']}) - ${float(r['price']):.2f} USDT")
+                except Exception as e:
+                    log.warning("AI dynamic catalog manual lookup failed: %s", e)
+
     ctx["orders"].sort(key=lambda x: float(x.get("created_at") or 0), reverse=True)
     ctx["orders"] = ctx["orders"][:12]
     return ctx
@@ -16165,6 +16205,26 @@ async def catalog_price_quote_answer(msg: str) -> tuple[str, bool, str]:
                 return "Precios de streaming disponibles:\n" + "\n".join(f"• {m}" for m in matches_s[:5]) + "\nAl comprar, las credenciales se entregan al instante en Pedidos.", False, "streaming_price_quote"
         except Exception as e:
             log.warning("AI catalog streaming price quote failed: %s", e)
+
+    # Check SMM services (seguidores, vistas, likes, WhatsApp, TikTok, etc.)
+    smm_keys = ["seguidor", "seguidores", "like", "likes", "vista", "vistas", "miembro", "miembros", "suscriptor", "suscriptores", "reaccion", "reacciones", "tiktok", "whatsapp"]
+    if any(k in query for k in smm_keys) and not any(k in query for k in ["netflix", "disney", "max", "prime", "spotify", "paramount", "crunchyroll"]):
+        try:
+            global_smm_markup = await settings.get_float("smm_default_markup", 1.80)
+            global_smm_min = await settings.get_float("smm_min_price_usd", 0.0)
+            active_smm = await db.list_smm_services(active_only=True)
+            matches_smm = []
+            for s in active_smm:
+                s_name = (s.get("display_name") or s.get("name") or "").lower()
+                s_cat = (s.get("category") or "").lower()
+                if any(t in s_name or t in s_cat for t in tokens if t in smm_keys):
+                    row_info = smm_public_service_row(s, global_smm_markup, global_smm_min)
+                    rate_per_k = round(row_info["unit_price"] * 1000, 2)
+                    matches_smm.append(f"{row_info['name']}: ${rate_per_k:.2f} USDT por 1,000 (Mín: {row_info['min']}, Máx: {row_info['max']})")
+            if matches_smm:
+                return "Servicios SMM disponibles:\n" + "\n".join(f"• {m}" for m in matches_smm[:4]) + "\nPuedes ordenar pegando el enlace de tu canal o publicación en la sección SMM.", False, "smm_price_quote"
+        except Exception as e:
+            log.warning("AI catalog SMM price quote failed: %s", e)
 
     try:
         prods = await db.get_cached_products()
@@ -16532,8 +16592,9 @@ async def generate_ai_chat_response(session_id: int, user_id: int, message: str,
         "2. Cuentas y Pantallas de Streaming: Ofrecemos pantallas y cuentas completas oficiales de Netflix, Disney+, Max / HBO, Amazon Prime Video, Spotify Premium, YouTube Premium, etc. La entrega es 100% inmediata y automatizada: al confirmar la compra con el saldo, las credenciales de acceso (correo, contraseña, perfil y PIN de seguridad) quedan disponibles de inmediato en la sección 'Pedidos'.\n"
         "3. Recargas automáticas de juegos (Free Fire, Blood Strike, etc.): Se envían automáticamente al ID de jugador / servidor especificado. Si el estado es 'completado', el sistema ya procesó la entrega exitosamente en sus servidores.\n"
         "4. Números virtuales SMS: El cliente compra un número temporal para recibir un SMS de activación (WhatsApp, Telegram, Google, etc.). Si el SMS no llega dentro del tiempo (20 minutos) o el usuario cancela, el costo se reembolsa al 100% en su saldo. Si el SMS llega, la entrega está completada (no cubre bloqueos de la app externa posteriores).\n"
-        "5. Gift Cards y Pines: Al completarse el pedido, el código o PIN aparece directamente en el apartado 'Pedidos'.\n"
-        "6. Programa Revendedor / Mayorista:\n"
+        "5. Servicios SMM (Redes Sociales): Ofrecemos seguidores y reacciones para canales de WhatsApp, miembros y vistas de Telegram, seguidores, likes y vistas de TikTok, suscriptores y vistas de YouTube, etc. Se adquieren indicando el enlace público del canal o post y la cantidad deseada dentro del mínimo y máximo.\n"
+        "6. Gift Cards y Pines: Al completarse el pedido, el código o PIN aparece directamente en el apartado 'Pedidos'.\n"
+        "7. Programa Revendedor / Mayorista:\n"
         "   - Bronce Mayorista: depósito único desde $25 USDT (+14% markup sobre costo base).\n"
         "   - Plata Mayorista: depósito único desde $50 USDT (+10% markup).\n"
         "   - Oro VIP Mayorista: depósito único desde $100 USDT (+7% markup, mejor precio disponible).\n"

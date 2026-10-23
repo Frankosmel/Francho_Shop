@@ -847,20 +847,66 @@ async def is_banned(user_id: int) -> bool:
             return bool(r[0]) if r else False
 
 
-async def search_users(query: str, limit: int = 20) -> list[dict]:
-    """Busca por user_id, username, first_name o email."""
+async def search_users(
+    query: str = "",
+    limit: int = 20,
+    role: str = "",
+    status: str = "",
+    segment: str = "",
+    sort: str = "last_seen_desc",
+    **kwargs
+) -> list[dict]:
+    """Busca usuarios con filtros opcionales de texto, rol, estado, segmento y orden."""
     async with aiosqlite.connect(DB) as db:
         db.row_factory = aiosqlite.Row
+        where_clauses = []
+        params = []
+
         q_raw = (query or "").strip().lstrip("@")
-        q = f"%{q_raw}%"
-        async with db.execute("""
-            SELECT * FROM users
-            WHERE CAST(user_id AS TEXT) LIKE ?
-               OR username LIKE ?
-               OR first_name LIKE ?
-               OR email LIKE ?
-            ORDER BY last_seen DESC LIMIT ?
-        """, (q, q, q, q, limit)) as c:
+        if q_raw:
+            where_clauses.append("(CAST(user_id AS TEXT) LIKE ? OR username LIKE ? OR first_name LIKE ? OR email LIKE ?)")
+            params.extend([f"%{q_raw}%"] * 4)
+
+        if role and str(role).strip().lower() not in ("", "all", "todos"):
+            where_clauses.append("role = ?")
+            params.append(str(role).strip().lower())
+
+        if status:
+            st = str(status).strip().lower()
+            if st == "banned":
+                where_clauses.append("is_banned = 1")
+            elif st == "active":
+                where_clauses.append("is_banned = 0")
+
+        if segment:
+            seg = str(segment).strip().lower()
+            if seg in ("buyers", "compradores"):
+                where_clauses.append("total_spent > 0")
+            elif seg in ("depositors", "depositantes"):
+                where_clauses.append("total_deposit > 0")
+            elif seg in ("with_balance", "con_saldo"):
+                where_clauses.append("balance > 0")
+            elif seg in ("resellers", "revendedores"):
+                where_clauses.append("role = 'reseller'")
+
+        where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+        sort_map = {
+            "last_seen_desc": "last_seen DESC",
+            "last_seen_asc": "last_seen ASC",
+            "created_at_desc": "created_at DESC",
+            "created_at_asc": "created_at ASC",
+            "balance_desc": "balance DESC",
+            "balance_asc": "balance ASC",
+            "spent_desc": "total_spent DESC",
+            "deposit_desc": "total_deposit DESC",
+        }
+        order_sql = sort_map.get(sort, "last_seen DESC")
+
+        sql = f"SELECT * FROM users {where_sql} ORDER BY {order_sql} LIMIT ?"
+        params.append(int(limit) if limit else 20)
+
+        async with db.execute(sql, tuple(params)) as c:
             return [dict(r) for r in await c.fetchall()]
 
 

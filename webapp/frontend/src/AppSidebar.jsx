@@ -570,8 +570,8 @@ export function AppSidebar({
       {!window.Capacitor?.isNativePlatform?.() && (
         <div className="p-3 border-t border-white/5 bg-[#0e1424]/60">
           <a
-            href="/downloads/FranchoShop.apk"
-            download="FranchoShop.apk"
+            href="/downloads/FranchoShop-v2.3.apk"
+            download="FranchoShop-v2.3.apk"
             className="flex items-center justify-between gap-2 w-full p-2.5 rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 hover:border-emerald-400 text-white transition group active:scale-98 shadow-sm"
           >
             <div className="flex items-center gap-2.5 min-w-0">

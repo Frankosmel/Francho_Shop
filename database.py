@@ -5195,7 +5195,12 @@ async def get_user_kyc(user_id: int) -> dict | None:
         db.row_factory = aiosqlite.Row
         async with db.execute("SELECT * FROM user_kyc WHERE user_id = ? ORDER BY id DESC LIMIT 1", (user_id,)) as c:
             row = await c.fetchone()
-            return dict(row) if row else None
+            if not row:
+                return None
+            d = dict(row)
+            d["is_verified"] = d.get("status") == "approved"
+            d["tier"] = 1 if d["is_verified"] else 0
+            return d
 
 async def submit_user_kyc(
     user_id: int,

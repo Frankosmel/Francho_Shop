@@ -3,10 +3,11 @@
   "version_code": 20,
   "min_supported_version": "2.2.6",
   "mandatory": false,
-  "published_at": "2026-10-23T17:39:00Z",
+  "published_at": "2026-10-23T17:44:00Z",
   "apk_url": "https://franchoshop.com/downloads/FranchoShop.apk",
-  "sha256": "a3a39223eef54a6ceeb89ece6f3c9b9eb127af5887cf84b4fdac55f727dfb6cf",
+  "sha256": "bc1c4130eb347e4d17dd5652056de073988c84a3ee9d90e49c37bca233a7e8ce",
   "notes": [
+    "App ultra ligera optimizada a solo 15 MB.",
     "Nuevo catálogo integrado de streaming y cuentas.",
     "Buscador de usuarios y soporte de órdenes actualizado.",
     "Notificaciones push mejoradas y rendimiento optimizado."

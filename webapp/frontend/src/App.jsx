@@ -20692,6 +20692,23 @@ function OrdersScreen({ onOpenCase, onGoSupport, onBack }) {
                         </div>
                       )}
 
+                      {/* Banner de Garantía / Reporte para Streaming */}
+                      {o.type === 'streaming' && (
+                        <div className="flex items-center justify-between gap-3 text-xs bg-amber-500/10 p-3 rounded-xl border border-amber-500/20">
+                          <div className="min-w-0">
+                            <p className="font-bold text-amber-200">¿Problemas con el acceso o la cuenta?</p>
+                            <p className="text-[10px] text-white/50">Garantía activa de 30 días para soporte y revisión</p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={(e) => { e.stopPropagation(); onGoSupport && onGoSupport() }}
+                            className="rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/30 px-3 py-1.5 text-xs font-bold text-amber-300 active:scale-95 transition-all shadow-sm shrink-0"
+                          >
+                            Reportar problema
+                          </button>
+                        </div>
+                      )}
+
                       {/* Datos de entrega (pedidos manuales completados) */}
                       {o.type === 'manual' && o.delivery_data && (
                         <div className="p-3 rounded-xl bg-green-500/10 border border-green-500/20 text-xs space-y-1">

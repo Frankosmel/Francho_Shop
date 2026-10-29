@@ -20846,11 +20846,8 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
   const [bindRefLoading, setBindRefLoading] = useState(false)
   const [bindRefMsg, setBindRefMsg] = useState(null)
   const [bindRefErr, setBindRefErr] = useState(null)
-  const [showPaymentProfile, setShowPaymentProfile] = useState(false)
   const [paymentHandleInput, setPaymentHandleInput] = useState(() => initialProfile?.payment_handle || '')
   const [paymentProfileEnabled, setPaymentProfileEnabled] = useState(() => !!initialProfile?.payment_profile_enabled)
-  const [paymentIdentitySaving, setPaymentIdentitySaving] = useState(false)
-  const [paymentIdentityMsg, setPaymentIdentityMsg] = useState(null)
 
   const handleBindReferral = async () => {
     if (!bindRefCode.trim()) return
@@ -21003,17 +21000,29 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
     setProfileSaving(true)
     setProfileMsg(null)
     try {
+      const requestedHandle = paymentHandleInput.trim()
+      let identity = null
+      if (requestedHandle || paymentProfileEnabled || profile.payment_handle) {
+        const identityResult = await api.updatePaymentIdentity({
+          handle: requestedHandle || profile.payment_handle,
+          profile_enabled: paymentProfileEnabled,
+        })
+        identity = identityResult?.identity || {}
+      }
       const data = await api.updateProfile({ display_name: profileName, email: profileEmail })
       const updated = data.profile || {}
       setProfile(prev => ({
         ...prev,
+        ...identity,
         ...updated,
         display_name: updated.display_name ?? prev.display_name,
         name: updated.name || prev.name,
         email: updated.email ?? prev.email,
         email_verified: updated.email_verified ?? prev.email_verified
       }))
-      setProfileMsg('Datos del perfil actualizados correctamente')
+      setPaymentHandleInput(identity?.payment_handle || requestedHandle || '')
+      setPaymentProfileEnabled(identity?.payment_profile_enabled ?? paymentProfileEnabled)
+      setProfileMsg('Perfil actualizado correctamente')
       setEditProfile(false)
     } catch (e) { setProfileMsg(`No se pudo guardar el perfil: ${e.message}`) }
     setProfileSaving(false)
@@ -21029,26 +21038,6 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
       setProfileMsg('Imagen de perfil actualizada correctamente')
     } catch (e) { setProfileMsg(`No se pudo actualizar la imagen: ${e.message}`) }
     setPhotoUploading(false)
-  }
-
-  async function handleSavePaymentIdentity() {
-    setPaymentIdentitySaving(true)
-    setPaymentIdentityMsg(null)
-    try {
-      const result = await api.updatePaymentIdentity({
-        handle: paymentHandleInput.trim(),
-        profile_enabled: paymentProfileEnabled,
-      })
-      const identity = result?.identity || {}
-      setProfile(prev => ({ ...prev, ...identity }))
-      setPaymentHandleInput(identity.payment_handle || '')
-      setPaymentProfileEnabled(!!identity.payment_profile_enabled)
-      setPaymentIdentityMsg('Perfil de pagos actualizado.')
-    } catch (e) {
-      setPaymentIdentityMsg(e?.message || 'No se pudo actualizar el perfil de pagos.')
-    } finally {
-      setPaymentIdentitySaving(false)
-    }
   }
 
   return (
@@ -21083,6 +21072,8 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
           onClick={() => {
             setProfileName(profile.display_name || profile.name || '')
             setProfileEmail(profile.email || '')
+            setPaymentHandleInput(profile.payment_handle || '')
+            setPaymentProfileEnabled(!!profile.payment_profile_enabled)
             setProfileMsg(null)
             setEditProfile(true)
           }}
@@ -21115,7 +21106,8 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
               <UserIdentityBadges profile={profile} />
               <FranchoFMark className="h-5 w-5 shrink-0 text-[#00e878]" />
             </div>
-            {profile.username && <p className="truncate text-xs text-white/50">@{profile.username}</p>}
+            {profile.payment_handle && <p className="truncate text-xs font-bold text-accent">@{profile.payment_handle}</p>}
+            {profile.username && <p className="truncate text-[10px] text-white/40">Telegram: @{profile.username}</p>}
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               <div className={`inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${activeRole.badge}`}>
                 <RoleIcon className={`h-3 w-3 flex-shrink-0 ${activeRole.icon}`} />
@@ -21144,21 +21136,6 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
         {profileMsg && <p className={`mt-3 rounded-lg border px-3 py-2 text-xs font-semibold ${profileMsgIsError ? 'border-red-500/25 bg-red-500/10 text-red-300' : 'border-green-500/25 bg-green-500/10 text-green-300'}`}>{profileMsg}</p>}
       </div>
 
-      <button
-        type="button"
-        onClick={() => { setPaymentIdentityMsg(null); setShowPaymentProfile(true) }}
-        className="card mb-3 flex w-full items-center justify-between gap-3 border-emerald-400/20 bg-gradient-to-r from-emerald-500/10 via-card to-card px-3.5 py-3 text-left transition hover:border-emerald-300/45 active:scale-[0.99]"
-      >
-        <span className="flex min-w-0 items-center gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-400/10 text-emerald-300"><QrCode className="h-4.5 w-4.5" /></span>
-          <span className="min-w-0">
-            <span className="block text-xs font-black text-white">Francho Pay</span>
-            <span className="block truncate text-[11px] text-white/50">{profile.payment_handle ? `@${profile.payment_handle}${profile.payment_profile_enabled ? ' · Perfil público activo' : ' · Perfil privado'}` : 'Crea tu usuario y enlace de cobro'}</span>
-          </span>
-        </span>
-        <ChevronRight className="h-4 w-4 shrink-0 text-emerald-300/70" />
-      </button>
-
       {/* Se monta fuera de la tarjeta: su overflow no puede recortar el diálogo en móvil. */}
       {editProfile && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={() => setEditProfile(false)} role="presentation">
@@ -21166,7 +21143,7 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
             <div className="mb-4 flex items-center justify-between gap-3">
               <div>
                 <h3 id="edit-profile-title" className="text-base font-black">Editar perfil</h3>
-                <p className="text-xs text-white/45">Actualiza tu nombre, email e imagen.</p>
+                <p className="text-xs text-white/45">Actualiza tu identidad, acceso e imagen.</p>
               </div>
               <button type="button" onClick={() => setEditProfile(false)} aria-label="Cerrar" className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5 text-white/60 active:scale-95"><X className="h-4 w-4" /></button>
             </div>
@@ -21189,12 +21166,32 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
                   placeholder="Tu nombre para mostrar" maxLength={60} />
               </div>
               <div>
+                <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-white/45">Usuario Francho Shop</label>
+                <div className="flex overflow-hidden rounded-xl border border-white/10 bg-bg focus-within:border-accent">
+                  <span className="flex items-center px-3 text-sm font-black text-accent">@</span>
+                  <input value={paymentHandleInput} onChange={(e) => setPaymentHandleInput(e.target.value.replace(/^@+/, '').toLowerCase())}
+                    className="min-w-0 flex-1 bg-transparent py-2.5 pr-3 text-sm text-white outline-none" placeholder="frankosmel" maxLength={24} autoCapitalize="none" autoCorrect="off" />
+                </div>
+                <p className="mt-1 text-[10px] text-white/35">Es tu usuario general en Francho Shop. No cambia tu @ de Telegram.</p>
+              </div>
+              <div>
                 <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-white/45">Email</label>
                 <input type="email" value={profileEmail} onChange={e => setProfileEmail(e.target.value)}
                   className="w-full rounded-xl border border-white/10 bg-bg px-3 py-2.5 text-sm text-white outline-none focus:border-accent"
                   placeholder="correo@ejemplo.com" maxLength={120} />
                 <p className="mt-1 text-[10px] text-white/35">Si cambias el email, quedará pendiente de verificación.</p>
               </div>
+              <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-3">
+                <span><span className="block text-xs font-bold text-white">Perfil público y QR</span><span className="mt-0.5 block text-[10px] text-white/45">Permite compartir tu enlace de pagos.</span></span>
+                <input type="checkbox" checked={paymentProfileEnabled} onChange={(e) => setPaymentProfileEnabled(e.target.checked)} className="h-4 w-4 accent-emerald-400" />
+              </label>
+              {paymentProfileUrl && paymentProfileEnabled && (
+                <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-3 text-center">
+                  <div className="inline-flex rounded-lg bg-white p-2"><QRCodeSVG value={paymentProfileUrl} size={112} level="M" /></div>
+                  <p className="mt-2 truncate text-[11px] font-semibold text-emerald-200">{paymentProfileUrl}</p>
+                  <button type="button" onClick={async () => { try { await navigator.clipboard.writeText(paymentProfileUrl); setProfileMsg('Enlace de perfil copiado.') } catch {} }} className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-emerald-300"><Copy className="h-3.5 w-3.5" />Copiar enlace</button>
+                </div>
+              )}
               <div className="grid grid-cols-2 gap-2 pt-1">
                 <button type="button" onClick={() => setEditProfile(false)}
                   className="rounded-xl border border-white/10 bg-white/5 py-2.5 text-xs font-bold text-white/60 active:scale-95">
@@ -21205,49 +21202,6 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
                   {profileSaving ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Guardar'}
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showPaymentProfile && (
-        <div className="fixed inset-0 z-[105] flex items-end justify-center bg-black/75 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={() => setShowPaymentProfile(false)} role="presentation">
-          <div role="dialog" aria-modal="true" aria-labelledby="payment-profile-title" className="w-full max-w-md rounded-t-2xl border border-white/10 bg-card p-4 text-left shadow-2xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="mb-4 flex items-start justify-between gap-3">
-              <div>
-                <h3 id="payment-profile-title" className="text-base font-black text-white">Francho Pay</h3>
-                <p className="mt-0.5 text-xs text-white/45">Tu perfil público para recibir pagos.</p>
-              </div>
-              <button type="button" onClick={() => setShowPaymentProfile(false)} aria-label="Cerrar" className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5 text-white/60 active:scale-95"><X className="h-4 w-4" /></button>
-            </div>
-
-            <div className="space-y-3">
-              <div>
-                <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-white/45">Tu usuario Francho Shop</label>
-                <div className="flex overflow-hidden rounded-xl border border-white/10 bg-bg focus-within:border-emerald-400/70">
-                  <span className="flex items-center px-3 text-sm font-black text-emerald-300">@</span>
-                  <input value={paymentHandleInput} onChange={(e) => setPaymentHandleInput(e.target.value.replace(/^@+/, '').toLowerCase())} className="min-w-0 flex-1 bg-transparent py-2.5 pr-3 text-sm text-white outline-none" placeholder="frankosmel" maxLength={24} autoCapitalize="none" autoCorrect="off" />
-                </div>
-                <p className="mt-1 text-[10px] text-white/35">Entre 4 y 24 caracteres: letras, números, guion y guion bajo.</p>
-              </div>
-
-              <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-3">
-                <span><span className="block text-xs font-bold text-white">Activar perfil público</span><span className="mt-0.5 block text-[10px] text-white/45">Permitirá abrir y compartir tu enlace de pagos.</span></span>
-                <input type="checkbox" checked={paymentProfileEnabled} onChange={(e) => setPaymentProfileEnabled(e.target.checked)} className="h-4 w-4 accent-emerald-400" />
-              </label>
-
-              {profile.public_code && <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[.03] px-3 py-2 text-xs"><span className="text-white/45">Código Francho Shop</span><code className="font-black text-emerald-300">{profile.public_code}</code></div>}
-
-              {paymentProfileUrl && profile.payment_profile_enabled && (
-                <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-3 text-center">
-                  <div className="inline-flex rounded-lg bg-white p-2"><QRCodeSVG value={paymentProfileUrl} size={118} level="M" /></div>
-                  <p className="mt-2 truncate text-[11px] font-semibold text-emerald-200">{paymentProfileUrl}</p>
-                  <button type="button" onClick={async () => { try { await navigator.clipboard.writeText(paymentProfileUrl); setPaymentIdentityMsg('Enlace copiado.') } catch {} }} className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-emerald-300"><Copy className="h-3.5 w-3.5" />Copiar enlace</button>
-                </div>
-              )}
-
-              {paymentIdentityMsg && <p className={`rounded-lg border px-3 py-2 text-xs font-semibold ${/no se pudo|inválido|reservado|uso|dentro/i.test(paymentIdentityMsg) ? 'border-red-500/25 bg-red-500/10 text-red-300' : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'}`}>{paymentIdentityMsg}</p>}
-              <button type="button" onClick={handleSavePaymentIdentity} disabled={paymentIdentitySaving} className="w-full rounded-xl bg-accent py-3 text-xs font-black text-bg active:scale-[0.98] disabled:opacity-50">{paymentIdentitySaving ? 'Guardando…' : 'Guardar perfil de pagos'}</button>
             </div>
           </div>
         </div>

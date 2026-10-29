@@ -144,6 +144,35 @@ async def init_db():
             CREATE INDEX IF NOT EXISTS idx_deposits_status ON deposits(status);
 
             -- ═══════════════════════════════════════
+            --   COBROS PÚBLICOS (Francho Pay)
+            -- ═══════════════════════════════════════
+            CREATE TABLE IF NOT EXISTS public_payment_requests (
+                id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+                payment_id          TEXT UNIQUE NOT NULL,
+                recipient_user_id   INTEGER NOT NULL,
+                recipient_handle    TEXT NOT NULL,
+                payer_user_id       INTEGER,
+                amount_usd          REAL NOT NULL,
+                requested_currency  TEXT NOT NULL,
+                requested_network   TEXT NOT NULL,
+                provider_track_id   TEXT UNIQUE NOT NULL,
+                payment_address     TEXT,
+                provider_amount     TEXT,
+                provider_currency   TEXT,
+                provider_network    TEXT,
+                provider_payload    TEXT,
+                status              TEXT NOT NULL DEFAULT 'pending',
+                expires_at          REAL,
+                paid_at             REAL,
+                created_at          REAL DEFAULT (unixepoch()),
+                updated_at          REAL DEFAULT (unixepoch()),
+                FOREIGN KEY (recipient_user_id) REFERENCES users(user_id),
+                FOREIGN KEY (payer_user_id) REFERENCES users(user_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_public_payment_recipient ON public_payment_requests(recipient_user_id, created_at);
+            CREATE INDEX IF NOT EXISTS idx_public_payment_status ON public_payment_requests(status, created_at);
+
+            -- ═══════════════════════════════════════
             --   ÓRDENES
             -- ═══════════════════════════════════════
             CREATE TABLE IF NOT EXISTS orders (
@@ -1205,7 +1234,7 @@ async def get_fc_transfer_history(user_id: int, limit: int = 20) -> list[dict]:
         async with db.execute(
             """
             SELECT * FROM balance_log
-            WHERE user_id=? AND type IN ('transfer_out', 'transfer_in', 'transfer_sent', 'transfer_received')
+            WHERE user_id=? AND type IN ('transfer_out', 'transfer_in', 'transfer_sent', 'transfer_received', 'payment_received')
             ORDER BY created_at DESC
             LIMIT ?
             """,
@@ -1220,6 +1249,11 @@ async def get_fc_transfer_history(user_id: int, limit: int = 20) -> list[dict]:
 
 def gen_deposit_id() -> str:
     return f"DEP{int(time.time())}{uuid.uuid4().hex[:6].upper()}"
+
+
+def gen_public_payment_id() -> str:
+    """Referencia pública no secuencial para cobros entre perfiles."""
+    return f"FS-149-{secrets.token_hex(5).upper()}"
 
 
 async def create_deposit(user_id: int, amount_usd: float, track_id: str, pay_link: str) -> str:
@@ -1281,6 +1315,145 @@ async def get_recent_deposits(limit: int = 20) -> list[dict]:
             "SELECT * FROM deposits ORDER BY created_at DESC LIMIT ?", (limit,)
         ) as c:
             return [dict(r) for r in await c.fetchall()]
+
+
+# ══════════════════════════════════════
+#  COBROS PÚBLICOS (Francho Pay)
+# ══════════════════════════════════════
+
+async def create_public_payment_request(
+    payment_id: str,
+    recipient_user_id: int,
+    recipient_handle: str,
+    amount_usd: float,
+    requested_currency: str,
+    requested_network: str,
+    provider_track_id: str,
+    payment_address: str = "",
+    provider_amount: str = "",
+    provider_currency: str = "",
+    provider_network: str = "",
+    provider_payload: str = "",
+    expires_at: float | None = None,
+    payer_user_id: int | None = None,
+) -> dict:
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        await db.execute(
+            """
+            INSERT INTO public_payment_requests (
+                payment_id, recipient_user_id, recipient_handle, payer_user_id,
+                amount_usd, requested_currency, requested_network, provider_track_id,
+                payment_address, provider_amount, provider_currency, provider_network,
+                provider_payload, expires_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                payment_id, recipient_user_id, recipient_handle, payer_user_id,
+                amount_usd, requested_currency, requested_network, provider_track_id,
+                payment_address, provider_amount, provider_currency, provider_network,
+                provider_payload, expires_at, now, now,
+            ),
+        )
+        await db.commit()
+        async with db.execute("SELECT * FROM public_payment_requests WHERE payment_id = ?", (payment_id,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else {}
+
+
+async def get_public_payment_by_track(provider_track_id: str) -> dict | None:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM public_payment_requests WHERE provider_track_id = ?", (provider_track_id,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+
+async def get_public_payment_by_id(payment_id: str) -> dict | None:
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM public_payment_requests WHERE payment_id = ?", (payment_id,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+
+async def get_pending_public_payment_requests(limit: int = 20, since: float | None = None) -> list[dict]:
+    query = "SELECT * FROM public_payment_requests WHERE status IN ('pending', 'paying')"
+    params: list = []
+    if since is not None:
+        query += " AND created_at >= ?"
+        params.append(since)
+    query += " ORDER BY created_at DESC LIMIT ?"
+    params.append(int(limit))
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(query, params) as c:
+            return [dict(row) for row in await c.fetchall()]
+
+
+async def update_public_payment_status(provider_track_id: str, status: str, provider_payload: str = "") -> None:
+    async with aiosqlite.connect(DB) as db:
+        if provider_payload:
+            await db.execute(
+                "UPDATE public_payment_requests SET status = ?, provider_payload = ?, updated_at = ? WHERE provider_track_id = ?",
+                (status, provider_payload, time.time(), provider_track_id),
+            )
+        else:
+            await db.execute(
+                "UPDATE public_payment_requests SET status = ?, updated_at = ? WHERE provider_track_id = ?",
+                (status, time.time(), provider_track_id),
+            )
+        await db.commit()
+
+
+async def settle_public_payment_request(provider_track_id: str, provider_payload: str = "") -> tuple[dict | None, bool]:
+    """Marca como pagado y acredita una sola vez el saldo del destinatario.
+
+    No actualiza total_deposit: recibir un cobro no equivale a una recarga propia
+    ni debe habilitar precios de revendedor.
+    """
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        await db.execute("BEGIN IMMEDIATE")
+        async with db.execute("SELECT * FROM public_payment_requests WHERE provider_track_id = ?", (provider_track_id,)) as c:
+            row = await c.fetchone()
+        if not row:
+            await db.rollback()
+            return None, False
+        payment = dict(row)
+        if payment.get("status") == "paid":
+            await db.commit()
+            return payment, False
+
+        amount = round(float(payment.get("amount_usd") or 0), 2)
+        if amount <= 0:
+            await db.rollback()
+            raise ValueError("Monto de cobro público inválido")
+        recipient_user_id = int(payment["recipient_user_id"])
+        await db.execute(
+            """
+            UPDATE public_payment_requests
+            SET status = 'paid', paid_at = ?, updated_at = ?, provider_payload = ?
+            WHERE provider_track_id = ? AND status <> 'paid'
+            """,
+            (now, now, provider_payload, provider_track_id),
+        )
+        if db.total_changes < 1:
+            await db.commit()
+            return payment, False
+        await db.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (amount, recipient_user_id))
+        await db.execute(
+            """
+            INSERT INTO balance_log (user_id, amount, type, ref_id, note)
+            VALUES (?, ?, 'payment_received', ?, ?)
+            """,
+            (recipient_user_id, amount, payment["payment_id"], f"Pago recibido en @{payment['recipient_handle']}"),
+        )
+        await db.commit()
+        payment.update({"status": "paid", "paid_at": now, "updated_at": now})
+        return payment, True
 
 
 # ══════════════════════════════════════

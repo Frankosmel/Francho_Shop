@@ -160,7 +160,7 @@ const DEPOSIT_PRESETS = [5, 10, 25, 50, 100, 250]
 const NAV_STATE_KEY = 'fs_last_nav_v1'
 const WHATSAPP_SUPPORT_URL = 'https://wa.me/5363785631'
 const WHATSAPP_CHANNEL_URL = 'https://whatsapp.com/channel/0029VaRW8KgGehETCBaAnN2K'
-const SAFE_NAV_SCREENS = new Set(['home', 'regions', 'products', 'detail', 'streaming-product', 'profile', 'orders', 'help', 'terms', 'terms-conditions', 'privacy', 'privacy-policy', 'faq', 'cookies', 'cookies-policy', 'contact', 'partner-help', 'seller-store', 'guides', 'guide-detail', 'case', 'sms', 'smm', 'telegram', 'capcut', 'fzr-catalog', 'api-docs', 'api', 'seller', 'referrals', 'swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc', 'vpn', 'wireguard'])
+const SAFE_NAV_SCREENS = new Set(['home', 'regions', 'products', 'detail', 'streaming-product', 'profile', 'orders', 'help', 'terms', 'terms-conditions', 'privacy', 'privacy-policy', 'faq', 'cookies', 'cookies-policy', 'contact', 'partner-help', 'seller-store', 'guides', 'guide-detail', 'case', 'sms', 'smm', 'telegram', 'capcut', 'fzr-catalog', 'api-docs', 'api', 'seller', 'referrals', 'swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc', 'vpn', 'wireguard', 'my-web-store', 'webstore'])
 const PRIVATE_NAV_SCREENS = new Set(['panel', 'admin', 'admin-edit'])
 const CATALOG_ROUTE_PARAMS = ['product', 'manual_product', 'game', 'region', 'case', 'seguimiento', 'screen', 'sms_country', 'sms_service', 'sms_operator', 'fzr_type', 'fzr_category', 'category', 'juego', 'game_id', 'type']
 
@@ -175,7 +175,8 @@ const RESERVED_URL_SLUGS = new Set([
   'support', 'inbox', 'register', 'login', 'forgot', 'verify', 'reset',
   'downloads', 'capturas_admin', 'favicon.ico', 'manifest.json', 'robots.txt',
   'sitemap.xml', 'index.html', 'admin.html', 'og-image.png', 'fzr-catalog',
-  'swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc', 'vpn', 'wireguard'
+  'swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc', 'vpn', 'wireguard',
+  'my-web-store', 'webstore'
 ])
 
 function resolveCatalogCategoryFromUrl(params) {
@@ -365,7 +366,7 @@ const readSavedNav = () => {
     const saved = JSON.parse(localStorage.getItem(NAV_STATE_KEY) || 'null')
     // VPN is a destination, not a startup screen. Restoring it traps a user in
     // the product page when reopening the installed app.
-    if (!saved || ['vpn', 'wireguard'].includes(saved.screen) || PRIVATE_NAV_SCREENS.has(saved.screen) || !SAFE_NAV_SCREENS.has(saved.screen)) {
+    if (!saved || ['vpn', 'wireguard', 'my-web-store', 'webstore'].includes(saved.screen) || PRIVATE_NAV_SCREENS.has(saved.screen) || !SAFE_NAV_SCREENS.has(saved.screen)) {
       try { localStorage.removeItem(NAV_STATE_KEY) } catch {}
       return null
     }
@@ -1168,6 +1169,16 @@ function AppInner({ adminPortal = false }) {
           setLoading(false)
           return
         }
+        if (cleanPath === '/my-web-store' || cleanPath === '/webstore') {
+          if (data?.is_guest) {
+            setAuthScreen('login')
+            setLoading(false)
+            return
+          }
+          setScreen('my-web-store')
+          setLoading(false)
+          return
+        }
         const productId = params.get('product')
         const gameParam = params.get('game')
         const caseParam = params.get('case') || params.get('seguimiento')
@@ -1179,11 +1190,17 @@ function AppInner({ adminPortal = false }) {
         } else if (screenParam === 'streaming') {
           setCatalogFilter('streaming')
           setScreen('home')
-        } else if (['sms', 'smm', 'telegram', 'capcut', 'profile', 'orders', 'support', 'inbox', 'help', 'contact', 'referrals', 'partner-help', 'swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc', 'vpn', 'wireguard'].includes(screenParam)) {
+        } else if (['sms', 'smm', 'telegram', 'capcut', 'profile', 'orders', 'support', 'inbox', 'help', 'contact', 'referrals', 'partner-help', 'swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc', 'vpn', 'wireguard', 'my-web-store', 'webstore'].includes(screenParam)) {
           if (['swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc'].includes(screenParam) && !canCrypto) {
             setScreen('home')
           } else if (screenParam === 'wireguard' || screenParam === 'vpn') {
             setScreen('vpn')
+          } else if (screenParam === 'my-web-store' || screenParam === 'webstore') {
+            if (data?.is_guest) {
+              setAuthScreen('login')
+            } else {
+              setScreen('my-web-store')
+            }
           } else {
             setScreen(screenParam === 'inbox' ? 'support' : screenParam)
           }
@@ -1388,6 +1405,12 @@ function AppInner({ adminPortal = false }) {
             setLoading(false)
             return
           }
+          if (cleanPath2 === '/my-web-store' || cleanPath2 === '/webstore') {
+            setAuthScreen('login')
+            setMe(GUEST_USER)
+            setLoading(false)
+            return
+          }
           const productId = params.get('product')
           const gameParam2 = params.get('game')
           const caseParam2 = params.get('case') || params.get('seguimiento')
@@ -1396,11 +1419,16 @@ function AppInner({ adminPortal = false }) {
             setFzrType(resolvedCategory2.providerType)
             setFzrCategory(resolvedCategory2.categoryId)
             setScreen('fzr-catalog')
-          } else if (['sms', 'smm', 'telegram', 'capcut', 'help', 'contact', 'partner-help', 'api-docs', 'swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc', 'vpn', 'wireguard'].includes(screenParam2)) {
+          } else if (['sms', 'smm', 'telegram', 'capcut', 'help', 'contact', 'partner-help', 'api-docs', 'swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc', 'vpn', 'wireguard', 'my-web-store', 'webstore'].includes(screenParam2)) {
             if (['swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc'].includes(screenParam2) && !canCrypto2) {
               setScreen('home')
             } else if (screenParam2 === 'wireguard' || screenParam2 === 'vpn') {
               setScreen('vpn')
+            } else if (screenParam2 === 'my-web-store' || screenParam2 === 'webstore') {
+              setAuthScreen('login')
+              setMe(GUEST_USER)
+              setLoading(false)
+              return
             } else {
               setScreen(screenParam2)
             }
@@ -1510,6 +1538,12 @@ function AppInner({ adminPortal = false }) {
             setLoading(false)
             return
           }
+          if (cleanPath3 === '/my-web-store' || cleanPath3 === '/webstore') {
+            setAuthScreen('login')
+            setMe(GUEST_USER)
+            setLoading(false)
+            return
+          }
           const productId = params.get('product')
           const gameParam3 = params.get('game')
           const caseParam3 = params.get('case') || params.get('seguimiento')
@@ -1518,9 +1552,14 @@ function AppInner({ adminPortal = false }) {
             setFzrType(resolvedCategory3.providerType)
             setFzrCategory(resolvedCategory3.categoryId)
             setScreen('fzr-catalog')
-          } else if (['sms', 'smm', 'telegram', 'capcut', 'help', 'contact', 'partner-help', 'api-docs', 'swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc', 'vpn', 'wireguard'].includes(screenParam3)) {
+          } else if (['sms', 'smm', 'telegram', 'capcut', 'help', 'contact', 'partner-help', 'api-docs', 'swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc', 'vpn', 'wireguard', 'my-web-store', 'webstore'].includes(screenParam3)) {
             if (screenParam3 === 'wireguard' || screenParam3 === 'vpn') {
               setScreen('vpn')
+            } else if (screenParam3 === 'my-web-store' || screenParam3 === 'webstore') {
+              setAuthScreen('login')
+              setMe(GUEST_USER)
+              setLoading(false)
+              return
             } else {
               setScreen(screenParam3)
             }
@@ -1835,8 +1874,8 @@ function AppInner({ adminPortal = false }) {
         let targetUrl = window.location.pathname + window.location.search
         if (screen === 'fzr-catalog' && fzrCategory) {
           targetUrl = '/' + encodeURIComponent(fzrCategory)
-        } else if (['swap', 'energy', 'p2p', 'wallet', 'orders', 'profile', 'support', 'api-docs', 'vpn'].includes(screen)) {
-          targetUrl = '/' + screen
+        } else if (['swap', 'energy', 'p2p', 'wallet', 'orders', 'profile', 'support', 'api-docs', 'vpn', 'my-web-store', 'webstore'].includes(screen)) {
+          targetUrl = '/' + (screen === 'webstore' ? 'my-web-store' : screen)
         }
         if (replaceNextHistory.current) {
           window.history.replaceState(catalogHistoryState(screen, currentGame, currentRegion, currentProduct, fzrType, fzrCategory, catalogFilter), '', targetUrl)
@@ -2102,6 +2141,15 @@ function AppInner({ adminPortal = false }) {
       setScreen('vpn')
       return
     }
+    if (target === 'my-web-store' || target === 'webstore') {
+      if (isGuest) {
+        requireLogin()
+        return
+      }
+      window.history.pushState({ screen: 'my-web-store' }, '', '/my-web-store')
+      setScreen('my-web-store')
+      return
+    }
     if (target === 'guides') {
       openGuide('')
       return
@@ -2176,7 +2224,7 @@ function AppInner({ adminPortal = false }) {
   }
 
   return (
-    <div className={showAppSidebar ? "flex h-screen w-full bg-bg text-white overflow-hidden select-text" : ((activeWebStore && screen === 'home') ? "min-h-screen bg-bg" : (screen === 'panel' || screen === 'sms' || screen === 'smm' || screen === 'telegram' || screen === 'capcut' || screen === 'fzr-catalog' || screen === 'home' || screen === 'vpn') ? "h-screen bg-bg overflow-hidden flex flex-col" : "min-h-screen bg-bg pb-24")}>
+    <div className={showAppSidebar ? "flex h-screen w-full bg-bg text-white overflow-hidden select-text" : ((activeWebStore && screen === 'home') ? "min-h-screen bg-bg" : (screen === 'panel' || screen === 'sms' || screen === 'smm' || screen === 'telegram' || screen === 'capcut' || screen === 'fzr-catalog' || screen === 'home' || screen === 'vpn' || screen === 'my-web-store' || screen === 'webstore') ? "h-screen bg-bg overflow-hidden flex flex-col" : "min-h-screen bg-bg pb-24")}>
       {/* 1. Barra Lateral Persistente en Desktop / Tablets (md+) */}
       {showAppSidebar && (
         <AppSidebar
@@ -2224,7 +2272,7 @@ function AppInner({ adminPortal = false }) {
 
       {/* 3. Área Principal de Contenido */}
       <div className={showAppSidebar ? "flex-1 min-w-0 flex flex-col h-full overflow-hidden relative" : "contents"}>
-        {!isPolicyScreen && screen !== 'home' && screen !== 'profile' && screen !== 'panel' && screen !== 'sms' && screen !== 'smm' && screen !== 'telegram' && screen !== 'capcut' && screen !== 'fzr-catalog' && screen !== 'streaming-product' && screen !== 'orders' && screen !== 'api' && screen !== 'api-docs' && screen !== 'support' && screen !== 'inbox' && screen !== 'case' && screen !== 'swap' && screen !== 'energy' && screen !== 'p2p' && screen !== 'wallet' && screen !== 'vip' && screen !== 'kyc' && screen !== 'vpn' && (
+        {!isPolicyScreen && screen !== 'home' && screen !== 'profile' && screen !== 'panel' && screen !== 'sms' && screen !== 'smm' && screen !== 'telegram' && screen !== 'capcut' && screen !== 'fzr-catalog' && screen !== 'streaming-product' && screen !== 'orders' && screen !== 'api' && screen !== 'api-docs' && screen !== 'support' && screen !== 'inbox' && screen !== 'case' && screen !== 'swap' && screen !== 'energy' && screen !== 'p2p' && screen !== 'wallet' && screen !== 'vip' && screen !== 'kyc' && screen !== 'vpn' && screen !== 'my-web-store' && screen !== 'webstore' && (
           <Header me={me} onBack={goBack}
                   onOpenSidebar={() => setSidebarOpen(true)}
                   onProfile={() => isGuest ? requireLogin() : setScreen('profile')}
@@ -2444,10 +2492,7 @@ function AppInner({ adminPortal = false }) {
             setScreen('panel')
           }}
           onWebStore={() => {
-            window.history.pushState({ screen: 'panel' }, '', '/panel')
-            setPanelReturnRole('reseller')
-            setPanelReturnTab('res-b2b-webstore')
-            setScreen('panel')
+            handleNav('my-web-store')
           }}
           onPartnerHelp={() => setScreen('partner-help')}
           onApi={() => setScreen('api-docs')}
@@ -2607,10 +2652,7 @@ function AppInner({ adminPortal = false }) {
             setScreen('panel')
           }}
           onWebStore={() => {
-            window.history.pushState({ screen: 'panel' }, '', '/panel')
-            setPanelReturnRole('reseller')
-            setPanelReturnTab('res-b2b-webstore')
-            setScreen('panel')
+            handleNav('my-web-store')
           }}
           onPartnerHelp={() => setScreen('partner-help')}
           onApi={() => setScreen('api-docs')}
@@ -2694,6 +2736,42 @@ function AppInner({ adminPortal = false }) {
           }}
           onNavOrders={() => handleNav('orders')}
         />
+      )}
+      {(screen === 'my-web-store' || screen === 'webstore') && (
+        <div className="flex-1 overflow-y-auto px-3 sm:px-6 py-4 sm:py-6 scrollbar-thin">
+          <div className="max-w-5xl mx-auto space-y-4">
+            <div className="flex items-center justify-between border-b border-white/10 pb-4">
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={goBack}
+                  className="rounded-xl border border-white/10 bg-white/5 p-2 text-white/70 hover:bg-white/10 hover:text-white transition cursor-pointer"
+                  title="Volver"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </button>
+                <div>
+                  <h1 className="text-lg sm:text-2xl font-black text-white flex items-center gap-2">
+                    <Globe2 className="h-5 w-5 sm:h-6 sm:w-6 text-emerald-400" />
+                    Mi Tienda Web & Mini App
+                  </h1>
+                  <p className="text-xs text-white/50">Crea y gestiona tu propio negocio digital con marca y bot de Telegram</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => isGuest ? requireLogin() : setShowTopUp(true)}
+                  className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 hover:bg-emerald-500/20 text-xs font-bold transition cursor-pointer"
+                >
+                  <DollarSign className="w-4 h-4" />
+                  <span>Recargar Saldo</span>
+                </button>
+              </div>
+            </div>
+            <ResellerWebStorePanel onOpenDeposit={() => isGuest ? requireLogin() : setShowTopUp(true)} />
+          </div>
+        </div>
       )}
 
       {showTopUp && (
@@ -2907,13 +2985,13 @@ function AppInner({ adminPortal = false }) {
         />
       )}
 
-      {!activeWebStore && screen !== 'case' && screen !== 'panel' && screen !== 'admin' && screen !== 'sms' && screen !== 'smm' && screen !== 'telegram' && screen !== 'capcut' && screen !== 'fzr-catalog' && screen !== 'vpn' && (
+      {!activeWebStore && screen !== 'case' && screen !== 'panel' && screen !== 'admin' && screen !== 'sms' && screen !== 'smm' && screen !== 'telegram' && screen !== 'capcut' && screen !== 'fzr-catalog' && screen !== 'vpn' && screen !== 'my-web-store' && screen !== 'webstore' && (
         <BottomNav active={screen} me={me} onNav={handleNav} showCryptoFeatures={showCryptoFeatures} />
       )}
 
       {/* Fallback: si el screen no matchea ningún componente, mostrar home */}
       {!['home', 'regions', 'products', 'detail', 'confirm', 'result',
-         'streaming-product', 'profile', 'orders', 'support', 'inbox', 'help', 'terms', 'terms-conditions', 'privacy', 'privacy-policy', 'faq', 'faqs', 'cookies', 'cookies-policy', 'contact', 'guides', 'guide-detail', 'seller-store', 'partner-help', 'admin', 'admin-edit', 'case', 'panel', 'sms', 'smm', 'telegram', 'capcut', 'fzr-catalog', 'api-docs', 'api', 'seller', 'referrals', 'swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc', 'vpn', 'wireguard'].includes(screen) && (
+         'streaming-product', 'profile', 'orders', 'support', 'inbox', 'help', 'terms', 'terms-conditions', 'privacy', 'privacy-policy', 'faq', 'faqs', 'cookies', 'cookies-policy', 'contact', 'guides', 'guide-detail', 'seller-store', 'partner-help', 'admin', 'admin-edit', 'case', 'panel', 'sms', 'smm', 'telegram', 'capcut', 'fzr-catalog', 'api-docs', 'api', 'seller', 'referrals', 'swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc', 'vpn', 'wireguard', 'my-web-store', 'webstore'].includes(screen) && (
         <div className="p-8 text-center">
           <p className="text-white/60 mb-4">Estado no reconocido: {screen}</p>
           <button onClick={() => setScreen('home')} className="btn-primary max-w-xs mx-auto">
@@ -20752,7 +20830,23 @@ let _cachedProfileData = readProfileCache()
 function PublicPaymentProfileScreen({ handle }) {
   const [state, setState] = useState({ loading: true, profile: null, error: '' })
   const [copied, setCopied] = useState(false)
+  const [paymentOpen, setPaymentOpen] = useState(false)
+  const [paymentOptions, setPaymentOptions] = useState([])
+  const [paymentOptionsError, setPaymentOptionsError] = useState('')
+  const [paymentOptionsLoading, setPaymentOptionsLoading] = useState(false)
+  const [paymentAmount, setPaymentAmount] = useState('10')
+  const [paymentCurrency, setPaymentCurrency] = useState('')
+  const [paymentNetwork, setPaymentNetwork] = useState('')
+  const [paymentInvoice, setPaymentInvoice] = useState(null)
+  const [paymentLoading, setPaymentLoading] = useState(false)
+  const [paymentError, setPaymentError] = useState('')
+  const [paymentCopied, setPaymentCopied] = useState(false)
   const paymentUrl = typeof window !== 'undefined' ? `${window.location.origin}/pay/${handle}` : ''
+  const selectedCurrency = useMemo(
+    () => paymentOptions.find((item) => item.symbol === paymentCurrency) || null,
+    [paymentOptions, paymentCurrency]
+  )
+  const paymentNetworks = selectedCurrency?.networks || []
 
   useEffect(() => {
     let cancelled = false
@@ -20779,6 +20873,71 @@ function PublicPaymentProfileScreen({ handle }) {
       try { await navigator.share({ title: 'Francho Shop', text: `Paga de forma segura a @${handle}`, url: paymentUrl }); return } catch {}
     }
     copyLink()
+  }
+
+  useEffect(() => {
+    if (!paymentOpen || paymentInvoice) return undefined
+    let cancelled = false
+    setPaymentOptionsLoading(true)
+    setPaymentOptionsError('')
+    api.getPublicPaymentOptions(handle)
+      .then((data) => {
+        if (cancelled) return
+        const currencies = Array.isArray(data?.currencies) ? data.currencies : []
+        if (!currencies.length) throw new Error('No hay métodos de pago disponibles ahora mismo')
+        setPaymentOptions(currencies)
+        const preferred = currencies.find((item) => item.symbol === 'USDT') || currencies[0]
+        setPaymentCurrency((current) => currencies.some((item) => item.symbol === current) ? current : preferred.symbol)
+      })
+      .catch((err) => { if (!cancelled) setPaymentOptionsError(err.message || 'No se pudieron cargar los métodos de pago') })
+      .finally(() => { if (!cancelled) setPaymentOptionsLoading(false) })
+    return () => { cancelled = true }
+  }, [paymentOpen, paymentInvoice, handle])
+
+  useEffect(() => {
+    if (!paymentNetworks.length) {
+      setPaymentNetwork('')
+      return
+    }
+    const preferred = paymentNetworks.find((item) => /^(bsc|bep20|binance smart chain)$/i.test(item.network) || /bep20|binance smart chain/i.test(item.name))
+    setPaymentNetwork((current) => paymentNetworks.some((item) => item.network === current) ? current : (preferred || paymentNetworks[0]).network)
+  }, [paymentCurrency, paymentNetworks.length])
+
+  useEffect(() => {
+    if (!paymentInvoice?.payment_id || paymentInvoice.status === 'paid') return undefined
+    const timer = window.setInterval(async () => {
+      try {
+        const result = await api.getPublicPaymentStatus(paymentInvoice.payment_id)
+        if (result?.payment) setPaymentInvoice((current) => current ? { ...current, ...result.payment } : current)
+      } catch {}
+    }, 12000)
+    return () => window.clearInterval(timer)
+  }, [paymentInvoice?.payment_id, paymentInvoice?.status])
+
+  async function createPublicPayment() {
+    const amount = Number(String(paymentAmount).replace(',', '.'))
+    if (!amount || amount <= 0) { setPaymentError('Escribe un monto válido'); return }
+    if (!paymentCurrency || !paymentNetwork) { setPaymentError('Selecciona moneda y red para continuar'); return }
+    setPaymentLoading(true)
+    setPaymentError('')
+    try {
+      const response = await api.createPublicPayment(handle, { amount, pay_currency: paymentCurrency, network: paymentNetwork })
+      if (!response?.payment) throw new Error('No se pudo preparar el pago')
+      setPaymentInvoice(response.payment)
+    } catch (err) {
+      setPaymentError(err.message || 'No se pudo preparar el pago')
+    } finally {
+      setPaymentLoading(false)
+    }
+  }
+
+  async function copyPaymentAddress() {
+    if (!paymentInvoice?.address) return
+    try {
+      await navigator.clipboard.writeText(paymentInvoice.address)
+      setPaymentCopied(true)
+      window.setTimeout(() => setPaymentCopied(false), 1800)
+    } catch { setPaymentError('No se pudo copiar. Mantén pulsada la dirección para copiarla.') }
   }
 
   if (state.loading) {
@@ -20825,10 +20984,13 @@ function PublicPaymentProfileScreen({ handle }) {
             </div>
           </div>
           <p className="mx-auto mt-4 max-w-[270px] text-xs leading-relaxed text-white/50">
-            Escanea el código o comparte este enlace para recibir pagos cuando Francho Pay esté disponible.
+            Escanea el código o comparte este enlace para abrir un pago a este perfil.
           </p>
 
-          <div className="mt-6 grid grid-cols-2 gap-3">
+          <button type="button" onClick={() => { setPaymentOpen(true); setPaymentError('') }} className="fs-public-pay-primary mt-6 inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-3 text-sm font-black transition active:translate-y-0.5">
+            <WalletCards className="h-4 w-4" />Pagar a @{profile.handle}
+          </button>
+          <div className="mt-3 grid grid-cols-2 gap-3">
             <button type="button" onClick={copyLink} className="fs-public-pay-secondary inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-xs font-extrabold text-white transition active:translate-y-0.5">
               <Copy className="h-4 w-4" />{copied ? 'Enlace copiado' : 'Copiar enlace'}
             </button>
@@ -20842,6 +21004,83 @@ function PublicPaymentProfileScreen({ handle }) {
           Enlace público de Francho Shop
         </footer>
       </section>
+
+      {paymentOpen && (
+        <div className="fixed inset-0 z-[1000] flex items-end justify-center bg-black/75 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={(event) => {
+          if (event.target === event.currentTarget) setPaymentOpen(false)
+        }}>
+          <section role="dialog" aria-modal="true" aria-label={`Pagar a ${profileName}`} className="fs-public-pay-modal w-full max-w-md rounded-t-[24px] p-5 sm:rounded-[24px]">
+            <div className="mb-5 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10px] font-black tracking-[0.14em] text-emerald-300/70 uppercase">Pago a perfil</p>
+                <h2 className="mt-1 truncate text-lg font-black text-white">@{profile.handle}</h2>
+              </div>
+              <button type="button" onClick={() => setPaymentOpen(false)} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/15" aria-label="Cerrar pago"><X className="h-4 w-4" /></button>
+            </div>
+
+            {!paymentInvoice ? (
+              <div className="space-y-3">
+                <label className="block">
+                  <span className="mb-1.5 block text-[11px] font-bold text-white/60">Monto a enviar</span>
+                  <span className="relative block">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-black text-white/40">$</span>
+                    <input value={paymentAmount} onChange={(event) => { setPaymentAmount(event.target.value); setPaymentError('') }} inputMode="decimal" placeholder="10.00" className="fs-public-pay-input w-full rounded-xl py-3 pl-8 pr-14 text-base font-black text-white outline-none" />
+                    <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-white/45">USDT</span>
+                  </span>
+                </label>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <label className="block min-w-0">
+                    <span className="mb-1.5 block text-[11px] font-bold text-white/60">Moneda</span>
+                    <select value={paymentCurrency} onChange={(event) => { setPaymentCurrency(event.target.value); setPaymentError('') }} disabled={paymentOptionsLoading || !!paymentOptionsError} className="fs-public-pay-input h-11 w-full rounded-xl px-3 text-xs font-black text-white outline-none disabled:opacity-50">
+                      {!paymentCurrency && <option value="">Cargando...</option>}
+                      {paymentOptions.map((item) => <option key={item.symbol} value={item.symbol}>{item.symbol}</option>)}
+                    </select>
+                  </label>
+                  <label className="block min-w-0">
+                    <span className="mb-1.5 block text-[11px] font-bold text-white/60">Red</span>
+                    <select value={paymentNetwork} onChange={(event) => { setPaymentNetwork(event.target.value); setPaymentError('') }} disabled={paymentOptionsLoading || !!paymentOptionsError || !paymentNetworks.length} className="fs-public-pay-input h-11 w-full rounded-xl px-3 text-xs font-black text-white outline-none disabled:opacity-50">
+                      {!paymentNetwork && <option value="">Seleccionar</option>}
+                      {paymentNetworks.map((item) => <option key={item.network} value={item.network}>{item.name || item.network}</option>)}
+                    </select>
+                  </label>
+                </div>
+                {paymentOptionsLoading && <p className="flex items-center gap-2 text-xs text-white/50"><Loader2 className="h-3.5 w-3.5 animate-spin" />Cargando métodos disponibles…</p>}
+                {paymentOptionsError && <p className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-xs text-red-100">{paymentOptionsError}</p>}
+                {paymentError && <p className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-xs text-red-100">{paymentError}</p>}
+                <button type="button" onClick={createPublicPayment} disabled={paymentLoading || paymentOptionsLoading || !!paymentOptionsError || !paymentCurrency || !paymentNetwork} className="fs-public-pay-primary inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-black transition disabled:opacity-45 active:translate-y-0.5">
+                  {paymentLoading ? <><Loader2 className="h-4 w-4 animate-spin" />Preparando pago…</> : <><ArrowUpRight className="h-4 w-4" />Continuar al pago</>}
+                </button>
+                <p className="px-2 text-center text-[10px] leading-relaxed text-white/40">El pago se acredita automáticamente a @{profile.handle} después de la confirmación de la red.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div className={`rounded-2xl border p-4 text-center ${paymentInvoice.status === 'paid' ? 'border-emerald-300/30 bg-emerald-300/10' : 'border-white/10 bg-white/[0.035]'}`}>
+                  <p className="text-[10px] font-bold tracking-[0.13em] text-white/45 uppercase">{paymentInvoice.status === 'paid' ? 'Pago acreditado' : 'Envía exactamente'}</p>
+                  <p className={`mt-1 text-2xl font-black ${paymentInvoice.status === 'paid' ? 'text-emerald-200' : 'text-white'}`}>{paymentInvoice.pay_amount} <span className="text-base text-emerald-300">{paymentInvoice.pay_currency}</span></p>
+                  <p className="mt-1 text-xs font-bold text-white/60">Red: <span className="text-emerald-300">{paymentInvoice.network}</span></p>
+                </div>
+                {paymentInvoice.qr_code && <div className="mx-auto w-fit rounded-2xl bg-white p-2.5 shadow-xl shadow-black/35"><img src={paymentInvoice.qr_code} alt="QR de pago" className="h-40 w-40 rounded-xl" /></div>}
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <p className="text-[10px] font-bold tracking-[0.12em] text-white/40 uppercase">Dirección de pago</p>
+                  <p className="mt-1 break-all select-text font-mono text-xs leading-relaxed text-white/90">{paymentInvoice.address}</p>
+                  <button type="button" onClick={copyPaymentAddress} className="fs-public-pay-secondary mt-3 inline-flex min-h-10 w-full items-center justify-center gap-2 rounded-xl px-3 text-xs font-black text-white transition active:translate-y-0.5"><Copy className="h-3.5 w-3.5" />{paymentCopied ? 'Dirección copiada' : 'Copiar dirección'}</button>
+                  {paymentInvoice.memo && <p className="mt-3 rounded-lg border border-amber-300/20 bg-amber-300/10 p-2 text-xs text-amber-100">Memo/Destino: <span className="select-text font-mono font-bold">{paymentInvoice.memo}</span></p>}
+                </div>
+                {paymentError && <p className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-xs text-red-100">{paymentError}</p>}
+                {paymentInvoice.status !== 'paid' && <button type="button" onClick={async () => {
+                  try {
+                    setPaymentError('')
+                    const result = await api.getPublicPaymentStatus(paymentInvoice.payment_id)
+                    if (result?.payment) setPaymentInvoice((current) => ({ ...current, ...result.payment }))
+                  } catch (err) { setPaymentError(err.message || 'No se pudo verificar el pago') }
+                }} className="fs-public-pay-primary inline-flex min-h-12 w-full items-center justify-center gap-2 rounded-xl px-4 text-sm font-black transition active:translate-y-0.5"><RefreshCcw className="h-4 w-4" />Ya pagué / Verificar</button>}
+                <button type="button" onClick={() => { setPaymentInvoice(null); setPaymentError(''); setPaymentCopied(false) }} className="w-full py-1.5 text-xs font-bold text-white/45 transition hover:text-white/75">Cambiar monto o red</button>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
     </main>
   )
 }

@@ -2279,11 +2279,11 @@ export function WalletScreen({ me, onBack, onTopUp, onNav }) {
           </div>
         )}
 
-        {/* 3. VISTA: HISTORIAL DE TRANSFERENCIAS FC */}
+        {/* 3. VISTA: HISTORIAL DE COBROS Y TRANSFERENCIAS FC */}
         {walletTab === 'movements' && <div className={`${walletPanelClass} space-y-3`}>
           <div className="flex justify-between items-center">
-            <h3 className="font-black text-xs sm:text-sm text-white">Envíos y recibos de FC</h3>
-            <span className="text-[10px] text-white/40">Solo transferencias</span>
+            <h3 className="font-black text-xs sm:text-sm text-white">Cobros y transferencias</h3>
+            <span className="text-[10px] text-white/40">Sin compras</span>
           </div>
 
           {isGuest ? (
@@ -2298,7 +2298,9 @@ export function WalletScreen({ me, onBack, onTopUp, onNav }) {
                 const amt = Number(tx.amount || 0)
                 const isPositive = amt > 0
                 const dateStr = tx.created_at ? new Date(tx.created_at * 1000).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Reciente'
-                const typeLabel = ['transfer_out', 'transfer_sent'].includes(tx.type) ? 'FC enviado' : 'FC recibido'
+                const typeLabel = ['transfer_out', 'transfer_sent'].includes(tx.type)
+                  ? 'FC enviado'
+                  : tx.type === 'payment_received' ? 'Pago recibido' : 'FC recibido'
                 return (
                   <div key={tx.id} className="flex items-center justify-between rounded-xl border border-white/5 bg-white/[.04] p-3 text-xs">
                     <div className="min-w-0 pr-2">
@@ -2315,7 +2317,7 @@ export function WalletScreen({ me, onBack, onTopUp, onNav }) {
             </div>
           ) : (
             <div className="rounded-xl border border-white/5 bg-white/[.04] p-4 text-center text-xs text-white/50">
-              Aún no tienes transferencias de FC. Las compras y recargas no aparecen en este historial.
+              Aún no tienes cobros ni transferencias de FC. Las compras no aparecen en este historial.
             </div>
           )}
         </div>}

@@ -452,6 +452,25 @@ async def background_oxapay_deposit_sync_loop():
                         await db.update_deposit(track_id, status, json.dumps(info, ensure_ascii=False))
                 except Exception as ex:
                     log.debug("Error comprobando depósito pendiente %s: %s", track_id, ex)
+
+            pending_public_payments = await db.get_pending_public_payment_requests(limit=15, since=cutoff)
+            for payment in pending_public_payments:
+                track_id = str(payment.get("provider_track_id") or "").strip()
+                if not track_id:
+                    continue
+                try:
+                    info = await oxapay.get_payment(track_id)
+                    status = str(info.get("status") or "").lower()
+                    raw_provider = json.dumps({"provider": info}, ensure_ascii=False)
+                    if status == "paid":
+                        settled, credited = await db.settle_public_payment_request(track_id, raw_provider)
+                        if settled and credited:
+                            await notify_public_payment_received(settled, "auto_sync")
+                            log.info("Francho Pay Auto-Sync: acreditado %s ($%.2f)", settled["payment_id"], float(settled["amount_usd"]))
+                    elif status in ("paying", "expired", "failed", "cancelled", "canceled"):
+                        await db.update_public_payment_status(track_id, status, raw_provider)
+                except Exception as ex:
+                    log.debug("Error comprobando cobro público pendiente %s: %s", track_id, ex)
         except asyncio.CancelledError:
             break
         except Exception as e:
@@ -4512,6 +4531,12 @@ class DepositCreateRequest(BaseModel):
     network: str = Field(default="", max_length=80)
 
 
+class PublicPaymentCreateRequest(BaseModel):
+    amount: float = Field(gt=0, le=10000)
+    pay_currency: str = Field(default="USDT", min_length=2, max_length=16)
+    network: str = Field(default="", min_length=1, max_length=80)
+
+
 class ReferralApplyRequest(BaseModel):
     referrer_id: str | int | None = None
     code: str | None = None
@@ -5191,6 +5216,56 @@ async def get_oxapay_payment_options() -> list[dict]:
     return items
 
 
+async def public_payment_profile_or_404(handle: str) -> tuple[str, dict]:
+    try:
+        clean_handle = db.validate_payment_handle(handle)
+    except ValueError:
+        raise HTTPException(404, "Perfil no encontrado")
+    profile_data = await db.get_public_payment_profile(clean_handle)
+    if not profile_data:
+        raise HTTPException(404, "Perfil no encontrado")
+    return clean_handle, profile_data
+
+
+def public_payment_payload(payment: dict) -> dict:
+    return {
+        "payment_id": payment.get("payment_id"),
+        "recipient_handle": payment.get("recipient_handle"),
+        "amount": float(payment.get("amount_usd") or 0),
+        "pay_amount": payment.get("provider_amount") or payment.get("amount_usd"),
+        "pay_currency": payment.get("provider_currency") or payment.get("requested_currency"),
+        "network": payment.get("provider_network") or payment.get("requested_network"),
+        "address": payment.get("payment_address") or "",
+        "status": str(payment.get("status") or "pending").lower(),
+        "expires_at": payment.get("expires_at"),
+        "paid_at": payment.get("paid_at"),
+    }
+
+
+async def notify_public_payment_received(payment: dict, source: str) -> None:
+    """Notifica el cobro acreditado sin exponer información del pagador."""
+    recipient_id = int(payment["recipient_user_id"])
+    amount = float(payment.get("amount_usd") or 0)
+    handle = str(payment.get("recipient_handle") or "")
+    try:
+        await db.create_notification(
+            user_id=recipient_id,
+            type="payment_received",
+            title="Pago recibido",
+            message=f"Recibiste ${amount:.2f} USDT mediante tu perfil @{handle}.",
+            url="/wallet",
+        )
+        if fcm:
+            await fcm.notify_deposit_confirmed(recipient_id, amount)
+        await audit_json(0, f"public_payment.{source}", "public_payment", payment["payment_id"], {
+            "recipient_user_id": recipient_id,
+            "amount": amount,
+            "track_id": payment.get("provider_track_id"),
+        })
+    except Exception as exc:
+        log.warning("No se pudo notificar el cobro público %s: %s", payment.get("payment_id"), exc)
+
+
 @app.get("/api/deposits/payment-options")
 async def deposit_payment_options(user: dict = Depends(get_current_user)):
     """Opciones de moneda/red permitidas por OxaPay para esta cuenta Merchant."""
@@ -5524,8 +5599,9 @@ async def oxapay_deposit_callback(request: Request):
         raise HTTPException(400, "Callback OxaPay sin track_id")
 
     dep = await db.get_deposit_by_track(track_id)
-    if not dep:
-        raise HTTPException(404, "Depósito no encontrado")
+    public_payment = None if dep else await db.get_public_payment_by_track(track_id)
+    if not dep and not public_payment:
+        raise HTTPException(404, "Pago no encontrado")
 
     provider_verified = False
     try:
@@ -5534,8 +5610,21 @@ async def oxapay_deposit_callback(request: Request):
     except OxaPayError:
         provider = payload
 
-    status = str(provider.get("status") or payload.get("status") or dep.get("status") or "pending").lower()
+    current_status = dep.get("status") if dep else public_payment.get("status")
+    status = str(provider.get("status") or payload.get("status") or current_status or "pending").lower()
     raw_callback = json.dumps({"callback": payload, "provider": provider}, ensure_ascii=False)
+
+    if public_payment:
+        if status == "paid":
+            if not (webhook_verified or provider_verified):
+                raise HTTPException(502, "No se pudo verificar el pago con OxaPay")
+            settled, credited = await db.settle_public_payment_request(track_id, raw_callback)
+            if settled and credited:
+                await notify_public_payment_received(settled, "callback")
+            return {"ok": True, "status": "paid", "credited": credited}
+        if status in ("paying", "expired", "failed", "cancelled", "canceled"):
+            await db.update_public_payment_status(track_id, status, raw_callback)
+        return {"ok": True, "status": status, "credited": False}
 
     if status == "paid":
         if not (webhook_verified or provider_verified):
@@ -5797,16 +5886,130 @@ async def update_payment_identity(req: PaymentIdentityUpdateRequest, user: dict 
     return {"ok": True, "identity": payment_identity_payload(identity)}
 
 
+@app.get("/api/public/profiles/{handle}/payment-options")
+async def public_profile_payment_options(handle: str, request: Request):
+    await enforce_public_handle_rate_limit(request, limit=12)
+    await public_payment_profile_or_404(handle)
+    try:
+        options = await get_oxapay_payment_options()
+    except OxaPayError as exc:
+        raise HTTPException(502, exc.message)
+    if not options:
+        raise HTTPException(503, "No hay monedas disponibles para recibir pagos ahora mismo")
+    return {"ok": True, "currencies": options}
+
+
+@app.post("/api/public/profiles/{handle}/payments")
+async def create_public_profile_payment(handle: str, req: PublicPaymentCreateRequest, request: Request):
+    """Crea una factura para acreditar saldo al dueño de un perfil público.
+
+    Esta ruta es pública a propósito: permite que una persona sin cuenta pague a
+    otra. El callback acredita exclusivamente al recipient_user_id almacenado.
+    """
+    await enforce_public_handle_rate_limit(request, limit=6)
+    clean_handle, profile_data = await public_payment_profile_or_404(handle)
+    amount = round(float(req.amount), 2)
+    minimum = await settings.get_float("min_deposit")
+    if amount < minimum:
+        raise HTTPException(400, f"El pago mínimo es de {minimum:.2f} USDT")
+    if amount > 10000:
+        raise HTTPException(400, "El monto máximo es 10,000 USDT")
+
+    try:
+        options = await get_oxapay_payment_options()
+    except OxaPayError as exc:
+        raise HTTPException(502, exc.message)
+    currency = req.pay_currency.strip().upper()
+    selected_currency = next((item for item in options if item["symbol"] == currency), None)
+    if not selected_currency:
+        raise HTTPException(400, "La moneda seleccionada no está habilitada")
+    selected_network = next(
+        (item for item in selected_currency.get("networks", []) if item["network"].lower() == req.network.strip().lower()),
+        None,
+    )
+    if not selected_network:
+        raise HTTPException(400, "La red seleccionada no es válida para esta moneda")
+
+    payment_id = db.gen_public_payment_id()
+    callback_url = f"{config.WEBHOOK_HOST}{config.OXAPAY_CALLBACK_PATH}" if config.WEBHOOK_HOST else None
+    try:
+        provider = await oxapay.create_white_label(
+            amount=amount,
+            order_id=payment_id,
+            pay_currency=currency,
+            network=selected_network["network"],
+            description=f"Francho Shop · Pago a @{clean_handle} · {amount:.2f} USDT",
+            callback_url=callback_url,
+        )
+    except OxaPayError as exc:
+        raise HTTPException(502, exc.message)
+
+    track_id = str(provider.get("track_id") or provider.get("trackId") or "").strip()
+    address = str(provider.get("address") or "").strip()
+    if not track_id or not address:
+        raise HTTPException(502, "No se pudieron preparar los datos de pago")
+    try:
+        expires_at = float(provider.get("expired_at") or provider.get("expires_at") or 0) or None
+    except (TypeError, ValueError):
+        expires_at = None
+    payment = await db.create_public_payment_request(
+        payment_id=payment_id,
+        recipient_user_id=int(profile_data["user_id"]),
+        recipient_handle=clean_handle,
+        amount_usd=amount,
+        requested_currency=currency,
+        requested_network=selected_network["network"],
+        provider_track_id=track_id,
+        payment_address=address,
+        provider_amount=str(provider.get("pay_amount") or amount),
+        provider_currency=str(provider.get("pay_currency") or currency).upper(),
+        provider_network=str(provider.get("network") or selected_network["network"]),
+        provider_payload=json.dumps(provider, ensure_ascii=False),
+        expires_at=expires_at,
+    )
+    await audit_json(0, "public_payment.created", "public_payment", payment_id, {
+        "recipient_user_id": int(profile_data["user_id"]),
+        "recipient_handle": clean_handle,
+        "amount": amount,
+        "currency": currency,
+        "network": selected_network["network"],
+        "track_id": track_id,
+    })
+    return {
+        "ok": True,
+        "payment": {**public_payment_payload(payment), "qr_code": str(provider.get("qr_code") or ""), "memo": str(provider.get("memo") or "")},
+    }
+
+
+@app.get("/api/public/payments/{payment_id}")
+async def public_payment_status(payment_id: str, request: Request):
+    await enforce_public_handle_rate_limit(request, limit=20)
+    payment = await db.get_public_payment_by_id(payment_id.strip().upper())
+    if not payment:
+        raise HTTPException(404, "Pago no encontrado")
+    if payment.get("status") not in ("paid", "expired", "failed", "cancelled", "canceled"):
+        try:
+            provider = await oxapay.get_payment(str(payment["provider_track_id"]))
+            provider_status = str(provider.get("status") or payment.get("status") or "pending").lower()
+            raw_provider = json.dumps({"provider": provider}, ensure_ascii=False)
+            if provider_status == "paid":
+                settled, credited = await db.settle_public_payment_request(str(payment["provider_track_id"]), raw_provider)
+                if settled:
+                    payment = settled
+                    if credited:
+                        await notify_public_payment_received(payment, "status_sync")
+            elif provider_status in ("paying", "expired", "failed", "cancelled", "canceled"):
+                await db.update_public_payment_status(str(payment["provider_track_id"]), provider_status, raw_provider)
+                payment["status"] = provider_status
+        except OxaPayError:
+            pass
+    return {"ok": True, "payment": public_payment_payload(payment)}
+
+
 @app.get("/api/public/profiles/{handle}")
 async def public_payment_profile(handle: str, request: Request):
     await enforce_public_handle_rate_limit(request)
-    try:
-        clean_handle = db.validate_payment_handle(handle)
-    except ValueError:
-        raise HTTPException(404, "Perfil no encontrado")
-    profile_data = await db.get_public_payment_profile(clean_handle)
-    if not profile_data:
-        raise HTTPException(404, "Perfil no encontrado")
+    _, profile_data = await public_payment_profile_or_404(handle)
 
     user_id = profile_data["user_id"]
     vip_info = (await db.get_user_vip_status(user_id)) or {}

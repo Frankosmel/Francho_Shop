@@ -1,31 +1,101 @@
+@import '@fontsource/montserrat/400.css';
+@import '@fontsource/montserrat/500.css';
+@import '@fontsource/montserrat/600.css';
+@import '@fontsource/montserrat/700.css';
+@import '@fontsource/montserrat/800.css';
+@import '@fontsource/montserrat/900.css';
+@import '@fontsource/chakra-petch/600.css';
+@import '@fontsource/chakra-petch/700.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 html, body, #root {
   height: 100%;
-  background: #0b1117;
+  background-color: #070a0f;
   color: #fff;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html.light-theme, html.light-theme body, html.light-theme #root {
+  background-color: #F8FAFC !important;
+  color: #0f172a !important;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background-image: 
+    radial-gradient(at 10% 12%, rgba(139, 92, 246, 0.09) 0px, transparent 40%),
+    radial-gradient(at 90% 18%, rgba(59, 130, 246, 0.08) 0px, transparent 40%),
+    radial-gradient(at 50% 95%, rgba(16, 185, 129, 0.07) 0px, transparent 50%);
+  transform: translateZ(0);
+}
+
+html.light-theme body::before {
+  display: none !important;
+  opacity: 0 !important;
 }
 
 * { -webkit-tap-highlight-color: transparent; }
 
 body {
   overscroll-behavior: none;
+  -webkit-overflow-scrolling: touch;
 }
 
 .btn {
-  @apply w-full py-3.5 rounded-lg font-semibold text-base transition active:scale-95;
+  @apply w-full py-3.5 rounded-xl font-semibold text-base transition active:scale-95;
 }
 .btn-primary {
-  @apply btn bg-accent text-white shadow-lg shadow-accent/20;
+  @apply btn text-white hover:brightness-105;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: #00c26f;
+  box-shadow: inset 0 2px 1px rgba(255,255,255,.36), 0 5px 0 #057544, 0 12px 20px rgba(0,194,111,.24);
+}
+.btn-primary::before,
+.fs-btn-glossy::before {
+  content: '';
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  top: 7%;
+  height: 38%;
+  border-radius: 9999px;
+  background: rgba(255,255,255,.28);
+  filter: blur(1px);
+  pointer-events: none;
+}
+.btn-primary:active,
+.fs-btn-glossy:active {
+  transform: translateY(4px);
+  box-shadow: inset 0 2px 1px rgba(255,255,255,.18), 0 1px 0 #057544;
+}
+.fs-btn-glossy {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  background: #00c26f !important;
+  box-shadow: inset 0 2px 1px rgba(255,255,255,.36), 0 5px 0 #057544, 0 12px 20px rgba(0,194,111,.24) !important;
+}
+.btn-primary:disabled,
+.fs-btn-glossy:disabled {
+  transform: none;
+  box-shadow: none !important;
 }
 .btn-ghost {
-  @apply btn bg-card text-white border border-white/10;
+  @apply btn bg-card text-white border border-white/10 hover:border-white/20;
 }
 .card {
-  @apply bg-card rounded-lg border border-white/5 shadow-sm shadow-black/10;
+  @apply bg-card/90 backdrop-blur-md rounded-xl border border-white/10 shadow-lg shadow-black/20;
 }
 
 /* Modal slide-up animation */
@@ -37,8 +107,387 @@ body {
   animation: slide-up 0.3s ease-out;
 }
 
+@keyframes fs-account-ring-spin {
+  to { transform: rotate(360deg); }
+}
+.fs-account-ring-spin {
+  animation: fs-account-ring-spin 2.8s linear infinite;
+  will-change: transform;
+}
+.fs-account-ring-spin-admin {
+  animation: fs-account-ring-spin 2.1s linear infinite reverse;
+  will-change: transform;
+}
+.fs-account-ring-3d {
+  border: 1px solid rgb(255 255 255 / 0.38);
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 0.52),
+    inset 0 -1px 1px rgb(0 0 0 / 0.42),
+    0 1px 2px rgb(0 0 0 / 0.68),
+    0 0 7px rgb(34 197 94 / 0.42);
+}
+
+/* Acciones principales de Wallet: volumen por luz y degradado, no por una franja inferior. */
+.fs-wallet-button-primary {
+  background: linear-gradient(180deg, #7bf4c0 0%, #27d98b 47%, #0ba96b 100%);
+  color: #062316;
+  border: 0;
+  box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.58), inset 0 -1px 2px rgb(0 65 39 / 0.25), 0 5px 0 rgb(3 12 8 / 0.62), 0 11px 18px rgb(0 0 0 / 0.3);
+}
+.fs-wallet-button-amber {
+  background: linear-gradient(180deg, #ffe18a 0%, #f6bd36 48%, #db8c10 100%);
+  color: #281700;
+  border: 0;
+  box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.55), inset 0 -1px 2px rgb(106 60 0 / 0.24), 0 5px 0 rgb(17 12 3 / 0.62), 0 11px 18px rgb(0 0 0 / 0.3);
+}
+.fs-wallet-button-slate {
+  background: linear-gradient(180deg, #5d779d 0%, #304967 52%, #1a2a40 100%);
+  color: #f8fbff;
+  border: 0;
+  box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.24), inset 0 -1px 2px rgb(4 12 24 / 0.42), 0 5px 0 rgb(3 8 16 / 0.72), 0 11px 18px rgb(0 0 0 / 0.34);
+}
+
+.fs-balance-depth {
+  background: linear-gradient(180deg, rgb(35 47 52 / 0.98) 0%, rgb(20 29 33 / 0.98) 100%);
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 0.12),
+    inset 0 -1px 2px rgb(0 0 0 / 0.28),
+    0 2px 3px rgb(0 0 0 / 0.64),
+    0 7px 13px rgb(0 0 0 / 0.4),
+    0 17px 28px rgb(0 0 0 / 0.2);
+}
+
+/* El panel lateral conserva sus colores, pero todos sus controles comparten relieve. */
+.fs-sidebar-surface button {
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.1) 0%, rgb(255 255 255 / 0.025) 48%, rgb(0 0 0 / 0.1) 100%);
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 0.1),
+    inset 0 -1px 1px rgb(0 0 0 / 0.2),
+    0 3px 0 rgb(0 0 0 / 0.34),
+    0 8px 14px rgb(0 0 0 / 0.16);
+}
+.fs-sidebar-surface button:hover {
+  filter: brightness(1.08);
+}
+.fs-sidebar-surface button:active {
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.28), 0 1px 0 rgb(0 0 0 / 0.34);
+}
+
+.fs-orders-surface button {
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.09) 0%, rgb(255 255 255 / 0.02) 54%, rgb(0 0 0 / 0.09) 100%);
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 0.1),
+    inset 0 -1px 1px rgb(0 0 0 / 0.18),
+    0 3px 0 rgb(0 0 0 / 0.32),
+    0 7px 13px rgb(0 0 0 / 0.14);
+}
+.fs-orders-surface button:active {
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.28), 0 1px 0 rgb(0 0 0 / 0.32);
+}
+.fs-orders-card {
+  background-image: linear-gradient(145deg, rgb(255 255 255 / 0.045), transparent 42%);
+  box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.045), 0 8px 18px rgb(0 0 0 / 0.16);
+}
+
+.fs-profile-surface button {
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.09) 0%, rgb(255 255 255 / 0.02) 54%, rgb(0 0 0 / 0.09) 100%);
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 0.1),
+    inset 0 -1px 1px rgb(0 0 0 / 0.18),
+    0 3px 0 rgb(0 0 0 / 0.32),
+    0 8px 14px rgb(0 0 0 / 0.14);
+}
+.fs-profile-surface button:active {
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.28), 0 1px 0 rgb(0 0 0 / 0.32);
+}
+.fs-profile-surface .card {
+  background-image: linear-gradient(145deg, rgb(255 255 255 / 0.045), transparent 42%);
+  box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.045), 0 8px 18px rgb(0 0 0 / 0.16);
+}
+
+.fs-catalog-card-3d {
+  background-image: linear-gradient(145deg, rgb(255 255 255 / 0.12), transparent 32%, rgb(0 0 0 / 0.14) 100%);
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 0.14),
+    inset 0 -2px 3px rgb(0 0 0 / 0.32),
+    0 6px 0 rgb(0 0 0 / 0.48),
+    0 13px 22px rgb(0 0 0 / 0.28);
+}
+.fs-catalog-card-3d:hover {
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 0.16),
+    inset 0 -2px 3px rgb(0 0 0 / 0.34),
+    0 7px 0 rgb(0 0 0 / 0.52),
+    0 17px 28px rgb(0 0 0 / 0.34);
+}
+.fs-catalog-card-3d:active {
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.28), 0 1px 0 rgb(0 0 0 / 0.34);
+}
+
+/* Las opiniones conservan su lectura limpia, con el mismo relieve oscuro del resto de la tienda. */
+.fs-review-card-3d {
+  background-image: linear-gradient(145deg, rgb(255 255 255 / 0.1), transparent 38%, rgb(0 0 0 / 0.16) 100%);
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 0.12),
+    inset 0 -2px 3px rgb(0 0 0 / 0.26),
+    0 5px 0 rgb(0 0 0 / 0.38),
+    0 13px 23px rgb(0 0 0 / 0.24);
+  transition: transform 220ms ease, box-shadow 220ms ease, filter 220ms ease;
+}
+.fs-review-card-3d:hover {
+  filter: brightness(1.04);
+  transform: translateY(-1px);
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 0.14),
+    inset 0 -2px 3px rgb(0 0 0 / 0.3),
+    0 6px 0 rgb(0 0 0 / 0.42),
+    0 17px 29px rgb(0 0 0 / 0.3);
+}
+.fs-review-card-3d:active {
+  transform: translateY(3px);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.3), 0 2px 0 rgb(0 0 0 / 0.36), 0 7px 13px rgb(0 0 0 / 0.18);
+}
+.fs-review-stars {
+  display: inline-flex;
+  align-items: center;
+  letter-spacing: 0.08em;
+}
+.fs-review-star {
+  color: #ffd86b;
+  text-shadow:
+    0 1px 0 #7a4a00,
+    0 2px 3px rgb(0 0 0 / 0.55),
+    0 0 7px rgb(255 196 62 / 0.3);
+  filter: drop-shadow(0 1px 1px rgb(0 0 0 / 0.32));
+}
+.fs-review-star-muted {
+  color: rgb(255 255 255 / 0.16);
+  text-shadow: 0 1px 1px rgb(0 0 0 / 0.34);
+  filter: none;
+}
+
+/* Identidad de cuenta: KYC verificado y membresía Francho Gold. */
+.fs-user-badge-verified {
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  color: #00e878;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.fs-user-badge-gold {
+  min-width: 0;
+  height: auto;
+  padding: 0;
+  color: #f7c845;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.fs-user-badge-verified > span,
+.fs-user-badge-gold > span {
+  font-size: 0.58rem;
+  font-weight: 900;
+  line-height: 1;
+}
+
+/* Acceso: cristal oscuro, profundidad moderada y acciones principales con acabado Luxury 3D. */
+.fs-auth-screen {
+  background-image: none;
+}
+.fs-auth-card {
+  background-image: linear-gradient(145deg, rgb(255 255 255 / 0.09), transparent 30%, rgb(0 0 0 / 0.16) 100%);
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 0.12),
+    inset 0 -2px 5px rgb(0 0 0 / 0.32),
+    0 8px 0 rgb(0 0 0 / 0.42),
+    0 22px 42px rgb(0 0 0 / 0.46);
+}
+.fs-auth-card input {
+  box-shadow: inset 0 2px 4px rgb(0 0 0 / 0.34), inset 0 1px 1px rgb(255 255 255 / 0.04);
+}
+.fs-auth-tabs button {
+  text-shadow: 0 1px 1px rgb(0 0 0 / 0.28);
+}
+.fs-auth-tabs button[class*="bg-gradient"] {
+  box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.24), inset 0 -2px 3px rgb(0 75 45 / 0.35), 0 3px 0 rgb(0 0 0 / 0.38), 0 8px 14px rgb(0 0 0 / 0.24);
+}
+.fs-auth-primary {
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 0.3),
+    inset 0 -3px 4px rgb(0 86 50 / 0.38),
+    0 5px 0 rgb(0 0 0 / 0.44),
+    0 13px 23px rgb(0 0 0 / 0.34);
+}
+.fs-auth-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+  transform: translateY(-1px);
+}
+.fs-auth-primary:active:not(:disabled) {
+  transform: translateY(3px) scale(0.99);
+  box-shadow: inset 0 2px 4px rgb(0 65 38 / 0.46), 0 2px 0 rgb(0 0 0 / 0.4), 0 7px 12px rgb(0 0 0 / 0.22);
+}
+.fs-auth-secondary {
+  box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.1), inset 0 -1px 2px rgb(0 0 0 / 0.26), 0 3px 0 rgb(0 0 0 / 0.34), 0 8px 15px rgb(0 0 0 / 0.2);
+}
+.fs-auth-secondary:active {
+  transform: translateY(2px);
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.35), 0 1px 0 rgb(0 0 0 / 0.34);
+}
+.fs-telegram-auth-icon {
+  box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.3), inset 0 -2px 3px rgb(10 95 145 / 0.46), 0 3px 0 rgb(0 0 0 / 0.34), 0 8px 15px rgb(0 0 0 / 0.22);
+}
+.fs-auth-route-transition {
+  animation: fs-auth-route-in 150ms ease-out both;
+}
+@keyframes fs-auth-route-in {
+  from {
+    opacity: 0.92;
+    transform: translateX(9px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fs-auth-route-transition {
+    animation: none;
+  }
+}
+
+/* Páginas legales: una URL o palabra extensa nunca debe salirse del ancho móvil. */
+.fs-policy-page,
+.fs-terms-modal {
+  max-width: 100%;
+}
+.fs-policy-page > *,
+.fs-policy-page .rounded-2xl,
+.fs-policy-page .rounded-xl,
+.fs-policy-page .flex,
+.fs-terms-modal .flex {
+  min-width: 0;
+  max-width: 100%;
+}
+.fs-policy-page p,
+.fs-policy-page li,
+.fs-policy-page h1,
+.fs-policy-page h2,
+.fs-policy-page h3,
+.fs-policy-page h4,
+.fs-terms-modal p,
+.fs-terms-modal li,
+.fs-terms-modal h3,
+.fs-terms-modal h4 {
+  overflow-wrap: anywhere;
+  word-break: normal;
+}
+.fs-policy-page code,
+.fs-terms-modal code {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.fs-policy-page ul,
+.fs-terms-modal ul {
+  padding-inline-start: 1.25rem;
+}
+
+.fs-purchase-surface button {
+  background-image: linear-gradient(180deg, rgb(255 255 255 / 0.1) 0%, rgb(255 255 255 / 0.025) 52%, rgb(0 0 0 / 0.1) 100%);
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / 0.1),
+    inset 0 -1px 2px rgb(0 0 0 / 0.2),
+    0 3px 0 rgb(0 0 0 / 0.36),
+    0 8px 15px rgb(0 0 0 / 0.18);
+}
+.fs-purchase-surface button:active {
+  box-shadow: inset 0 1px 2px rgb(0 0 0 / 0.3), 0 1px 0 rgb(0 0 0 / 0.36);
+}
+.fs-purchase-surface .card,
+.fs-purchase-surface section {
+  box-shadow: inset 0 1px 1px rgb(255 255 255 / 0.05), 0 8px 18px rgb(0 0 0 / 0.16);
+}
+@media (prefers-reduced-motion: reduce) {
+  .fs-account-ring-spin,
+  .fs-account-ring-spin-admin { animation: none; }
+}
+
 /* Share modal slide-up animation */
 @keyframes slideUp {
   from { transform: translateY(100%); opacity: 0; }
   to { transform: translateY(0); opacity: 1; }
+}
+
+/* Color Hue Rainbow Slider styling */
+.color-hue-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 3px solid rgba(0, 0, 0, 0.75);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+  transition: transform 0.1s ease;
+}
+.color-hue-slider::-webkit-slider-thumb:hover,
+.color-hue-slider::-webkit-slider-thumb:active {
+  transform: scale(1.18);
+}
+.color-hue-slider::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background: #ffffff;
+  border: 3px solid rgba(0, 0, 0, 0.75);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  cursor: pointer;
+}
+
+/* Scrollbar suppression for carousels */
+.scrollbar-none, .no-scrollbar {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
+}
+.scrollbar-none::-webkit-scrollbar,
+.no-scrollbar::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  -webkit-appearance: none !important;
+}
+
+
+
+/* Motion system: short, purposeful transitions that keep native touch scrolling responsive. */
+html { scroll-behavior: smooth; }
+.fs-screen-transition {
+  animation: fs-screen-enter 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity;
+}
+@keyframes fs-screen-enter {
+  from { opacity: 0; transform: translate3d(0, 8px, 0); }
+  to { opacity: 1; transform: translate3d(0, 0, 0); }
+}
+.fs-game-rail {
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 0.25rem;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.fs-game-rail > * { scroll-snap-align: start; }
+@media (hover: hover) {
+  .fs-game-rail > * { transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1); }
+  .fs-game-rail > *:hover { transform: translateY(-2px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 1ms !important;
+  }
 }

@@ -1,0 +1,1637 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Votol Tuning Pro - Centro de Control SaaS</title>
+  <link rel="icon" href="https://franchoshop.reenvioplusbot.xyz/icon-512.jpg" type="image/jpeg">
+  <style>
+    :root {
+      --bg: #090d16;
+      --surface: #111726;
+      --surface-card: #161f33;
+      --surface-border: #232f48;
+      --primary: #f59e0b;
+      --primary-glow: rgba(245, 158, 11, 0.35);
+      --cyan: #00e5ff;
+      --cyan-glow: rgba(0, 229, 255, 0.3);
+      --emerald: #10b981;
+      --emerald-glow: rgba(16, 185, 129, 0.25);
+      --rose: #f43f5e;
+      --amber: #fbbf24;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --drawer-width: 320px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-tap-highlight-color: transparent; }
+    body { background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+
+    /* Top Navbar */
+    .navbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(17, 23, 38, 0.9);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--surface-border);
+      padding: 10px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .nav-left { display: flex; align-items: center; gap: 12px; }
+    .hamburger-btn {
+      width: 44px;
+      height: 44px;
+      background: var(--surface-card);
+      border: 1px solid var(--surface-border);
+      border-radius: 12px;
+      color: var(--cyan);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    }
+    .hamburger-btn:hover {
+      background: rgba(0, 229, 255, 0.15);
+      border-color: var(--cyan);
+      transform: scale(1.04);
+    }
+    .hamburger-btn span {
+      display: block;
+      width: 20px;
+      height: 2.5px;
+      background: var(--cyan);
+      border-radius: 2px;
+      transition: 0.2s;
+    }
+    .brand-title { display: flex; align-items: center; gap: 8px; }
+    .brand-title h1 { font-size: 18px; font-weight: 800; letter-spacing: 0.5px; background: linear-gradient(135deg, #fff, var(--cyan)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .brand-title .badge-pill { font-size: 11px; font-weight: 800; padding: 2px 8px; border-radius: 20px; background: rgba(245, 158, 11, 0.2); color: var(--primary); border: 1px solid rgba(245, 158, 11, 0.4); }
+
+    .nav-center { display: flex; align-items: center; gap: 6px; }
+    .nav-tab-btn {
+      padding: 8px 14px;
+      border-radius: 10px;
+      background: var(--surface-card);
+      border: 1px solid var(--surface-border);
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+    .nav-tab-btn:hover { color: #fff; border-color: #475569; }
+    .nav-tab-btn.active {
+      background: rgba(0, 229, 255, 0.15);
+      border-color: var(--cyan);
+      color: var(--cyan);
+      box-shadow: 0 0 12px rgba(0, 229, 255, 0.15);
+    }
+    .nav-tab-badge {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 1px 6px;
+      border-radius: 10px;
+      background: var(--surface-border);
+      color: #fff;
+    }
+    .nav-tab-btn.active .nav-tab-badge { background: var(--cyan); color: #000; }
+
+    .nav-right { display: flex; align-items: center; gap: 8px; }
+    .icon-btn {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      background: var(--surface-card);
+      border: 1px solid var(--surface-border);
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: 0.2s;
+      font-size: 16px;
+    }
+    .icon-btn:hover { color: #fff; border-color: var(--cyan); }
+
+    /* Left Drawer Overlay */
+    .drawer-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(5, 8, 15, 0.75);
+      backdrop-filter: blur(6px);
+      -webkit-backdrop-filter: blur(6px);
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .drawer-overlay.open { opacity: 1; pointer-events: auto; }
+
+    /* Left Drawer Sidebar */
+    .drawer {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: var(--drawer-width);
+      max-width: 85vw;
+      height: 100vh;
+      background: var(--surface);
+      border-right: 1px solid var(--surface-border);
+      z-index: 1001;
+      transform: translateX(-100%);
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      display: flex;
+      flex-direction: column;
+      box-shadow: 15px 0 40px rgba(0,0,0,0.6);
+    }
+    .drawer.open { transform: translateX(0); }
+
+    .drawer-header {
+      padding: 20px 18px;
+      border-bottom: 1px solid var(--surface-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: linear-gradient(180deg, rgba(0, 229, 255, 0.05), transparent);
+    }
+    .admin-profile { display: flex; align-items: center; gap: 12px; }
+    .admin-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      background: linear-gradient(135deg, var(--primary), #ef4444);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+      box-shadow: 0 0 15px var(--primary-glow);
+    }
+    .admin-name { font-size: 15px; font-weight: 800; color: #fff; }
+    .admin-status { font-size: 11px; color: var(--emerald); display: flex; align-items: center; gap: 4px; font-weight: 600; }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--emerald); box-shadow: 0 0 8px var(--emerald); }
+    .drawer-close {
+      width: 34px;
+      height: 34px;
+      background: var(--surface-card);
+      border: 1px solid var(--surface-border);
+      border-radius: 8px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 18px;
+      transition: 0.2s;
+    }
+    .drawer-close:hover { color: #fff; border-color: var(--rose); }
+
+    .drawer-content {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .drawer-section-label {
+      font-size: 11px;
+      font-weight: 800;
+      color: var(--text-muted);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      padding: 12px 10px 6px 10px;
+    }
+    .drawer-btn {
+      width: 100%;
+      padding: 12px 14px;
+      border-radius: 10px;
+      background: transparent;
+      border: 1px solid transparent;
+      color: #cbd5e1;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      transition: all 0.15s ease;
+      text-align: left;
+      text-decoration: none;
+    }
+    .drawer-btn:hover {
+      background: var(--surface-card);
+      border-color: var(--surface-border);
+      color: #fff;
+      transform: translateX(3px);
+    }
+    .drawer-btn.active {
+      background: rgba(0, 229, 255, 0.12);
+      border-color: rgba(0, 229, 255, 0.4);
+      color: var(--cyan);
+      box-shadow: 0 0 12px rgba(0, 229, 255, 0.1);
+    }
+    .drawer-btn-left { display: flex; align-items: center; gap: 12px; }
+    .drawer-btn-icon { font-size: 18px; width: 22px; text-align: center; }
+    .badge-count {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 2px 8px;
+      border-radius: 20px;
+      background: var(--surface-border);
+      color: var(--text-muted);
+    }
+    .drawer-btn.active .badge-count {
+      background: var(--cyan);
+      color: #000;
+    }
+
+    .drawer-footer {
+      padding: 14px;
+      border-top: 1px solid var(--surface-border);
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      background: rgba(11, 15, 25, 0.4);
+    }
+    .btn-logout {
+      width: 100%;
+      padding: 11px;
+      border-radius: 10px;
+      background: rgba(244, 63, 94, 0.12);
+      border: 1px solid rgba(244, 63, 94, 0.3);
+      color: #fda4af;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: 0.2s;
+    }
+    .btn-logout:hover { background: rgba(244, 63, 94, 0.25); color: #fff; }
+
+    /* Main Container */
+    .container { max-width: 1240px; margin: 0 auto; padding: 18px 16px 40px; }
+
+    /* Hero Banner Stats */
+    .stats-banner {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 14px;
+      margin-bottom: 22px;
+    }
+    .stat-box {
+      background: var(--surface-card);
+      border: 1px solid var(--surface-border);
+      border-radius: 16px;
+      padding: 16px 18px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    .stat-box:hover {
+      border-color: #3b4d75;
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    }
+    .stat-box-icon {
+      width: 48px;
+      height: 48px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 22px;
+    }
+    .stat-box-info { flex: 1; }
+    .stat-box-val { font-size: 24px; font-weight: 800; color: #fff; }
+    .stat-box-label { font-size: 12px; color: var(--text-muted); font-weight: 600; margin-top: 2px; }
+
+    /* Search & Filter Toolbar */
+    .filter-toolbar {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 16px;
+      padding: 12px;
+      margin-bottom: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .search-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .search-input-wrap {
+      flex: 1;
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+    .search-input-wrap span { position: absolute; left: 14px; color: var(--text-muted); font-size: 16px; }
+    .search-input {
+      width: 100%;
+      padding: 12px 16px 12px 42px;
+      background: var(--surface-card);
+      border: 1px solid var(--surface-border);
+      border-radius: 10px;
+      color: #fff;
+      font-size: 14px;
+      outline: none;
+      transition: 0.2s;
+    }
+    .search-input:focus { border-color: var(--cyan); box-shadow: 0 0 10px var(--cyan-glow); }
+
+    .filter-pills {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+    .pill-btn {
+      padding: 8px 14px;
+      border-radius: 8px;
+      background: var(--surface-card);
+      border: 1px solid var(--surface-border);
+      color: var(--text-muted);
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: 0.15s;
+    }
+    .pill-btn:hover { color: #fff; border-color: #475569; }
+    .pill-btn.active {
+      background: var(--cyan);
+      color: #000;
+      border-color: var(--cyan);
+      box-shadow: 0 0 12px var(--cyan-glow);
+    }
+
+    /* Client Cards */
+    .client-list { display: flex; flex-direction: column; gap: 14px; }
+    .client-card {
+      background: var(--surface-card);
+      border: 1px solid var(--surface-border);
+      border-radius: 16px;
+      padding: 18px;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+    .client-card:hover { border-color: #3b4d75; box-shadow: 0 6px 20px rgba(0,0,0,0.35); }
+    .client-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+      background: var(--surface-border);
+    }
+    .client-card.status-active::before { background: var(--emerald); }
+    .client-card.status-trial::before { background: var(--cyan); }
+    .client-card.status-expired::before { background: var(--rose); }
+
+    .client-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .client-identity { display: flex; align-items: center; gap: 12px; }
+    .client-avatar {
+      width: 42px;
+      height: 42px;
+      border-radius: 12px;
+      background: #1e293b;
+      color: var(--cyan);
+      font-weight: 800;
+      font-size: 17px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid #334155;
+    }
+    .client-card.status-active .client-avatar { color: var(--emerald); border-color: rgba(16,185,129,0.4); }
+    .client-card.status-expired .client-avatar { color: var(--rose); border-color: rgba(244,63,94,0.4); }
+
+    .client-name-wrap { display: flex; flex-direction: column; }
+    .client-name { font-size: 16px; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 8px; }
+    .client-id-tag { font-size: 11px; color: var(--text-muted); font-weight: 600; }
+
+    .client-badge-group { display: flex; align-items: center; gap: 8px; }
+    .badge {
+      font-size: 11px;
+      font-weight: 800;
+      padding: 4px 10px;
+      border-radius: 20px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+    .badge-active { background: rgba(16, 185, 129, 0.15); color: var(--emerald); border: 1px solid rgba(16, 185, 129, 0.35); }
+    .badge-trial { background: rgba(0, 229, 255, 0.15); color: var(--cyan); border: 1px solid rgba(0, 229, 255, 0.35); }
+    .badge-expired { background: rgba(244, 63, 94, 0.15); color: var(--rose); border: 1px solid rgba(244, 63, 94, 0.35); }
+
+    /* Client Info Grid */
+    .client-info-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 10px;
+      font-size: 13px;
+      background: rgba(11, 15, 25, 0.5);
+      border: 1px solid rgba(255,255,255,0.04);
+      border-radius: 12px;
+      padding: 14px;
+      margin-bottom: 16px;
+    }
+    .info-cell { display: flex; flex-direction: column; gap: 3px; }
+    .info-label { font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; }
+    .info-value { color: #f1f5f9; font-weight: 600; word-break: break-all; }
+    .info-value code { background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px; font-family: monospace; font-size: 12px; color: var(--cyan); }
+
+    /* Actions Grid */
+    .actions-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    .action-btn {
+      padding: 9px 14px;
+      border-radius: 9px;
+      font-size: 12px;
+      font-weight: 700;
+      border: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+      text-decoration: none;
+    }
+    .action-btn:hover { transform: translateY(-1px); }
+    .action-btn:active { transform: translateY(1px); }
+
+    .btn-whatsapp { background: #25d366; color: #fff; box-shadow: 0 2px 8px rgba(37,211,102,0.3); }
+    .btn-whatsapp:hover { background: #1eb954; color: #fff; }
+
+    .btn-trial-add { background: rgba(0, 229, 255, 0.15); color: var(--cyan); border: 1px solid rgba(0, 229, 255, 0.35); }
+    .btn-trial-add:hover { background: rgba(0, 229, 255, 0.25); }
+
+    .btn-plan-month { background: #1e293b; color: #cbd5e1; border: 1px solid #334155; }
+    .btn-plan-month:hover { background: #334155; color: #fff; }
+
+    .btn-plan-year { background: rgba(245, 158, 11, 0.15); color: var(--primary); border: 1px solid rgba(245, 158, 11, 0.35); }
+    .btn-plan-year:hover { background: rgba(245, 158, 11, 0.25); }
+
+    .btn-plan-lifetime { background: linear-gradient(135deg, #f59e0b, #ef4444); color: #fff; box-shadow: 0 2px 10px rgba(245, 158, 11, 0.3); }
+
+    .btn-hwid-reset { background: rgba(148, 163, 184, 0.1); color: #94a3b8; border: 1px solid #334155; }
+    .btn-hwid-reset:hover { background: #334155; color: #fff; }
+
+    /* ==================================================== */
+    /* 📸 SECCIÓN DEDICADA: CAPTURAS PARA EL ASISTENTE IA   */
+    /* ==================================================== */
+    .screenshots-view-header {
+      background: linear-gradient(135deg, rgba(0, 229, 255, 0.1), rgba(245, 158, 11, 0.05));
+      border: 1px solid rgba(0, 229, 255, 0.3);
+      border-radius: 18px;
+      padding: 22px;
+      margin-bottom: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .sh-title-box h2 { font-size: 20px; font-weight: 800; color: #fff; display: flex; align-items: center; gap: 10px; }
+    .sh-title-box p { font-size: 13px; color: var(--text-muted); margin-top: 6px; line-height: 1.5; max-width: 650px; }
+
+    .upload-card-box {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 18px;
+      padding: 20px;
+      margin-bottom: 24px;
+    }
+    .drop-zone {
+      border: 2px dashed #00e5ff;
+      background: rgba(0, 229, 255, 0.03);
+      border-radius: 14px;
+      padding: 30px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s ease;
+    }
+    .drop-zone:hover {
+      background: rgba(0, 229, 255, 0.08);
+      border-color: #fff;
+    }
+    .drop-zone-icon { font-size: 38px; margin-bottom: 10px; display: inline-block; }
+    .drop-zone-title { font-size: 15px; font-weight: 700; color: #fff; }
+    .drop-zone-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+    .preview-box {
+      display: none;
+      margin-top: 16px;
+      background: var(--surface-card);
+      border: 1px solid var(--surface-border);
+      border-radius: 12px;
+      padding: 14px;
+      align-items: center;
+      gap: 14px;
+    }
+    .preview-thumb {
+      width: 90px;
+      height: 90px;
+      object-fit: cover;
+      border-radius: 10px;
+      border: 1px solid var(--surface-border);
+    }
+    .preview-info { flex: 1; min-width: 0; }
+    .preview-name { font-size: 14px; font-weight: 700; color: #fff; word-break: break-all; }
+    .preview-size { font-size: 12px; color: var(--cyan); margin-top: 2px; }
+
+    .note-input-wrap { margin-top: 16px; }
+    .note-input {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--surface-card);
+      border: 1px solid var(--surface-border);
+      border-radius: 10px;
+      color: #fff;
+      font-size: 13px;
+      outline: none;
+      resize: vertical;
+      min-height: 70px;
+      transition: 0.2s;
+    }
+    .note-input:focus { border-color: var(--cyan); box-shadow: 0 0 10px var(--cyan-glow); }
+
+    .btn-submit-upload {
+      margin-top: 14px;
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, var(--cyan), #0284c7);
+      color: #000;
+      border: none;
+      border-radius: 12px;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 15px rgba(0, 229, 255, 0.3);
+      transition: all 0.2s;
+    }
+    .btn-submit-upload:hover { opacity: 0.95; transform: translateY(-1px); }
+    .btn-submit-upload:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+
+    /* Gallery Cards */
+    .screenshots-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .screenshot-card {
+      background: var(--surface-card);
+      border: 1px solid var(--surface-border);
+      border-radius: 14px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      transition: all 0.2s;
+    }
+    .screenshot-card:hover { border-color: #3b4d75; transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+    .card-img-wrap {
+      position: relative;
+      width: 100%;
+      height: 180px;
+      background: #090d16;
+      cursor: pointer;
+      overflow: hidden;
+    }
+    .card-img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform 0.3s ease;
+    }
+    .card-img-wrap:hover .card-img { transform: scale(1.05); }
+    .img-zoom-badge {
+      position: absolute;
+      bottom: 8px;
+      right: 8px;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(4px);
+      padding: 4px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      color: #fff;
+      font-weight: 700;
+    }
+    .card-body { padding: 14px; flex: 1; display: flex; flex-direction: column; justify-content: space-between; gap: 10px; }
+    .card-note {
+      font-size: 13px;
+      color: #f1f5f9;
+      background: rgba(0,0,0,0.25);
+      border-left: 3px solid var(--cyan);
+      padding: 8px 10px;
+      border-radius: 4px;
+      line-height: 1.4;
+      font-style: italic;
+    }
+    .card-meta-row { display: flex; justify-content: space-between; font-size: 11px; color: var(--text-muted); font-weight: 600; }
+    .card-actions-row { display: flex; gap: 8px; margin-top: 4px; }
+    .btn-copy-for-ai {
+      flex: 1;
+      padding: 8px 10px;
+      border-radius: 8px;
+      background: rgba(0, 229, 255, 0.15);
+      border: 1px solid rgba(0, 229, 255, 0.35);
+      color: var(--cyan);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: 0.15s;
+    }
+    .btn-copy-for-ai:hover { background: rgba(0, 229, 255, 0.25); }
+    .btn-del-ss {
+      padding: 8px 12px;
+      border-radius: 8px;
+      background: rgba(244, 63, 94, 0.15);
+      border: 1px solid rgba(244, 63, 94, 0.35);
+      color: var(--rose);
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: 0.15s;
+    }
+    .btn-del-ss:hover { background: rgba(244, 63, 94, 0.25); }
+
+    /* Lightbox Modal */
+    .lightbox-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: rgba(0,0,0,0.92);
+      backdrop-filter: blur(8px);
+      z-index: 5000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .lightbox-content { max-width: 90vw; max-height: 85vh; border-radius: 12px; box-shadow: 0 0 30px rgba(0,0,0,0.8); }
+    .lightbox-close {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      width: 44px;
+      height: 44px;
+      border-radius: 50%;
+      background: rgba(255,255,255,0.2);
+      border: none;
+      color: #fff;
+      font-size: 22px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+    .lightbox-close:hover { background: var(--rose); }
+
+    /* Lock Screen */
+    #lock-screen {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      background: radial-gradient(circle at center, #172138 0%, #090d16 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 2000;
+      padding: 16px;
+    }
+    .lock-box {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 20px;
+      padding: 34px 28px;
+      width: 100%;
+      max-width: 380px;
+      text-align: center;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.7);
+    }
+    .lock-icon-glow {
+      width: 68px;
+      height: 68px;
+      margin: 0 auto 16px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, var(--primary), #ef4444);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 32px;
+      box-shadow: 0 0 25px var(--primary-glow);
+    }
+    .lock-input {
+      width: 100%;
+      padding: 14px;
+      background: #090d16;
+      border: 1px solid var(--surface-border);
+      border-radius: 12px;
+      color: #fff;
+      font-size: 18px;
+      text-align: center;
+      margin: 18px 0;
+      outline: none;
+      letter-spacing: 3px;
+      transition: 0.2s;
+    }
+    .lock-input:focus { border-color: var(--primary); box-shadow: 0 0 14px var(--primary-glow); }
+    .lock-btn {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, var(--primary), #d97706);
+      border: none;
+      border-radius: 12px;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4);
+      transition: 0.2s;
+    }
+    .lock-btn:hover { transform: translateY(-1px); }
+
+    /* Toast Notification */
+    .toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      padding: 12px 18px;
+      border-radius: 12px;
+      color: #fff;
+      font-size: 13px;
+      font-weight: 600;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      z-index: 3000;
+      display: none;
+      align-items: center;
+      gap: 10px;
+      animation: slideUp 0.3s ease;
+    }
+    @keyframes slideUp {
+      from { transform: translateY(20px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- Pantalla de Seguridad PIN -->
+<div id="lock-screen">
+  <div class="lock-box">
+    <div class="lock-icon-glow">⚡</div>
+    <h2 style="font-size: 20px; font-weight: 800;">Votol Tuning Pro</h2>
+    <p style="font-size: 13px; color: var(--text-muted); margin-top: 6px;">Panel exclusivo de Frankosmel para gestión de licencias y clientes.</p>
+    <input type="password" id="pin-input" class="lock-input" placeholder="PIN de Seguridad" autofocus>
+    <button class="lock-btn" onclick="checkPin()">Acceder al Dashboard</button>
+  </div>
+</div>
+
+<!-- Left Drawer Sidebar (Menú Desplegable con |||) -->
+<div class="drawer-overlay" id="drawer-overlay" onclick="toggleDrawer(false)"></div>
+<aside class="drawer" id="drawer">
+  <div class="drawer-header">
+    <div class="admin-profile">
+      <div class="admin-avatar">⚡</div>
+      <div>
+        <div class="admin-name">Francho Admin</div>
+        <div class="admin-status"><span class="status-dot"></span> Votol SaaS Live</div>
+      </div>
+    </div>
+    <button class="drawer-close" onclick="toggleDrawer(false)">✕</button>
+  </div>
+
+  <div class="drawer-content">
+    <div class="drawer-section-label">Vistas del Sistema</div>
+    <button class="drawer-btn active" id="drawer-tab-users" onclick="switchMainView('users')">
+      <div class="drawer-btn-left">
+        <span class="drawer-btn-icon">👥</span>
+        <span>Gestión de Clientes</span>
+      </div>
+      <span class="badge-count" id="drawer-count-all-main">0</span>
+    </button>
+
+    <button class="drawer-btn" id="drawer-tab-screenshots" onclick="switchMainView('screenshots')">
+      <div class="drawer-btn-left">
+        <span class="drawer-btn-icon">📸</span>
+        <span>Capturas para IA</span>
+      </div>
+      <span class="badge-count" id="drawer-count-ss" style="background:rgba(0,229,255,0.2); color:var(--cyan);">0</span>
+    </button>
+
+    <div class="drawer-section-label">Filtros de Clientes</div>
+    <button class="drawer-btn" data-filter="all" onclick="selectDrawerFilter('all')">
+      <div class="drawer-btn-left">
+        <span class="drawer-btn-icon">📋</span>
+        <span>Todos los Usuarios</span>
+      </div>
+      <span class="badge-count" id="drawer-count-all">0</span>
+    </button>
+
+    <button class="drawer-btn" data-filter="trial" onclick="selectDrawerFilter('trial')">
+      <div class="drawer-btn-left">
+        <span class="drawer-btn-icon">⏳</span>
+        <span>Pruebas Activas</span>
+      </div>
+      <span class="badge-count" id="drawer-count-trial">0</span>
+    </button>
+
+    <button class="drawer-btn" data-filter="expired" onclick="selectDrawerFilter('expired')">
+      <div class="drawer-btn-left">
+        <span class="drawer-btn-icon">⚠️</span>
+        <span>Pruebas Vencidas (Leads)</span>
+      </div>
+      <span class="badge-count" id="drawer-count-expired">0</span>
+    </button>
+
+    <button class="drawer-btn" data-filter="active" onclick="selectDrawerFilter('active')">
+      <div class="drawer-btn-left">
+        <span class="drawer-btn-icon">👑</span>
+        <span>Licencias Vitalicias / Pagas</span>
+      </div>
+      <span class="badge-count" id="drawer-count-active">0</span>
+    </button>
+
+    <button class="drawer-btn" data-filter="phone" onclick="selectDrawerFilter('phone')">
+      <div class="drawer-btn-left">
+        <span class="drawer-btn-icon">💬</span>
+        <span>Con WhatsApp</span>
+      </div>
+      <span class="badge-count" id="drawer-count-phone">0</span>
+    </button>
+
+    <div class="drawer-section-label">Herramientas & Enlaces</div>
+    <a href="https://franchoshop.reenvioplusbot.xyz/VotolTuningPro.apk" class="drawer-btn" target="_blank" download>
+      <div class="drawer-btn-left">
+        <span class="drawer-btn-icon">📲</span>
+        <span>Descargar APK v1.1.0</span>
+      </div>
+      <span class="badge-count" style="color:var(--emerald);">2.0MB</span>
+    </a>
+
+    <button class="drawer-btn" onclick="copyApkLink()">
+      <div class="drawer-btn-left">
+        <span class="drawer-btn-icon">📋</span>
+        <span>Copiar Enlace de la APK</span>
+      </div>
+    </button>
+
+    <a href="/subir.html" class="drawer-btn" target="_blank">
+      <div class="drawer-btn-left">
+        <span class="drawer-btn-icon">📤</span>
+        <span>Showcase GitHub</span>
+      </div>
+    </a>
+
+    <button class="drawer-btn" onclick="refreshCurrentView()">
+      <div class="drawer-btn-left">
+        <span class="drawer-btn-icon">🔄</span>
+        <span>Recargar Datos</span>
+      </div>
+    </button>
+  </div>
+
+  <div class="drawer-footer">
+    <button class="btn-logout" onclick="logoutAdmin()">🔒 Cerrar Sesión</button>
+  </div>
+</aside>
+
+<!-- Contenido Principal -->
+<div id="main-content" style="display: none;">
+  <!-- Barra Superior -->
+  <nav class="navbar">
+    <div class="nav-left">
+      <button class="hamburger-btn" onclick="toggleDrawer(true)" title="Abrir Menú Lateral">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+      <div class="brand-title">
+        <h1>Votol Admin</h1>
+        <span class="badge-pill">PRO v1.1</span>
+      </div>
+    </div>
+
+    <!-- Pestañas centrales de vista rápida -->
+    <div class="nav-center">
+      <button class="nav-tab-btn active" id="nav-btn-users" onclick="switchMainView('users')">
+        👥 Clientes
+      </button>
+      <button class="nav-tab-btn" id="nav-btn-screenshots" onclick="switchMainView('screenshots')">
+        📸 Capturas IA <span class="nav-tab-badge" id="nav-badge-ss">0</span>
+      </button>
+    </div>
+
+    <div class="nav-right">
+      <button class="icon-btn" onclick="refreshCurrentView()" title="Refrescar">🔄</button>
+    </div>
+  </nav>
+
+  <div class="container">
+    
+    <!-- ============================================== -->
+    <!-- VISTA 1: GESTIÓN DE CLIENTES & SUSCRIPCIONES   -->
+    <!-- ============================================== -->
+    <div id="view-users">
+      <!-- Tarjetas de Métricas Rápidas -->
+      <div class="stats-banner">
+        <div class="stat-box" onclick="selectDrawerFilter('all')">
+          <div class="stat-box-icon" style="background: rgba(0, 229, 255, 0.12); color: var(--cyan);">👥</div>
+          <div class="stat-box-info">
+            <div class="stat-box-val" id="stat-total">--</div>
+            <div class="stat-box-label">Clientes Registrados</div>
+          </div>
+        </div>
+
+        <div class="stat-box" onclick="selectDrawerFilter('trial')">
+          <div class="stat-box-icon" style="background: rgba(0, 229, 255, 0.12); color: var(--cyan);">⏳</div>
+          <div class="stat-box-info">
+            <div class="stat-box-val" id="stat-trials">--</div>
+            <div class="stat-box-label">Pruebas Activas</div>
+          </div>
+        </div>
+
+        <div class="stat-box" onclick="selectDrawerFilter('expired')">
+          <div class="stat-box-icon" style="background: rgba(244, 63, 94, 0.12); color: var(--rose);">⚠️</div>
+          <div class="stat-box-info">
+            <div class="stat-box-val" id="stat-expired">--</div>
+            <div class="stat-box-label">Pruebas Vencidas (Leads)</div>
+          </div>
+        </div>
+
+        <div class="stat-box" onclick="selectDrawerFilter('active')">
+          <div class="stat-box-icon" style="background: rgba(245, 158, 11, 0.12); color: var(--primary);">👑</div>
+          <div class="stat-box-info">
+            <div class="stat-box-val" id="stat-active">--</div>
+            <div class="stat-box-label">Licencias Vitalicias</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Barra de Búsqueda y Píldoras de Filtro -->
+      <div class="filter-toolbar">
+        <div class="search-row">
+          <div class="search-input-wrap">
+            <span>🔍</span>
+            <input type="text" id="search-box" class="search-input" placeholder="Buscar por nombre, WhatsApp, correo o HWID..." oninput="filterUsers()">
+          </div>
+        </div>
+        <div class="filter-pills">
+          <button class="pill-btn active" data-filter="all" onclick="selectPillFilter('all', this)">👥 Todos (<span id="count-all">0</span>)</button>
+          <button class="pill-btn" data-filter="trial" onclick="selectPillFilter('trial', this)">⏳ En Prueba (<span id="count-trial">0</span>)</button>
+          <button class="pill-btn" data-filter="expired" onclick="selectPillFilter('expired', this)">⚠️ Vencidos (<span id="count-expired">0</span>)</button>
+          <button class="pill-btn" data-filter="active" onclick="selectPillFilter('active', this)">👑 Vitalicias (<span id="count-active">0</span>)</button>
+          <button class="pill-btn" data-filter="phone" onclick="selectPillFilter('phone', this)">💬 WhatsApp (<span id="count-phone">0</span>)</button>
+        </div>
+      </div>
+
+      <!-- Lista Dinámica de Clientes -->
+      <div class="client-list" id="client-list">
+        <div style="text-align: center; padding: 50px; color: var(--text-muted);">Cargando clientes...</div>
+      </div>
+    </div>
+
+
+    <!-- ============================================== -->
+    <!-- VISTA 2: SUBIDA DE CAPTURAS PARA EL ASISTENTE  -->
+    <!-- ============================================== -->
+    <div id="view-screenshots" style="display: none;">
+      <div class="screenshots-view-header">
+        <div class="sh-title-box">
+          <h2>📸 Capturas para el Asistente IA</h2>
+          <p>Sube aquí capturas de pantalla de la app, errores en vivo o fotos de la moto. El asistente puede <b>ver los archivos directamente en el servidor</b> para responderte con precisión quirúrgica.</p>
+        </div>
+        <button class="action-btn btn-plan-month" onclick="loadScreenshots()">🔄 Actualizar Galería</button>
+      </div>
+
+      <!-- Caja de Subida -->
+      <div class="upload-card-box">
+        <div class="drop-zone" onclick="document.getElementById('ai-file-input').click()">
+          <span class="drop-zone-icon">📷</span>
+          <div class="drop-zone-title">Toca aquí para seleccionar una captura o tomar una foto</div>
+          <div class="drop-zone-subtitle">Formatos admitidos: JPG, PNG, WEBP (Directo desde la galería de tu teléfono o PC)</div>
+        </div>
+        <input type="file" id="ai-file-input" accept="image/*" style="display: none;" onchange="handleFileSelect(event)">
+
+        <!-- Previsualización instantánea -->
+        <div class="preview-box" id="preview-box">
+          <img class="preview-thumb" id="preview-img" src="" alt="Previsualización">
+          <div class="preview-info">
+            <div class="preview-name" id="preview-name">archivo.jpg</div>
+            <div class="preview-size" id="preview-size">0 KB</div>
+          </div>
+          <button class="btn-del-ss" onclick="clearSelectedFile()" title="Quitar archivo">✕</button>
+        </div>
+
+        <div class="note-input-wrap">
+          <label style="display:block; font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:6px; text-transform:uppercase;">
+            📝 Nota o pregunta para el Asistente IA (Opcional):
+          </label>
+          <textarea id="ai-note-input" class="note-input" placeholder="Ej: Mira cómo sale la telemetría en 0V, ¿qué cable debo revisar? / Mira los amperajes que puse..."></textarea>
+        </div>
+
+        <button class="btn-submit-upload" id="btn-submit-upload" onclick="uploadScreenshot()" disabled>
+          <span>🚀 Subir Captura para la IA</span>
+        </button>
+      </div>
+
+      <!-- Galería de Capturas Disponibles -->
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h3 style="font-size:16px; font-weight:800; color:#fff; display:flex; align-items:center; gap:8px;">
+          📂 Capturas Subidas al Servidor (<span id="gallery-count">0</span>)
+        </h3>
+      </div>
+
+      <div class="screenshots-grid" id="screenshots-grid">
+        <div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted);">Cargando capturas...</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Modal Lightbox (Ver Imagen en Grande) -->
+<div class="lightbox-modal" id="lightbox-modal" onclick="closeLightbox()">
+  <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+  <img class="lightbox-content" id="lightbox-img" src="" alt="Captura ampliada" onclick="event.stopPropagation()">
+</div>
+
+<!-- Toast flotante -->
+<div class="toast" id="toast">
+  <span id="toast-icon">✅</span>
+  <span id="toast-text">Acción realizada</span>
+</div>
+
+<script>
+  const ADMIN_PIN = "2026";
+  let allUsers = [];
+  let allScreenshots = [];
+  let currentFilter = 'all';
+  let currentView = 'users'; // 'users' | 'screenshots'
+  let selectedFile = null;
+
+  function checkPin() {
+    const val = document.getElementById('pin-input').value.trim();
+    if (val === ADMIN_PIN || val === "56246700" || val === "francho") {
+      document.getElementById('lock-screen').style.display = 'none';
+      document.getElementById('main-content').style.display = 'block';
+      sessionStorage.setItem('votol_admin_auth', '1');
+      loadUsers();
+      loadScreenshots();
+    } else {
+      showToast("❌ PIN incorrecto", "⚠️");
+    }
+  }
+
+  if (sessionStorage.getItem('votol_admin_auth') === '1') {
+    document.getElementById('lock-screen').style.display = 'none';
+    document.getElementById('main-content').style.display = 'block';
+    loadUsers();
+    loadScreenshots();
+  }
+
+  document.getElementById('pin-input').addEventListener('keyup', (e) => {
+    if (e.key === 'Enter') checkPin();
+  });
+
+  function toggleDrawer(open) {
+    const drawer = document.getElementById('drawer');
+    const overlay = document.getElementById('drawer-overlay');
+    if (open) {
+      drawer.classList.add('open');
+      overlay.classList.add('open');
+    } else {
+      drawer.classList.remove('open');
+      overlay.classList.remove('open');
+    }
+  }
+
+  // Cambiar entre Vista de Clientes y Vista de Capturas IA
+  function switchMainView(view) {
+    currentView = view;
+    toggleDrawer(false);
+
+    const viewUsers = document.getElementById('view-users');
+    const viewScreenshots = document.getElementById('view-screenshots');
+    const navBtnUsers = document.getElementById('nav-btn-users');
+    const navBtnScreenshots = document.getElementById('nav-btn-screenshots');
+    const drawerTabUsers = document.getElementById('drawer-tab-users');
+    const drawerTabScreenshots = document.getElementById('drawer-tab-screenshots');
+
+    if (view === 'users') {
+      viewUsers.style.display = 'block';
+      viewScreenshots.style.display = 'none';
+
+      navBtnUsers.classList.add('active');
+      navBtnScreenshots.classList.remove('active');
+      drawerTabUsers.classList.add('active');
+      drawerTabScreenshots.classList.remove('active');
+    } else {
+      viewUsers.style.display = 'none';
+      viewScreenshots.style.display = 'block';
+
+      navBtnUsers.classList.remove('active');
+      navBtnScreenshots.classList.add('active');
+      drawerTabUsers.classList.remove('active');
+      drawerTabScreenshots.classList.add('active');
+
+      loadScreenshots();
+    }
+  }
+
+  function refreshCurrentView() {
+    if (currentView === 'users') {
+      loadUsers();
+    } else {
+      loadScreenshots();
+    }
+  }
+
+  function selectDrawerFilter(filter) {
+    switchMainView('users');
+    currentFilter = filter;
+    document.querySelectorAll('.drawer-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.filter === filter);
+    });
+    document.querySelectorAll('.pill-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.filter === filter);
+    });
+    filterUsers();
+  }
+
+  function selectPillFilter(filter, btn) {
+    currentFilter = filter;
+    document.querySelectorAll('.pill-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.querySelectorAll('.drawer-btn').forEach(b => {
+      b.classList.toggle('active', b.dataset.filter === filter);
+    });
+    filterUsers();
+  }
+
+  async function loadUsers() {
+    try {
+      const res = await fetch('/api/auth/votol/admin/users');
+      const data = await res.json();
+      if (data.success) {
+        allUsers = data.users;
+        updateStats();
+        filterUsers();
+      }
+    } catch (e) {
+      showToast("Error al cargar clientes: " + e.message, "❌");
+    }
+  }
+
+  function updateStats() {
+    const total = allUsers.length;
+    const now = new Date();
+
+    let trials = 0;
+    let expired = 0;
+    let active = 0;
+    let withPhone = 0;
+
+    allUsers.forEach(u => {
+      if (u.phone && u.phone.trim()) withPhone++;
+      if (u.subscription_status === 'ACTIVE' || u.expires_at === 'LIFETIME') {
+        active++;
+      } else if (u.subscription_status === 'EXPIRED') {
+        expired++;
+      } else {
+        const exp = new Date(u.expires_at);
+        if (!isNaN(exp) && exp < now) {
+          expired++;
+        } else {
+          trials++;
+        }
+      }
+    });
+
+    document.getElementById('stat-total').textContent = total;
+    document.getElementById('stat-trials').textContent = trials;
+    document.getElementById('stat-expired').textContent = expired;
+    document.getElementById('stat-active').textContent = active;
+
+    document.getElementById('count-all').textContent = total;
+    document.getElementById('count-trial').textContent = trials;
+    document.getElementById('count-expired').textContent = expired;
+    document.getElementById('count-active').textContent = active;
+    document.getElementById('count-phone').textContent = withPhone;
+
+    document.getElementById('drawer-count-all-main').textContent = total;
+    document.getElementById('drawer-count-all').textContent = total;
+    document.getElementById('drawer-count-trial').textContent = trials;
+    document.getElementById('drawer-count-expired').textContent = expired;
+    document.getElementById('drawer-count-active').textContent = active;
+    document.getElementById('drawer-count-phone').textContent = withPhone;
+  }
+
+  function filterUsers() {
+    const q = document.getElementById('search-box').value.toLowerCase().trim();
+    const now = new Date();
+
+    const filtered = allUsers.filter(u => {
+      const name = (u.name || '').toLowerCase();
+      const email = (u.email || '').toLowerCase();
+      const phone = (u.phone || '').toLowerCase();
+      const hwid = (u.hwid || '').toLowerCase();
+      const matches = !q || name.includes(q) || email.includes(q) || phone.includes(q) || hwid.includes(q);
+      if (!matches) return false;
+
+      const isExpired = u.subscription_status === 'EXPIRED' || (u.expires_at !== 'LIFETIME' && new Date(u.expires_at) < now && u.subscription_status !== 'ACTIVE');
+      const isActive = u.subscription_status === 'ACTIVE' || u.expires_at === 'LIFETIME';
+
+      if (currentFilter === 'expired') return isExpired;
+      if (currentFilter === 'trial') return !isExpired && !isActive;
+      if (currentFilter === 'active') return isActive;
+      if (currentFilter === 'phone') return Boolean(u.phone && u.phone.trim());
+
+      return true;
+    });
+
+    renderUsers(filtered);
+  }
+
+  function renderUsers(list) {
+    const container = document.getElementById('client-list');
+    if (!list || list.length === 0) {
+      container.innerHTML = '<div style="text-align:center; padding:50px; color:var(--text-muted);">No se encontraron clientes con este filtro.</div>';
+      return;
+    }
+
+    const now = new Date();
+
+    container.innerHTML = list.map(u => {
+      let isExpired = u.subscription_status === 'EXPIRED';
+      const isActive = u.subscription_status === 'ACTIVE' || u.expires_at === 'LIFETIME';
+
+      if (!isExpired && !isActive && u.expires_at) {
+        const expDate = new Date(u.expires_at);
+        if (!isNaN(expDate) && expDate < now) isExpired = true;
+      }
+
+      let cardClass = 'status-trial';
+      let badgeHtml = '<span class="badge badge-trial">⏳ En Prueba</span>';
+
+      if (isActive) {
+        cardClass = 'status-active';
+        badgeHtml = '<span class="badge badge-active">👑 Activo (VIP)</span>';
+      } else if (isExpired) {
+        cardClass = 'status-expired';
+        badgeHtml = '<span class="badge badge-expired">⚠️ Prueba Vencida</span>';
+      }
+
+      let cleanPhone = (u.phone || '').replace(/[^0-9]/g, '');
+      if (cleanPhone.length === 8) cleanPhone = '53' + cleanPhone;
+      const waLink = cleanPhone ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(`Hola ${u.name || ''}, te saluda Frankosmel de Votol Tuning Pro. ¿Cómo te fue probando la app con tu moto?`)}` : '';
+
+      const initial = (u.name || u.email || 'U').charAt(0).toUpperCase();
+
+      return `
+        <div class="client-card ${cardClass}">
+          <div class="client-header">
+            <div class="client-identity">
+              <div class="client-avatar">${initial}</div>
+              <div class="client-name-wrap">
+                <div class="client-name">
+                  ${escapeHtml(u.name || 'Sin Nombre')}
+                  <span class="client-id-tag">#${u.id}</span>
+                </div>
+                <div style="font-size:12px; color:var(--text-muted);">${escapeHtml(u.email)}</div>
+              </div>
+            </div>
+            <div class="client-badge-group">
+              ${badgeHtml}
+            </div>
+          </div>
+
+          <div class="client-info-grid">
+            <div class="info-cell">
+              <span class="info-label">📱 Teléfono / WhatsApp</span>
+              <span class="info-value">${u.phone ? `<b>${escapeHtml(u.phone)}</b>` : '<i style="color:var(--text-muted)">Sin número</i>'}</span>
+            </div>
+            <div class="info-cell">
+              <span class="info-label">🔑 HWID (Móvil)</span>
+              <span class="info-value">${u.hwid ? `<code>${escapeHtml(u.hwid.substring(0, 16))}...</code> <button onclick="copyText('${escapeHtml(u.hwid)}')" style="background:transparent; border:none; color:var(--cyan); cursor:pointer; font-size:11px;">📋</button>` : '<i style="color:var(--rose)">No vinculado aún</i>'}</span>
+            </div>
+            <div class="info-cell">
+              <span class="info-label">⏳ Vencimiento</span>
+              <span class="info-value" style="color:${isActive ? 'var(--emerald)' : (isExpired ? 'var(--rose)' : 'var(--cyan)')}">
+                ${u.expires_at === 'LIFETIME' ? '🔥 VITALICIA ILIMITADA' : (u.expires_at || 'Sin fecha')}
+              </span>
+            </div>
+            <div class="info-cell">
+              <span class="info-label">📦 Plan / Acceso</span>
+              <span class="info-value">${escapeHtml(u.subscription_plan || 'Prueba Gratuita')}</span>
+            </div>
+            <div class="info-cell">
+              <span class="info-label">🕒 Último Acceso</span>
+              <span class="info-value" style="font-size:12px;">${u.last_login ? u.last_login.split('.')[0] : 'Nunca'}</span>
+            </div>
+            <div class="info-cell">
+              <span class="info-label">📅 Fecha Registro</span>
+              <span class="info-value" style="font-size:12px;">${u.created_at ? u.created_at.split('.')[0] : 'N/A'}</span>
+            </div>
+          </div>
+
+          <div class="actions-bar">
+            ${waLink ? `<a href="${waLink}" target="_blank" class="action-btn btn-whatsapp">💬 WhatsApp Directo</a>` : ''}
+            <button class="action-btn btn-trial-add" onclick="updateSub(${u.id}, 3, 'Prueba Gratuita', 'TRIAL')">🎁 +3 Días</button>
+            <button class="action-btn btn-plan-month" onclick="updateSub(${u.id}, 30, 'Plan 1 Mes', 'ACTIVE')">📅 1 Mes ($5)</button>
+            <button class="action-btn btn-plan-year" onclick="updateSub(${u.id}, 365, 'Plan 1 Año', 'ACTIVE')">🌟 1 Año ($25)</button>
+            <button class="action-btn btn-plan-lifetime" onclick="updateSub(${u.id}, -1, 'Licencia Vitalicia', 'ACTIVE')">👑 Vitalicia ($45)</button>
+            <button class="action-btn btn-hwid-reset" onclick="resetHwid(${u.id})">🔄 Reset HWID</button>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  async function updateSub(userId, addDays, planName, status) {
+    const promptMsg = addDays === -1 
+      ? `¿Activar LICENCIA VITALICIA permanente para este usuario?`
+      : `¿Asignar ${addDays} días (${planName}) a este usuario?`;
+
+    if (!confirm(promptMsg)) return;
+
+    try {
+      const res = await fetch('/api/auth/votol/admin/update-subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, add_days: addDays, plan_name: planName, status: status })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("✅ Suscripción actualizada correctamente", "🎉");
+        loadUsers();
+      } else {
+        showToast("Error: " + data.detail, "❌");
+      }
+    } catch (e) {
+      showToast("Error: " + e.message, "❌");
+    }
+  }
+
+  async function resetHwid(userId) {
+    if (!confirm("¿Desvincular el dispositivo (HWID) para que este usuario pueda iniciar sesión en otro teléfono?")) return;
+
+    try {
+      const res = await fetch('/api/auth/votol/admin/update-subscription', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: userId, reset_hwid: true })
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("✅ HWID desvinculado con éxito", "📱");
+        loadUsers();
+      } else {
+        showToast("Error: " + data.detail, "❌");
+      }
+    } catch (e) {
+      showToast("Error: " + e.message, "❌");
+    }
+  }
+
+  // ====================================================
+  // 📸 LÓGICA DE CAPTURAS PARA EL ASISTENTE IA
+  // ====================================================
+  function handleFileSelect(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    selectedFile = file;
+    document.getElementById('preview-box').style.display = 'flex';
+    document.getElementById('preview-name').textContent = file.name;
+    document.getElementById('preview-size').textContent = (file.size / 1024).toFixed(1) + ' KB';
+    document.getElementById('btn-submit-upload').disabled = false;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      document.getElementById('preview-img').src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function clearSelectedFile() {
+    selectedFile = null;
+    document.getElementById('ai-file-input').value = '';
+    document.getElementById('preview-box').style.display = 'none';
+    document.getElementById('btn-submit-upload').disabled = true;
+  }
+
+  async function uploadScreenshot() {
+    if (!selectedFile) return;
+
+    const btn = document.getElementById('btn-submit-upload');
+    const note = document.getElementById('ai-note-input').value;
+
+    btn.disabled = true;
+    btn.innerHTML = '⏳ Subiendo captura al servidor...';
+
+    const formData = new FormData();
+    formData.append('file', selectedFile);
+    formData.append('note', note);
+
+    try {
+      const res = await fetch('/api/auth/votol/admin/upload-screenshot', {
+        method: 'POST',
+        body: formData
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("✅ ¡Captura subida exitosamente!", "📸");
+        clearSelectedFile();
+        document.getElementById('ai-note-input').value = '';
+        loadScreenshots();
+      } else {
+        showToast("Error al subir: " + (data.detail || data.message), "❌");
+      }
+    } catch (e) {
+      showToast("Error de conexión: " + e.message, "❌");
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = '🚀 Subir Captura para la IA';
+    }
+  }
+
+  async function loadScreenshots() {
+    try {
+      const res = await fetch('/api/auth/votol/admin/screenshots');
+      const data = await res.json();
+      if (data.success) {
+        allScreenshots = data.screenshots || [];
+        renderScreenshots(allScreenshots);
+      }
+    } catch (e) {
+      console.error("Error al cargar capturas:", e);
+    }
+  }
+
+  function renderScreenshots(list) {
+    const grid = document.getElementById('screenshots-grid');
+    const countEl = document.getElementById('gallery-count');
+    const badgeNav = document.getElementById('nav-badge-ss');
+    const drawerBadge = document.getElementById('drawer-count-ss');
+
+    countEl.textContent = list.length;
+    badgeNav.textContent = list.length;
+    drawerBadge.textContent = list.length;
+
+    if (!list || list.length === 0) {
+      grid.innerHTML = '<div style="grid-column: 1/-1; text-align: center; padding: 40px; color: var(--text-muted); background: var(--surface); border: 1px dashed var(--surface-border); border-radius: 14px;">No has subido ninguna captura aún. ¡Sube la primera arriba!</div>';
+      return;
+    }
+
+    grid.innerHTML = list.map(ss => {
+      const promptToCopy = `Asistente, revisa la captura: ${ss.filename} ${ss.note ? `(Nota: ${ss.note})` : ''}`;
+
+      return `
+        <div class="screenshot-card">
+          <div class="card-img-wrap" onclick="openLightbox('${ss.url}')">
+            <img class="card-img" src="${ss.url}" alt="${escapeHtml(ss.filename)}" loading="lazy">
+            <div class="img-zoom-badge">🔍 Toca para ampliar</div>
+          </div>
+          <div class="card-body">
+            <div>
+              <div class="card-meta-row">
+                <span>📅 ${ss.created_at}</span>
+                <span>📦 ${ss.size_kb} KB</span>
+              </div>
+              <div style="font-size:12px; font-weight:700; color:#fff; margin-top:6px; word-break:break-all;">
+                ${escapeHtml(ss.filename)}
+              </div>
+              ${ss.note ? `<div class="card-note" style="margin-top:8px;">💬 "${escapeHtml(ss.note)}"</div>` : ''}
+            </div>
+
+            <div class="card-actions-row">
+              <button class="btn-copy-for-ai" onclick="copyText('${escapeHtml(promptToCopy)}')">
+                📋 Copiar para el Chat con la IA
+              </button>
+              <button class="btn-del-ss" onclick="deleteScreenshot('${ss.filename}')" title="Eliminar captura">
+                🗑️
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+  }
+
+  async function deleteScreenshot(filename) {
+    if (!confirm(`¿Deseas eliminar la captura ${filename}?`)) return;
+
+    try {
+      const res = await fetch(`/api/auth/votol/admin/screenshots/${encodeURIComponent(filename)}`, {
+        method: 'DELETE'
+      });
+      const data = await res.json();
+      if (data.success) {
+        showToast("Captura eliminada", "🗑️");
+        loadScreenshots();
+      } else {
+        showToast("Error al borrar: " + data.detail, "❌");
+      }
+    } catch (e) {
+      showToast("Error: " + e.message, "❌");
+    }
+  }
+
+  function openLightbox(url) {
+    const modal = document.getElementById('lightbox-modal');
+    const img = document.getElementById('lightbox-img');
+    img.src = url;
+    modal.style.display = 'flex';
+  }
+
+  function closeLightbox() {
+    document.getElementById('lightbox-modal').style.display = 'none';
+  }
+
+  function copyApkLink() {
+    copyText("https://franchoshop.reenvioplusbot.xyz/VotolTuningPro.apk");
+    showToast("Enlace de APK v1.1.0 copiado", "📋");
+  }
+
+  function copyText(txt) {
+    navigator.clipboard.writeText(txt).then(() => {
+      showToast("Copiado al portapapeles: " + txt.substring(0, 30) + "...", "📋");
+    });
+  }
+
+  function logoutAdmin() {
+    sessionStorage.removeItem('votol_admin_auth');
+    location.reload();
+  }
+
+  function showToast(text, icon = "✅") {
+    const toast = document.getElementById('toast');
+    document.getElementById('toast-text').textContent = text;
+    document.getElementById('toast-icon').textContent = icon;
+    toast.style.display = 'flex';
+    setTimeout(() => { toast.style.display = 'none'; }, 2800);
+  }
+
+  function escapeHtml(text) {
+    if (!text) return '';
+    return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+</script>
+
+</body>
+</html>

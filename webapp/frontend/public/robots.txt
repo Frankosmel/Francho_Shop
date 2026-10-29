@@ -1,0 +1,24 @@
+User-agent: *
+Allow: /
+Disallow: /admin
+Disallow: /b2b/panel.html
+Disallow: /b2b/login.html
+Disallow: /b2b/register.html
+Disallow: /b2b-api/api-keys
+Disallow: /b2b-api/auth/
+Disallow: /b2b-api/account
+Disallow: /b2b-api/wallet
+
+# Prevenir consumo innecesario de Crawl Budget y URLs duplicadas por parámetros de rastreo
+Disallow: /*?utm_source=*
+Disallow: /*?utm_medium=*
+Disallow: /*?utm_campaign=*
+Disallow: /*?fbclid=*
+Disallow: /*?gclid=*
+Disallow: /*?token=*
+Disallow: /*?session=*
+
+# Política de indexación y uso de contenido para IA
+Content-Signal: search=yes,ai-train=no,use=reference
+
+Sitemap: https://franchoshop.com/sitemap.xml

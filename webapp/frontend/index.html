@@ -4,20 +4,365 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no" />
     <meta name="theme-color" content="#0f1419" />
-    <meta name="description" content="Compra recargas de juegos, gift cards, suscripciones y productos digitales en Francho Shop. Plataforma pensada para Cuba y el mundo." />
-    <meta property="og:title" content="Francho Shop | Recargas de juegos y gift cards para Cuba" />
-    <meta property="og:description" content="Recargas de juegos, gift cards, suscripciones y productos digitales para Cuba y el mundo." />
+    <meta name="description" content="Tienda líder en Cuba de recargas directas por ID, diamantes Free Fire, Mobile Legends, Robux, tarjetas de regalo Steam, PlayStation y números virtuales SMS. Pagos en CUP por Transfermóvil, EnZona y USDT 24/7 con entrega inmediata." />
+    <meta name="keywords" content="recargas cuba, diamantes free fire cuba, recargar free fire por id, recargas transfermovil, recargas enzona, recargas roblox cuba, mobile legends diamantes cuba, pubg mobile uc, tarjetas regalo steam cuba, playstation gift card, numeros virtuales cuba, sms whatsapp cuba, francho shop" />
+    <link rel="canonical" href="https://franchoshop.com/" />
+    <link rel="preload" as="image" href="/logo-splash.webp" type="image/webp" fetchpriority="high" />
+    <link rel="icon" type="image/jpeg" href="/franchoshop.jpg?v=2" />
+    <link rel="apple-touch-icon" href="/franchoshop.jpg?v=2" />
+    <link rel="manifest" href="/manifest.json" />
+
+    <!-- Open Graph / WhatsApp / Telegram / Facebook -->
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="/api/icons/franchoshop.jpg" />
+    <meta property="og:url" content="https://franchoshop.com/" />
+    <meta property="og:site_name" content="Francho Shop" />
+    <meta property="og:title" content="Francho Shop — Recargas de Juegos, Diamantes Free Fire y Gift Cards en Cuba" />
+    <meta property="og:description" content="Recargas automáticas en segundos, diamantes Free Fire por ID, tarjetas Steam y PlayStation, números virtuales SMS y pagos en CUP por Transfermóvil y EnZona." />
+    <meta property="og:image" content="https://franchoshop.com/og-image.png?v=2" />
+    <meta property="og:image:secure_url" content="https://franchoshop.com/og-image.png?v=2" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Francho Shop - Recargas y Gift Cards en Cuba" />
+
+    <!-- Twitter Cards -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:site" content="@FranchoShop" />
+    <meta name="twitter:title" content="Francho Shop — Recargas de Juegos, Diamantes Free Fire y Gift Cards en Cuba" />
+    <meta name="twitter:description" content="Recargas automáticas en segundos, diamantes Free Fire por ID, tarjetas Steam y PlayStation, números virtuales SMS y pagos en CUP por Transfermóvil y EnZona." />
+    <meta name="twitter:image" content="https://franchoshop.com/og-image.png?v=2" />
+
+    <!-- Google Rich Snippets, ItemList & FAQ Schema.org -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "WebSite",
+          "@id": "https://franchoshop.com/#website",
+          "url": "https://franchoshop.com/",
+          "name": "Francho Shop",
+          "description": "Recargas de juegos, diamantes Free Fire por ID, tarjetas de regalo y números virtuales SMS en Cuba 24/7",
+          "potentialAction": {
+            "@type": "SearchAction",
+            "target": "https://franchoshop.com/?q={search_term_string}",
+            "query-input": "required name=search_term_string"
+          }
+        },
+        {
+          "@type": "Organization",
+          "@id": "https://franchoshop.com/#organization",
+          "name": "Francho Shop",
+          "url": "https://franchoshop.com/",
+          "logo": "https://franchoshop.com/franchoshop.jpg",
+          "sameAs": [
+            "https://t.me/franchoshop",
+            "https://instagram.com/franchoshop"
+          ]
+        },
+        {
+          "@type": "ItemList",
+          "@id": "https://franchoshop.com/#navigation",
+          "name": "Navegación Principal Francho Shop",
+          "itemListElement": [
+            {
+              "@type": "SiteNavigationElement",
+              "position": 1,
+              "name": "Catálogo de Recargas",
+              "description": "Catálogo completo de recargas automáticas por ID y gift cards",
+              "url": "https://franchoshop.com/catalogo"
+            },
+            {
+              "@type": "SiteNavigationElement",
+              "position": 2,
+              "name": "Iniciar Sesión",
+              "description": "Acceso seguro a tu cuenta de Francho Shop, historial y saldo",
+              "url": "https://franchoshop.com/login"
+            },
+            {
+              "@type": "SiteNavigationElement",
+              "position": 3,
+              "name": "Crear Cuenta",
+              "description": "Registro gratuito para clientes y revendedores en Cuba",
+              "url": "https://franchoshop.com/registro"
+            },
+            {
+              "@type": "SiteNavigationElement",
+              "position": 4,
+              "name": "Documentación API",
+              "description": "API REST para revendedores, desarrolladores y bots",
+              "url": "https://franchoshop.com/api-docs"
+            },
+            {
+              "@type": "SiteNavigationElement",
+              "position": 5,
+              "name": "Recargas Free Fire",
+              "description": "Diamantes Free Fire inmediatos acreditados por ID con Transfermóvil",
+              "url": "https://franchoshop.com/free-fire"
+            },
+            {
+              "@type": "SiteNavigationElement",
+              "position": 6,
+              "name": "Telegram Premium Cuba",
+              "description": "Activación oficial de Telegram Premium por @usuario con Transfermóvil",
+              "url": "https://franchoshop.com/telegram-premium"
+            },
+            {
+              "@type": "SiteNavigationElement",
+              "position": 7,
+              "name": "Guías de Recarga",
+              "description": "Tutoriales paso a paso para recargar juegos y servicios desde Cuba",
+              "url": "https://franchoshop.com/guias"
+            },
+            {
+              "@type": "SiteNavigationElement",
+              "position": 8,
+              "name": "Centro de Soporte",
+              "description": "Atención al cliente y resolución de dudas 24/7",
+              "url": "https://franchoshop.com/soporte"
+            }
+          ]
+        },
+        {
+          "@type": "ItemList",
+          "@id": "https://franchoshop.com/#recargas-populares",
+          "name": "Recargas Populares y Top-ups en Cuba",
+          "numberOfItems": 6,
+          "itemListElement": [
+            {
+              "@type": "ListItem",
+              "position": 1,
+              "name": "Diamantes Free Fire",
+              "url": "https://franchoshop.com/free-fire",
+              "image": "https://franchoshop.com/game-covers/free_fire.png"
+            },
+            {
+              "@type": "ListItem",
+              "position": 2,
+              "name": "Mobile Legends Bang Bang",
+              "url": "https://franchoshop.com/mobile-legends",
+              "image": "https://franchoshop.com/game-covers/mobile_legends.webp"
+            },
+            {
+              "@type": "ListItem",
+              "position": 3,
+              "name": "Robux Roblox",
+              "url": "https://franchoshop.com/roblox",
+              "image": "https://franchoshop.com/game-covers/roblox.webp"
+            },
+            {
+              "@type": "ListItem",
+              "position": 4,
+              "name": "PUBG Mobile UC",
+              "url": "https://franchoshop.com/pubg-mobile",
+              "image": "https://franchoshop.com/game-covers/pubg_mobile.webp"
+            },
+            {
+              "@type": "ListItem",
+              "position": 5,
+              "name": "Tarjetas Steam Wallet",
+              "url": "https://franchoshop.com/gift-cards",
+              "image": "https://franchoshop.com/game-covers/steam_wallet_global.jpg"
+            },
+            {
+              "@type": "ListItem",
+              "position": 6,
+              "name": "Números Virtuales SMS",
+              "url": "https://franchoshop.com/sms",
+              "image": "https://franchoshop.com/franchoshop.jpg"
+            }
+          ]
+        },
+        {
+          "@type": "FAQPage",
+          "@id": "https://franchoshop.com/#faq",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "¿Cómo recargar diamantes de Free Fire en Cuba con Francho Shop?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Solo ingresa tu ID de jugador de Free Fire, elige el paquete de diamantes o pase de nivel deseado y paga en CUP con Transfermóvil, EnZona o saldo Francho Shop. La entrega se acredita automáticamente a tu cuenta en segundos."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Qué métodos de pago en CUP aceptan?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Aceptamos pagos en CUP a través de Transfermóvil y EnZona con confirmación instantánea. También puedes abonar con USDT o saldo interno prepagado."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Cuánto tarda en llegar mi recarga o código de Gift Card?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Nuestras recargas directas por ID y la entrega de códigos de tarjetas de regalo digitales se procesan de forma 100% automática en segundos las 24 horas del día, los 7 días de la semana."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Se necesita VPN para recargar en Francho Shop desde Cuba?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "No. Puedes acceder a franchoshop.com y recargar tus juegos favoritos directamente desde Cuba sin VPN. Las recargas por ID se acreditan directo al servidor del juego."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Cómo funcionan los números virtuales para recibir SMS?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Seleccionas el país y el servicio (WhatsApp, Telegram, Google, etc.). El sistema te asigna un número temporal y en segundos recibes el código SMS de verificación directamente en tu pantalla."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "¿Qué garantía tienen las compras y cómo contacto a soporte?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "Todos nuestros servicios cuentan con garantía de entrega y reposición inmediata ante cualquier incidencia. Dispones de soporte 24/7 por chat directo en la web y vía canal oficial de Telegram."
+              }
+            }
+          ]
+        }
+      ]
+    }
+    </script>
+
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="manifest" href="/manifest.json" />
-    <link rel="apple-touch-icon" href="/api/icons/franchoshop.jpg" />
-    <title>Francho Shop | Recargas de juegos y gift cards para Cuba</title>
-    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <title>Francho Shop — Recargas de Juegos, Diamantes Free Fire y Gift Cards en Cuba</title>
+    <script>
+      (function() {
+        try {
+          var h = (window.location.hostname || '').toLowerCase();
+          var p = (window.location.pathname || '').toLowerCase();
+          var s = window.location.search || '';
+          var isStore = false;
+          if (h.endsWith('.franchoshop.com') && h !== 'franchoshop.com' && h !== 'www.franchoshop.com') isStore = true;
+          if (p.indexOf('/s/') === 0 || p.indexOf('/store/') === 0 || p.indexOf('/w/') === 0 || p.indexOf('/tienda-web/') === 0) isStore = true;
+          if (s.indexOf('web_store=') !== -1 || s.indexOf('tienda_web=') !== -1 || s.indexOf('store=') !== -1) isStore = true;
+          if (h.indexOf('franchoshop.') === -1 && h.indexOf('reenvioplusbot.') === -1 && h !== 'localhost' && h !== '127.0.0.1') isStore = true;
+          if (isStore) {
+            document.title = 'Tienda Online | Recargas & Entretenimiento 24/7';
+          }
+        } catch(e) {}
+      })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600;700&family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400;1,700&display=swap" rel="stylesheet" />
+    <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
   </head>
   <body class="bg-bg text-white">
-    <div id="root"></div>
+    <!-- Estructura semántica estática para Googlebot, motores de búsqueda y lectores de pantalla -->
+    <header class="sr-only">
+      <h1>Francho Shop — Recargas de Juegos, Diamantes Free Fire y Gift Cards en Cuba</h1>
+      <p>Tienda líder en Cuba para recargas automáticas por ID, diamantes Free Fire, Robux, Mobile Legends, tarjetas de regalo y números virtuales SMS con pagos en CUP por Transfermóvil y EnZona 24/7.</p>
+    </header>
+
+    <section class="sr-only" aria-label="Garantías y Ventajas de Francho Shop">
+      <h2>ENTREGA AUTOMÁTICA EN SEGUNDOS GARANTIZADA</h2>
+      <p>Acreditación directa en tu cuenta del juego en menos de 60 segundos.</p>
+      <h2>PAGOS EN CUP CON TRANSFERMÓVIL Y ENZONA</h2>
+      <p>Paga fácilmente desde Cuba sin comisiones ocultas en moneda nacional y USDT.</p>
+      <h2>DIAMANTES FREE FIRE, MLBB, ROBLOX Y MÁS AL MEJOR PRECIO</h2>
+      <p>Precios mayoristas y directos sin intermediarios.</p>
+      <h2>SOPORTE 24/7 Y REEMPLAZO ASEGURADO ANTE ERRORES</h2>
+      <p>Garantía de reposición y atención personalizada continua por chat y Telegram.</p>
+    </section>
+
+    <!-- Navegación estática rastreable para Googlebot y buscadores (SEO Sitelinks) -->
+    <nav class="sr-only" aria-label="Enlaces rápidos de navegación y catálogo">
+      <a href="https://franchoshop.com/free-fire">Recargar Free Fire en Cuba con Transfermóvil</a>
+      <a href="https://franchoshop.com/catalogo">Catálogo Completo de Recargas</a>
+      <a href="https://franchoshop.com/recargas">Recargas Directas por ID</a>
+      <a href="https://franchoshop.com/gift-cards">Tarjetas de Regalo y Gift Cards</a>
+      <a href="https://franchoshop.com/streaming">Cuentas de Streaming y Suscripciones</a>
+      <a href="https://franchoshop.com/telegram-premium">Comprar Telegram Premium en Cuba con Transfermóvil</a>
+      <a href="https://franchoshop.com/estrellas-telegram">Comprar Telegram Stars (Estrellas) en Cuba</a>
+      <a href="https://franchoshop.com/chatgpt-plus">Pagar ChatGPT Plus en Cuba con Transfermóvil</a>
+      <a href="https://franchoshop.com/mobile-legends">Recargas Mobile Legends Bang Bang (MLBB)</a>
+      <a href="https://franchoshop.com/roblox">Recargas Robux Roblox en Cuba</a>
+      <a href="https://franchoshop.com/pubg-mobile">Recargas PUBG Mobile UC</a>
+      <a href="https://franchoshop.com/sms">Números Virtuales SMS para WhatsApp y Telegram</a>
+      <a href="https://franchoshop.com/guias">Guías y Tutoriales de Recarga en Cuba</a>
+      <a href="https://franchoshop.com/guias/dificultades-gamers-en-cuba-recargas-online">Las Dificultades de los Gamers en Cuba y Cómo Recargar Seguro</a>
+      <a href="https://franchoshop.com/guias/como-comprar-telegram-premium-en-cuba">Cómo Comprar Telegram Premium en Cuba Paso a Paso</a>
+      <a href="https://franchoshop.com/guias/como-comprar-estrellas-telegram-en-cuba">Cómo Comprar Telegram Stars en Cuba</a>
+      <a href="https://franchoshop.com/guias/como-pagar-chatgpt-plus-en-cuba">Cómo Pagar ChatGPT Plus en Cuba</a>
+      <a href="https://franchoshop.com/login">Iniciar Sesión</a>
+      <a href="https://franchoshop.com/registro">Crear Cuenta</a>
+      <a href="https://franchoshop.com/panel">Revendedores B2B</a>
+      <a href="https://franchoshop.com/soporte">Centro de Soporte</a>
+      <a href="https://franchoshop.com/faq">Preguntas Frecuentes</a>
+    </nav>
+
+    <noscript>
+      <div style="padding: 24px; text-align: center; font-family: sans-serif; background-color: #0f1419; color: #ffffff;">
+        <h1>Francho Shop — Recargas de Juegos y Gift Cards en Cuba</h1>
+        <p>Plataforma líder en recargas automáticas por ID, diamantes Free Fire, Robux, gift cards de Steam y PlayStation, Telegram Premium, Telegram Stars, ChatGPT Plus y números virtuales SMS. Pagos en CUP por Transfermóvil y EnZona 24/7.</p>
+        <p>
+          <a href="/catalogo" style="color: #3b82f6;">Catálogo</a> | 
+          <a href="/free-fire" style="color: #3b82f6;">Free Fire</a> | 
+          <a href="/telegram-premium" style="color: #3b82f6;">Telegram Premium</a> | 
+          <a href="/estrellas-telegram" style="color: #3b82f6;">Telegram Stars</a> | 
+          <a href="/chatgpt-plus" style="color: #3b82f6;">ChatGPT Plus</a> | 
+          <a href="/recargas" style="color: #3b82f6;">Recargas</a> | 
+          <a href="/gift-cards" style="color: #3b82f6;">Gift Cards</a> | 
+          <a href="/guias" style="color: #3b82f6;">Guías</a> | 
+          <a href="/sms" style="color: #3b82f6;">Números Virtuales SMS</a> | 
+          <a href="/soporte" style="color: #3b82f6;">Soporte</a>
+        </p>
+      </div>
+    </noscript>
+
+    <div id="root">
+      <div id="app-initial-splash" style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background-color:#0f1419;font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;color:#ffffff;padding:16px;user-select:none;">
+        <style>
+          @keyframes initial-pulse-green {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7), 0 0 25px 5px rgba(34, 197, 94, 0.35); }
+            50% { box-shadow: 0 0 0 12px rgba(34, 197, 94, 0), 0 0 40px 12px rgba(34, 197, 94, 0.55); }
+          }
+          @keyframes initial-spin-slow {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+          }
+          .initial-logo-pulse {
+            animation: initial-pulse-green 1.8s ease-in-out infinite;
+          }
+          .initial-ring-spin {
+            animation: initial-spin-slow 3s linear infinite;
+          }
+        </style>
+        <div style="position:relative;width:112px;height:112px;display:flex;align-items:center;justify-content:center;">
+          <div style="position:absolute;inset:0;border-radius:50%;background:rgba(52,211,153,0.15);filter:blur(10px);pointer-events:none;"></div>
+          <div style="position:absolute;inset:0;border-radius:50%;border:1px solid rgba(74,222,128,0.15);pointer-events:none;"></div>
+          <div class="initial-ring-spin" style="position:absolute;inset:0;border-radius:50%;border:2px solid transparent;border-top-color:#4ade80;border-right-color:rgba(74,222,128,0.35);pointer-events:none;"></div>
+          <div class="initial-logo-pulse" style="position:relative;width:96px;height:96px;border-radius:50%;overflow:hidden;background:#10141d;display:flex;align-items:center;justify-content:center;border:2px solid rgba(74,222,128,0.9);box-shadow:0 0 25px rgba(34,197,94,0.4);">
+            <img src="/logo-splash.webp" alt="Francho Shop" width="96" height="96" fetchpriority="high" decoding="async" style="width:100%;height:100%;object-fit:cover;display:block;" />
+          </div>
+        </div>
+        <h1 style="margin-top:28px;font-size:24px;font-weight:900;letter-spacing:0.02em;background:linear-gradient(to right,#ffff00,#22c55e);-webkit-background-clip:text;-webkit-text-fill-color:transparent;text-align:center;">
+          Francho Shop
+        </h1>
+        <div style="text-align:center;margin-top:8px;min-height:44px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+          <p style="font-size:14px;font-weight:700;color:rgba(255,255,255,0.9);margin:0;">
+            Iniciando Francho Shop...
+          </p>
+          <p style="font-size:11px;color:rgba(255,255,255,0.5);margin:2px 0 0 0;">
+            Tu plataforma de recargas directas en Cuba
+          </p>
+        </div>
+        <div style="display:flex;gap:6px;margin-top:16px;">
+          <div style="width:8px;height:8px;border-radius:50%;background-color:#4ade80;"></div>
+          <div style="width:8px;height:8px;border-radius:50%;background-color:#4ade80;"></div>
+          <div style="width:8px;height:8px;border-radius:50%;background-color:#4ade80;"></div>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

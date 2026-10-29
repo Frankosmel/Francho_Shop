@@ -1,0 +1,584 @@
+{
+  "comparable_clean": 267,
+  "fzr_wins": 200,
+  "buffpin_wins": 67,
+  "by_game": {
+    "Arena Breakout": {
+      "FZR": 2,
+      "BuffPin": 3,
+      "Igual": 0,
+      "rows": 5,
+      "fzr_saving": 0.4346,
+      "buffpin_saving": 21.8833,
+      "examples_fzr": [
+        {
+          "category": "Arena Breakout",
+          "offer_name": "Monthly Advanced Battle Pass Activation Pass",
+          "fzr_cost_usd": "0.877",
+          "buffpin_name": "Arena Breakout（暗区突围）Monthly Advanced Battle Pass Activation Pass",
+          "buffpin_cost_usd": "1.0255",
+          "diff_usd": "-0.1485"
+        },
+        {
+          "category": "Arena Breakout",
+          "offer_name": "Monthly Premium Battle Pass Activation Pass",
+          "fzr_cost_usd": "3.529",
+          "buffpin_name": "Arena Breakout（暗区突围）Monthly Premium Battle Pass Activation Pass",
+          "buffpin_cost_usd": "3.8151",
+          "diff_usd": "-0.2861"
+        }
+      ],
+      "examples_buffpin": [
+        {
+          "category": "Arena Breakout",
+          "offer_name": "Quarterly Premium Battle Pass Bundle Activation Pass Bundle",
+          "fzr_cost_usd": "10.598",
+          "buffpin_name": "Arena Breakout（暗区突围）Monthly Premium Battle Pass Activation Pass",
+          "buffpin_cost_usd": "3.8151",
+          "diff_usd": "6.7829"
+        },
+        {
+          "category": "Arena Breakout: Infinite",
+          "offer_name": "Advanced Battle Pass Activation Card",
+          "fzr_cost_usd": "4.978",
+          "buffpin_name": "Arena Breakout（暗区突围）Monthly Advanced Battle Pass Activation Pass",
+          "buffpin_cost_usd": "1.0255",
+          "diff_usd": "3.9525"
+        },
+        {
+          "category": "Arena Breakout: Infinite",
+          "offer_name": "Premium Battle Pass Activation Card",
+          "fzr_cost_usd": "14.963",
+          "buffpin_name": "Arena Breakout（暗区突围）Monthly Premium Battle Pass Activation Pass",
+          "buffpin_cost_usd": "3.8151",
+          "diff_usd": "11.1479"
+        }
+      ]
+    },
+    "Blood Strike": {
+      "FZR": 0,
+      "BuffPin": 10,
+      "Igual": 0,
+      "rows": 10,
+      "fzr_saving": 0.0,
+      "buffpin_saving": 19.717600000000004,
+      "examples_fzr": [],
+      "examples_buffpin": [
+        {
+          "category": "Blood Strike",
+          "offer_name": "5.99 DEAL",
+          "fzr_cost_usd": "4.845",
+          "buffpin_name": "Blood Strike MENA USD 100 Golds + 5",
+          "buffpin_cost_usd": "0.6793",
+          "diff_usd": "4.1657"
+        },
+        {
+          "category": "Blood Strike",
+          "offer_name": "Level Up Pass",
+          "fzr_cost_usd": "1.6024",
+          "buffpin_name": "Blood Strike Pass Ultra Skin Lucky Chest",
+          "buffpin_cost_usd": "0.4017",
+          "diff_usd": "1.2007"
+        },
+        {
+          "category": "Blood Strike",
+          "offer_name": "Season Pass",
+          "fzr_cost_usd": "0.7619",
+          "buffpin_name": "Blood Strike Pass Ultra Skin Lucky Chest",
+          "buffpin_cost_usd": "0.4017",
+          "diff_usd": "0.3602"
+        },
+        {
+          "category": "Blood Strike",
+          "offer_name": "Strike Pass Elite",
+          "fzr_cost_usd": "3.2127",
+          "buffpin_name": "Blood Strike MENA USD Strike Pass Elite",
+          "buffpin_cost_usd": "2.4121",
+          "diff_usd": "0.8006"
+        },
+        {
+          "category": "Blood Strike",
+          "offer_name": "Strike Pass Premium",
+          "fzr_cost_usd": "7.2265",
+          "buffpin_name": "Blood Strike MENA USD Strike Pass Premium",
+          "buffpin_cost_usd": "5.3968",
+          "diff_usd": "1.8297"
+        },
+        {
+          "category": "Blood Strike (Mena)",
+          "offer_name": "5.99 DEAL",
+          "fzr_cost_usd": "5.783",
+          "buffpin_name": "Blood Strike MENA USD 100 Golds + 5",
+          "buffpin_cost_usd": "0.6793",
+          "diff_usd": "5.1037"
+        },
+        {
+          "category": "Blood Strike (Mena)",
+          "offer_name": "Level Up Pass",
+          "fzr_cost_usd": "1.893",
+          "buffpin_name": "Blood Strike Pass Ultra Skin Lucky Chest",
+          "buffpin_cost_usd": "0.4017",
+          "diff_usd": "1.4913"
+        },
+        {
+          "category": "Blood Strike (Mena)",
+          "offer_name": "Season Pass",
+          "fzr_cost_usd": "0.6205",
+          "buffpin_name": "Blood Strike Pass Ultra Skin Lucky Chest",
+          "buffpin_cost_usd": "0.4017",
+          "diff_usd": "0.2188"
+        }
+      ]
+    },
+    "Delta Force": {
+      "FZR": 3,
+      "BuffPin": 0,
+      "Igual": 0,
+      "rows": 3,
+      "fzr_saving": 0.034,
+      "buffpin_saving": 0.0,
+      "examples_fzr": [
+        {
+          "category": "Delta Force",
+          "offer_name": "18 Delta Coins",
+          "fzr_cost_usd": "0.22",
+          "buffpin_name": "Delta Force‌ 18 Delta Coins",
+          "buffpin_cost_usd": "0.2224",
+          "diff_usd": "-0.0024"
+        },
+        {
+          "category": "Delta Force",
+          "offer_name": "30 Delta Coins",
+          "fzr_cost_usd": "0.38",
+          "buffpin_name": "Delta Force‌ 30 Delta Coins",
+          "buffpin_cost_usd": "0.3808",
+          "diff_usd": "-0.0008"
+        },
+        {
+          "category": "Delta Force",
+          "offer_name": "60 Delta Coins",
+          "fzr_cost_usd": "0.77",
+          "buffpin_name": "Delta Force‌ 60 Delta Coins",
+          "buffpin_cost_usd": "0.8008",
+          "diff_usd": "-0.0308"
+        }
+      ],
+      "examples_buffpin": []
+    },
+    "Free Fire": {
+      "FZR": 95,
+      "BuffPin": 17,
+      "Igual": 0,
+      "rows": 112,
+      "fzr_saving": 182.333,
+      "buffpin_saving": 17.2922,
+      "examples_fzr": [
+        {
+          "category": "Free Fire (BD)",
+          "offer_name": "25 Diamonds",
+          "fzr_cost_usd": "0.1514",
+          "buffpin_name": "Free Fire Diamonds (MY/SG/PH/KH) 25 Diamonds",
+          "buffpin_cost_usd": "0.2575",
+          "diff_usd": "-0.1061"
+        },
+        {
+          "category": "Free Fire (BD)",
+          "offer_name": "50 Diamonds",
+          "fzr_cost_usd": "0.265",
+          "buffpin_name": "Free Fire Diamonds (ID) 50 Diamonds",
+          "buffpin_cost_usd": "0.4738",
+          "diff_usd": "-0.2088"
+        },
+        {
+          "category": "Free Fire (BD)",
+          "offer_name": "Monthly Membership",
+          "fzr_cost_usd": "6.038",
+          "buffpin_name": "Free Fire Diamonds (LATAM) Monthly Membership",
+          "buffpin_cost_usd": "12.2673",
+          "diff_usd": "-6.2293"
+        },
+        {
+          "category": "Free Fire (BD)",
+          "offer_name": "WEEKLY LITE",
+          "fzr_cost_usd": "0.34",
+          "buffpin_name": "Free Fire Diamonds (LATAM) Weekly Lite",
+          "buffpin_cost_usd": "0.6489",
+          "diff_usd": "-0.3089"
+        },
+        {
+          "category": "Free Fire (BD)",
+          "offer_name": "Weekly Membership",
+          "fzr_cost_usd": "1.214",
+          "buffpin_name": "Free Fire Diamonds (LATAM) Weekly Membership",
+          "buffpin_cost_usd": "2.5338",
+          "diff_usd": "-1.3198"
+        },
+        {
+          "category": "Free Fire (BR)",
+          "offer_name": "Booyah Pass",
+          "fzr_cost_usd": "1.673",
+          "buffpin_name": "Free Fire Diamonds (LATAM) Booyah Pass Card",
+          "buffpin_cost_usd": "4.0376",
+          "diff_usd": "-2.3646"
+        },
+        {
+          "category": "Free Fire (BR)",
+          "offer_name": "Level Up Package - Level 10",
+          "fzr_cost_usd": "0.469",
+          "buffpin_name": "Free Fire Diamonds (LATAM) 100+10 Diamonds",
+          "buffpin_cost_usd": "0.9476",
+          "diff_usd": "-0.4786"
+        },
+        {
+          "category": "Free Fire (BR)",
+          "offer_name": "Monthly Membership",
+          "fzr_cost_usd": "8.384",
+          "buffpin_name": "Free Fire Diamonds (LATAM) Monthly Membership",
+          "buffpin_cost_usd": "12.2673",
+          "diff_usd": "-3.8833"
+        }
+      ],
+      "examples_buffpin": [
+        {
+          "category": "Free Fire (BR)",
+          "offer_name": "Booyah Pass Premium Plus",
+          "fzr_cost_usd": "5.039",
+          "buffpin_name": "Free Fire Diamonds (TH) 43 + 25 Extra Diamonds",
+          "buffpin_cost_usd": "0.6489",
+          "diff_usd": "4.3901"
+        },
+        {
+          "category": "Free Fire (BR)",
+          "offer_name": "Level Up Package - Level 25",
+          "fzr_cost_usd": "0.469",
+          "buffpin_name": "Free Fire Diamonds (MY/SG/PH/KH) 25 Diamonds",
+          "buffpin_cost_usd": "0.2575",
+          "diff_usd": "0.2115"
+        },
+        {
+          "category": "Free Fire (CIS)",
+          "offer_name": "Level Up Package 25",
+          "fzr_cost_usd": "0.5131",
+          "buffpin_name": "Free Fire Diamonds (MY/SG/PH/KH) 25 Diamonds",
+          "buffpin_cost_usd": "0.2575",
+          "diff_usd": "0.2556"
+        },
+        {
+          "category": "Free Fire (ID)",
+          "offer_name": "25 Diamonds",
+          "fzr_cost_usd": "0.265",
+          "buffpin_name": "Free Fire Diamonds (MY/SG/PH/KH) 25 Diamonds",
+          "buffpin_cost_usd": "0.2575",
+          "diff_usd": "0.0075"
+        },
+        {
+          "category": "Free Fire (ID)",
+          "offer_name": "Level Up Pass - Level 25",
+          "fzr_cost_usd": "0.47",
+          "buffpin_name": "Free Fire Diamonds (MY/SG/PH/KH) 25 Diamonds",
+          "buffpin_cost_usd": "0.2575",
+          "diff_usd": "0.2125"
+        },
+        {
+          "category": "Free Fire (MY/SG)",
+          "offer_name": "310 Diamonds",
+          "fzr_cost_usd": "2.65",
+          "buffpin_name": "Free Fire Diamonds (LATAM) 310+31 Diamonds",
+          "buffpin_cost_usd": "2.6471",
+          "diff_usd": "0.0029"
+        },
+        {
+          "category": "Free Fire (MY/SG)",
+          "offer_name": "Level Up Package - Level 25",
+          "fzr_cost_usd": "0.612",
+          "buffpin_name": "Free Fire Diamonds (MY/SG/PH/KH) 25 Diamonds",
+          "buffpin_cost_usd": "0.2575",
+          "diff_usd": "0.3545"
+        },
+        {
+          "category": "Free Fire (SG)",
+          "offer_name": "Level Up Package - Level 25",
+          "fzr_cost_usd": "0.663",
+          "buffpin_name": "Free Fire Diamonds (MY/SG/PH/KH) 25 Diamonds",
+          "buffpin_cost_usd": "0.2575",
+          "diff_usd": "0.4055"
+        }
+      ]
+    },
+    "Genshin Impact": {
+      "FZR": 0,
+      "BuffPin": 12,
+      "Igual": 0,
+      "rows": 12,
+      "fzr_saving": 0.0,
+      "buffpin_saving": 66.39959999999999,
+      "examples_fzr": [],
+      "examples_buffpin": [
+        {
+          "category": "Genshin Impact (Global)",
+          "offer_name": "1980 + 260 Chronal Nexus",
+          "fzr_cost_usd": "28.9679",
+          "buffpin_name": "Genshin Impact Philippines (O) 1980 + 260 Chronal Nexus ",
+          "buffpin_cost_usd": "24.1226",
+          "diff_usd": "4.8453"
+        },
+        {
+          "category": "Genshin Impact (Global)",
+          "offer_name": "1980 + 260 Genesis Crystals",
+          "fzr_cost_usd": "28.9679",
+          "buffpin_name": "Genshin Impact Philippines (O) 1980 + 260 Chronal Nexus ",
+          "buffpin_cost_usd": "24.1226",
+          "diff_usd": "4.8453"
+        },
+        {
+          "category": "Genshin Impact (Global)",
+          "offer_name": "300 + 30 Chronal Nexus",
+          "fzr_cost_usd": "4.8228",
+          "buffpin_name": "Genshin Impact Philippines (O) 300 + 30 Chronal Nexus ",
+          "buffpin_cost_usd": "4.0479",
+          "diff_usd": "0.7749"
+        },
+        {
+          "category": "Genshin Impact (Global)",
+          "offer_name": "300 + 30 Genesis Crystals",
+          "fzr_cost_usd": "4.8228",
+          "buffpin_name": "Genshin Impact Philippines (O) 300 + 30 Chronal Nexus ",
+          "buffpin_cost_usd": "4.0479",
+          "diff_usd": "0.7749"
+        },
+        {
+          "category": "Genshin Impact (Global)",
+          "offer_name": "3280 + 600 Chronal Nexus",
+          "fzr_cost_usd": "48.2798",
+          "buffpin_name": "Genshin Impact Philippines (O) 3280 + 600 Chronal Nexus ",
+          "buffpin_cost_usd": "40.4584",
+          "diff_usd": "7.8214"
+        },
+        {
+          "category": "Genshin Impact (Global)",
+          "offer_name": "3280 + 600 Genesis Crystals",
+          "fzr_cost_usd": "48.2798",
+          "buffpin_name": "Genshin Impact Philippines (O) 3280 + 600 Chronal Nexus ",
+          "buffpin_cost_usd": "40.4584",
+          "diff_usd": "7.8214"
+        },
+        {
+          "category": "Genshin Impact (Global)",
+          "offer_name": "60 Chronal Nexus",
+          "fzr_cost_usd": "0.9562",
+          "buffpin_name": "Genshin Impact Philippines (O) 60 Chronal Nexus ",
+          "buffpin_cost_usd": "0.7828",
+          "diff_usd": "0.1734"
+        },
+        {
+          "category": "Genshin Impact (Global)",
+          "offer_name": "60 Genesis Crystals",
+          "fzr_cost_usd": "0.9562",
+          "buffpin_name": "Genshin Impact Philippines (O) 60 Chronal Nexus ",
+          "buffpin_cost_usd": "0.7828",
+          "diff_usd": "0.1734"
+        }
+      ]
+    },
+    "Honor of Kings": {
+      "FZR": 4,
+      "BuffPin": 2,
+      "Igual": 0,
+      "rows": 6,
+      "fzr_saving": 0.8924,
+      "buffpin_saving": 0.1856,
+      "examples_fzr": [
+        {
+          "category": "Honor of Kings",
+          "offer_name": "240 Tokens",
+          "fzr_cost_usd": "2.51",
+          "buffpin_name": "王者荣耀国际服（Honor of Kings） 240 点券",
+          "buffpin_cost_usd": "2.6815",
+          "diff_usd": "-0.1715"
+        },
+        {
+          "category": "Honor of Kings",
+          "offer_name": "400 Tokens",
+          "fzr_cost_usd": "4.19",
+          "buffpin_name": "王者荣耀国际服（Honor of Kings） 400 + 24 点券",
+          "buffpin_cost_usd": "4.5017",
+          "diff_usd": "-0.3117"
+        },
+        {
+          "category": "Honor of Kings",
+          "offer_name": "560 Tokens",
+          "fzr_cost_usd": "5.87",
+          "buffpin_name": "王者荣耀国际服（Honor of Kings） 560  点券",
+          "buffpin_cost_usd": "6.2167",
+          "diff_usd": "-0.3467"
+        },
+        {
+          "category": "Honor of Kings",
+          "offer_name": "80 Tokens",
+          "fzr_cost_usd": "0.84",
+          "buffpin_name": "王者荣耀国际服（Honor of Kings） 80 点券",
+          "buffpin_cost_usd": "0.9025",
+          "diff_usd": "-0.0625"
+        }
+      ],
+      "examples_buffpin": [
+        {
+          "category": "Honor of Kings",
+          "offer_name": "Weekly Card",
+          "fzr_cost_usd": "0.9612",
+          "buffpin_name": "Honor of Kings 国际服 Weekly Card",
+          "buffpin_cost_usd": "0.8628",
+          "diff_usd": "0.0984"
+        },
+        {
+          "category": "Honor of Kings",
+          "offer_name": "Weekly Card Plus",
+          "fzr_cost_usd": "2.8194",
+          "buffpin_name": "Honor of Kings 国际服 Weekly Card Plus",
+          "buffpin_cost_usd": "2.7322",
+          "diff_usd": "0.0872"
+        }
+      ]
+    },
+    "Mobile Legends": {
+      "FZR": 96,
+      "BuffPin": 23,
+      "Igual": 0,
+      "rows": 119,
+      "fzr_saving": 96.92770000000002,
+      "buffpin_saving": 38.787699999999994,
+      "examples_fzr": [
+        {
+          "category": "Mobile Legends (Global)",
+          "offer_name": "10 + 1 Diamonds",
+          "fzr_cost_usd": "0.15",
+          "buffpin_name": "Mobile Legends Philippines (O) 11 Diamonds (10 + 1 Bonus)",
+          "buffpin_cost_usd": "0.1648",
+          "diff_usd": "-0.0148"
+        },
+        {
+          "category": "Mobile Legends (Global)",
+          "offer_name": "1007 + 156 Diamonds",
+          "fzr_cost_usd": "14.88",
+          "buffpin_name": "Mobile Legends Philippines (O) 1163 Diamonds ( 1007 + 156 Bonus )",
+          "buffpin_cost_usd": "16.1298",
+          "diff_usd": "-1.2498"
+        },
+        {
+          "category": "Mobile Legends (Global)",
+          "offer_name": "102 + 10 Diamonds",
+          "fzr_cost_usd": "1.49",
+          "buffpin_name": "Mobile Legends Philippines (O) 112 Diamonds (102 + 10 Bonus)",
+          "buffpin_cost_usd": "1.6686",
+          "diff_usd": "-0.1786"
+        },
+        {
+          "category": "Mobile Legends (Global)",
+          "offer_name": "12 Diamonds",
+          "fzr_cost_usd": "0.194",
+          "buffpin_name": "Mobile Legends Indonesia (O) 12 Diamonds (11 + 1 Bonus)",
+          "buffpin_cost_usd": "0.2163",
+          "diff_usd": "-0.0223"
+        },
+        {
+          "category": "Mobile Legends (Global)",
+          "offer_name": "14 Diamonds",
+          "fzr_cost_usd": "0.23",
+          "buffpin_name": "Mobile Legends Indonesia (O) 14 Diamonds (13 + 1 Bonus)",
+          "buffpin_cost_usd": "0.2369",
+          "diff_usd": "-0.0069"
+        },
+        {
+          "category": "Mobile Legends (Global)",
+          "offer_name": "140 Diamonds",
+          "fzr_cost_usd": "2.29",
+          "buffpin_name": "Mobile Legends Malaysia (O) 140 Diamonds ",
+          "buffpin_cost_usd": "2.5441",
+          "diff_usd": "-0.2541"
+        },
+        {
+          "category": "Mobile Legends (Global)",
+          "offer_name": "156 + 16 Diamonds",
+          "fzr_cost_usd": "2.35",
+          "buffpin_name": "Mobile Legends Global (exec ID, MY, PH, RU, SG, TR) (O) 172 Diamonds (156 + 16 Bonus)",
+          "buffpin_cost_usd": "2.5132",
+          "diff_usd": "-0.1632"
+        },
+        {
+          "category": "Mobile Legends (Global)",
+          "offer_name": "170 Diamonds",
+          "fzr_cost_usd": "2.56",
+          "buffpin_name": "Mobile Legends Indonesia (O) 170 Diamonds (154 + 16 Bonus)",
+          "buffpin_cost_usd": "2.7398",
+          "diff_usd": "-0.1798"
+        }
+      ],
+      "examples_buffpin": [
+        {
+          "category": "Mobile Legends (Brazil)",
+          "offer_name": "150 + 15 Diamonds",
+          "fzr_cost_usd": "2.4189",
+          "buffpin_name": "Mobile Legends Brazil (O) 150+15 Diamonds ",
+          "buffpin_cost_usd": "2.1939",
+          "diff_usd": "0.225"
+        },
+        {
+          "category": "Mobile Legends (Brazil)",
+          "offer_name": "150 + 15 Diamonds (First Top-Up Bonus)",
+          "fzr_cost_usd": "2.35",
+          "buffpin_name": "Mobile Legends Brazil (O) 150+15 Diamonds ",
+          "buffpin_cost_usd": "2.1939",
+          "diff_usd": "0.1561"
+        },
+        {
+          "category": "Mobile Legends (Brazil)",
+          "offer_name": "250 + 25 Diamonds",
+          "fzr_cost_usd": "4.0449",
+          "buffpin_name": "Mobile Legends Brazil (O) 250+25 Diamonds",
+          "buffpin_cost_usd": "3.605",
+          "diff_usd": "0.4399"
+        },
+        {
+          "category": "Mobile Legends (Brazil)",
+          "offer_name": "250 + 25 Diamonds (First Top-Up Bonus)",
+          "fzr_cost_usd": "3.92",
+          "buffpin_name": "Mobile Legends Brazil (O) 250+25 Diamonds",
+          "buffpin_cost_usd": "3.605",
+          "diff_usd": "0.315"
+        },
+        {
+          "category": "Mobile Legends (Brazil)",
+          "offer_name": "50 + 5 Diamonds",
+          "fzr_cost_usd": "0.801",
+          "buffpin_name": "Mobile Legends Brazil (O) 50+5 Diamonds",
+          "buffpin_cost_usd": "0.7416",
+          "diff_usd": "0.0594"
+        },
+        {
+          "category": "Mobile Legends (Brazil)",
+          "offer_name": "50 + 5 Diamonds (First Top-Up Bonus)",
+          "fzr_cost_usd": "0.78",
+          "buffpin_name": "Mobile Legends Brazil (O) 50+5 Diamonds",
+          "buffpin_cost_usd": "0.7416",
+          "diff_usd": "0.0384"
+        },
+        {
+          "category": "Mobile Legends (Brazil)",
+          "offer_name": "500 + 65 Diamonds",
+          "fzr_cost_usd": "8.1138",
+          "buffpin_name": "Mobile Legends Brazil (O) 500+65 Diamonds",
+          "buffpin_cost_usd": "7.3954",
+          "diff_usd": "0.7184"
+        },
+        {
+          "category": "Mobile Legends (Brazil)",
+          "offer_name": "500 + 65 Diamonds (First Top-Up Bonus)",
+          "fzr_cost_usd": "7.86",
+          "buffpin_name": "Mobile Legends Brazil (O) 500+65 Diamonds",
+          "buffpin_cost_usd": "7.3954",
+          "diff_usd": "0.4646"
+        }
+      ]
+    }
+  }
+}

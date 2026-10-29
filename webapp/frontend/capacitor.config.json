@@ -20,7 +20,8 @@
   },
   "plugins": {
     "SplashScreen": {
-      "launchShowDuration": 2000,
+      "launchShowDuration": 500,
+      "launchAutoHide": true,
       "backgroundColor": "#0f172a",
       "androidSplashResourceName": "splash",
       "showSpinner": false,
@@ -35,6 +36,14 @@
       "style": "Dark",
       "backgroundColor": "#0f172a",
       "overlaysWebView": false
+    },
+    "SocialLogin": {
+      "providers": {
+        "google": true,
+        "facebook": false,
+        "apple": false,
+        "twitter": false
+      }
     }
   }
 }

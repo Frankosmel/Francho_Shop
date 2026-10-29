@@ -1,7 +1,7 @@
 {
   "name": "Francho Shop",
   "short_name": "Francho Shop",
-  "description": "Recargas de juegos y gift cards",
+  "description": "Recargas de juegos, números virtuales y productos digitales",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f1419",
@@ -9,10 +9,16 @@
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/api/icons/franchoshop.jpg",
-      "sizes": "192x192",
+      "src": "/franchoshop.jpg?v=2",
+      "sizes": "512x512",
       "type": "image/jpeg",
       "purpose": "any maskable"
+    },
+    {
+      "src": "/logo-512.png?v=2",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
     }
   ],
   "categories": ["shopping", "games"],

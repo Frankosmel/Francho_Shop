@@ -1,0 +1,15 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls",
+      "delegate_permission/common.get_login_creds"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.franchoshop.app",
+      "sha256_cert_fingerprints": [
+        "CB:99:65:AB:F2:66:BB:F7:DF:A8:48:AB:0D:85:2C:5B:61:6D:48:DD:1E:A2:D1:10:50:CD:5C:D2:CA:3E:A5:88"
+      ]
+    }
+  }
+]

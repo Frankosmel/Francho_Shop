@@ -1,0 +1,1117 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Francho Shop B2B Reseller API",
+    "version": "1.2.0",
+    "description": "API oficial y marca blanca para que revendedores autorizados integren recargas directas en juegos, tarjetas de regalo, suscripciones digitales y números virtuales SMS. Todos los precios y saldos se expresan en USDT.",
+    "contact": {
+      "name": "Soporte Francho Shop",
+      "url": "https://franchoshop.com"
+    }
+  },
+  "servers": [
+    {
+      "url": "https://franchoshop.com/v1",
+      "description": "Servidor de Producción Principal"
+    },
+    {
+      "url": "https://franchoshop.com/api/v1",
+      "description": "Servidor de Producción Alternativo"
+    }
+  ],
+  "security": [
+    {
+      "BearerAuth": []
+    },
+    {
+      "ApiKeyAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "General",
+      "description": "Información general del servicio"
+    },
+    {
+      "name": "Billetera",
+      "description": "Consulta de saldo y movimientos en USDT"
+    },
+    {
+      "name": "Catálogo",
+      "description": "Productos, juegos, carátulas y ofertas disponibles"
+    },
+    {
+      "name": "Pedidos",
+      "description": "Creación y consulta de pedidos en tiempo real"
+    },
+    {
+      "name": "SMS",
+      "description": "Números virtuales temporales para recepción de códigos de activación"
+    }
+  ],
+  "paths": {
+    "": {
+      "get": {
+        "tags": [
+          "General"
+        ],
+        "summary": "Información del servicio",
+        "description": "Devuelve nombre del servicio, versión activa, moneda base (USDT) y capacidades habilitadas.",
+        "responses": {
+          "200": {
+            "description": "Información de la API",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "name": {
+                          "type": "string",
+                          "example": "Francho Shop B2B API"
+                        },
+                        "version": {
+                          "type": "string",
+                          "example": "1.0.0"
+                        },
+                        "currency": {
+                          "type": "string",
+                          "example": "USDT"
+                        },
+                        "money_format": {
+                          "type": "string",
+                          "example": "decimal_string"
+                        },
+                        "capabilities": {
+                          "type": "array",
+                          "items": {
+                            "type": "string"
+                          },
+                          "example": [
+                            "catalog",
+                            "orders",
+                            "wallet",
+                            "wallet_movements"
+                          ]
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/wallet": {
+      "get": {
+        "tags": [
+          "Billetera"
+        ],
+        "summary": "Consultar saldo disponible",
+        "description": "Devuelve el saldo disponible en USDT de la cuenta revendedora asociada a la clave API.",
+        "responses": {
+          "200": {
+            "description": "Saldo actual",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "currency": {
+                          "type": "string",
+                          "example": "USDT"
+                        },
+                        "balance": {
+                          "type": "string",
+                          "example": "85.4500"
+                        },
+                        "reserved": {
+                          "type": "string",
+                          "example": "0.0000"
+                        },
+                        "available": {
+                          "type": "string",
+                          "example": "85.4500"
+                        },
+                        "plan": {
+                          "type": "string",
+                          "example": "reseller"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/wallet/movements": {
+      "get": {
+        "tags": [
+          "Billetera"
+        ],
+        "summary": "Historial de movimientos de saldo",
+        "description": "Lista transacciones de recargas, compras de pedidos y reembolsos.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 25,
+              "minimum": 1,
+              "maximum": 100
+            },
+            "description": "Cantidad de registros a devolver"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de movimientos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "id": {
+                            "type": "string",
+                            "example": "mov_1234"
+                          },
+                          "type": {
+                            "type": "string",
+                            "example": "spend"
+                          },
+                          "amount": {
+                            "type": "string",
+                            "example": "0.7700"
+                          },
+                          "currency": {
+                            "type": "string",
+                            "example": "USDT"
+                          },
+                          "reference": {
+                            "type": "string",
+                            "example": "fzr_FSB2B-123"
+                          },
+                          "description": {
+                            "type": "string",
+                            "example": "B2B Free Fire (LATAM)"
+                          },
+                          "created_at": {
+                            "type": "string",
+                            "format": "date-time"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/catalog/products": {
+      "get": {
+        "tags": [
+          "Catálogo"
+        ],
+        "summary": "Listar productos del catálogo",
+        "description": "Devuelve todos los productos habilitados con sus identificadores técnicos limpios (ej: free_fire_latam, telegram_premium).",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 100,
+              "minimum": 1,
+              "maximum": 100
+            },
+            "description": "Cantidad por página"
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Cursor opaco para paginación"
+          },
+          {
+            "name": "search",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filtro de búsqueda por nombre de producto"
+          },
+          {
+            "name": "group",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            },
+            "description": "Filtro por grupo (games, service_topup, giftcards)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Catálogo de productos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Product"
+                      }
+                    },
+                    "meta": {
+                      "type": "object",
+                      "properties": {
+                        "limit": {
+                          "type": "integer"
+                        },
+                        "has_more": {
+                          "type": "boolean"
+                        },
+                        "next_cursor": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "total": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/catalog/products/{product_id}/offers": {
+      "get": {
+        "tags": [
+          "Catálogo"
+        ],
+        "summary": "Listar ofertas de un producto",
+        "description": "Devuelve las ofertas o paquetes de recarga disponibles para el producto, incluyendo precios mayoristas en USDT y campos obligatorios de entrega.",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Código técnico del producto (ej: free_fire_latam, telegram_premium)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Ofertas del producto",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/Offer"
+                      }
+                    },
+                    "product": {
+                      "type": "object",
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "example": "free_fire_latam"
+                        },
+                        "name": {
+                          "type": "string",
+                          "example": "Free Fire (LATAM)"
+                        },
+                        "image_url": {
+                          "type": "string"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/catalog/products/{product_id}/image": {
+      "get": {
+        "tags": [
+          "Catálogo"
+        ],
+        "summary": "Obtener carátula de producto",
+        "description": "Devuelve la imagen oficial del producto servida de forma directa y marca blanca.",
+        "parameters": [
+          {
+            "name": "product_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Código del producto"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Imagen del producto (JPEG / PNG / WebP)",
+            "content": {
+              "image/*": {}
+            }
+          }
+        }
+      }
+    },
+    "/orders": {
+      "post": {
+        "tags": [
+          "Pedidos"
+        ],
+        "summary": "Crear compra / recarga",
+        "description": "Debita saldo de la cuenta y procesa la compra en tiempo real. Soporta el encabezado Idempotency-Key para reintentos seguros.",
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "minLength": 8,
+              "maxLength": 128
+            },
+            "description": "Identificador único de pedido generado por el cliente para evitar duplicados en reintentos. Opcional."
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateOrderRequest"
+              },
+              "example": {
+                "product_id": "free_fire_latam",
+                "offer_id": "110_diamonds",
+                "quantity": 1,
+                "fields": {
+                  "player_id": "123456789"
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Pedido creado exitosamente",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/UnprocessableEntity"
+          },
+          "502": {
+            "$ref": "#/components/responses/BadGateway"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Pedidos"
+        ],
+        "summary": "Listar pedidos recientes",
+        "description": "Devuelve las últimas órdenes realizadas por la cuenta revendedora.",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "default": 25,
+              "minimum": 1,
+              "maximum": 100
+            },
+            "description": "Cantidad de pedidos a listar"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Lista de pedidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/OrderSummary"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders/{order_id}": {
+      "get": {
+        "tags": [
+          "Pedidos"
+        ],
+        "summary": "Consultar pedido por ID",
+        "description": "Consulta el estado en vivo (completed, processing, refunded) y los detalles de entrega de una orden.",
+        "parameters": [
+          {
+            "name": "order_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID de la orden (ej: FSB2B-3F4A7C9B10D2E58A)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detalle del pedido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrderResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/sms/countries": {
+      "get": {
+        "tags": [
+          "SMS"
+        ],
+        "summary": "Países disponibles para números SMS",
+        "description": "Lista de países soportados para recepción de códigos con bandera y código ISO.",
+        "responses": {
+          "200": {
+            "description": "Lista de países",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "countries": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "country": {
+                            "type": "string",
+                            "example": "usa"
+                          },
+                          "name": {
+                            "type": "string",
+                            "example": "Estados Unidos"
+                          },
+                          "flag": {
+                            "type": "string",
+                            "example": "🇺🇸"
+                          },
+                          "iso": {
+                            "type": "string",
+                            "example": "us"
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sms/services": {
+      "get": {
+        "tags": [
+          "SMS"
+        ],
+        "summary": "Servicios y precios para números SMS",
+        "description": "Lista de servicios/apps (WhatsApp, Telegram, etc.) con stock en tiempo real y precios mayoristas.",
+        "parameters": [
+          {
+            "name": "country",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Código del país (ej: usa)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Servicios disponibles",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sms/orders": {
+      "post": {
+        "tags": [
+          "SMS"
+        ],
+        "summary": "Comprar número virtual SMS",
+        "description": "Adquiere un número temporal para recibir códigos. Si no se recibe ningún SMS en 20 minutos, se reembolsa el 100% automáticamente.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "country",
+                  "service"
+                ],
+                "properties": {
+                  "country": {
+                    "type": "string",
+                    "example": "usa"
+                  },
+                  "service": {
+                    "type": "string",
+                    "example": "whatsapp"
+                  },
+                  "operator": {
+                    "type": "string",
+                    "default": "any",
+                    "example": "any"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Número reservado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "order_id": {
+                      "type": "string",
+                      "example": "sms_89"
+                    },
+                    "phone": {
+                      "type": "string",
+                      "example": "+12025550198"
+                    },
+                    "service": {
+                      "type": "string",
+                      "example": "whatsapp"
+                    },
+                    "price": {
+                      "type": "string",
+                      "example": "0.75"
+                    },
+                    "currency": {
+                      "type": "string",
+                      "example": "USDT"
+                    },
+                    "status": {
+                      "type": "string",
+                      "example": "pending"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/sms/orders/{order_id}": {
+      "get": {
+        "tags": [
+          "SMS"
+        ],
+        "summary": "Consultar código SMS recibido",
+        "description": "Sincroniza en tiempo real. Cuando el código llega, se devuelve en sms_code.",
+        "parameters": [
+          {
+            "name": "order_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "ID de la orden SMS (ej: sms_89)"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Estado y código SMS",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "order_id": {
+                      "type": "string"
+                    },
+                    "phone": {
+                      "type": "string"
+                    },
+                    "status": {
+                      "type": "string",
+                      "example": "completed"
+                    },
+                    "sms_code": {
+                      "type": "string",
+                      "example": "849201"
+                    },
+                    "sms_text": {
+                      "type": "string"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "API Key",
+        "description": "Envía tu API key autorizada en el encabezado: Authorization: Bearer fs_live_..."
+      },
+      "ApiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-API-Key",
+        "description": "Envía tu API key autorizada en el encabezado: X-API-Key: fs_live_..."
+      }
+    },
+    "schemas": {
+      "Product": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "free_fire_latam",
+            "description": "Código técnico principal del producto"
+          },
+          "category_id": {
+            "type": "string",
+            "example": "free_fire_latam"
+          },
+          "public_id": {
+            "type": "string",
+            "example": "prd_RBynh3P7Ux7ECLEbKpIEpsYW"
+          },
+          "name": {
+            "type": "string",
+            "example": "Free Fire (LATAM)"
+          },
+          "group": {
+            "type": "string",
+            "example": "games"
+          },
+          "type": {
+            "type": "string",
+            "example": "topup"
+          },
+          "available": {
+            "type": "boolean",
+            "example": true
+          },
+          "image_url": {
+            "type": "string",
+            "example": "https://franchoshop.com/v1/catalog/products/free_fire_latam/image"
+          }
+        }
+      },
+      "Offer": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "110_diamonds",
+            "description": "Código técnico de la oferta"
+          },
+          "offer_id": {
+            "type": "string",
+            "example": "110_diamonds"
+          },
+          "public_id": {
+            "type": "string",
+            "example": "off_V91l3G..."
+          },
+          "name": {
+            "type": "string",
+            "example": "110 Diamantes"
+          },
+          "price": {
+            "type": "string",
+            "example": "0.7700"
+          },
+          "currency": {
+            "type": "string",
+            "example": "USDT"
+          },
+          "min_quantity": {
+            "type": "integer",
+            "example": 1
+          },
+          "max_quantity": {
+            "type": "integer",
+            "example": 1
+          },
+          "available": {
+            "type": "boolean",
+            "example": true
+          },
+          "required_fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "string",
+                  "example": "player_id"
+                },
+                "label": {
+                  "type": "string",
+                  "example": "ID de Jugador"
+                },
+                "required": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "type": {
+                  "type": "string",
+                  "example": "text"
+                }
+              }
+            }
+          }
+        }
+      },
+      "CreateOrderRequest": {
+        "type": "object",
+        "required": [
+          "product_id",
+          "offer_id"
+        ],
+        "properties": {
+          "product_id": {
+            "type": "string",
+            "example": "free_fire_latam",
+            "description": "Código del producto"
+          },
+          "offer_id": {
+            "type": "string",
+            "example": "110_diamonds",
+            "description": "Código de la oferta"
+          },
+          "quantity": {
+            "type": "integer",
+            "default": 1,
+            "minimum": 1,
+            "example": 1
+          },
+          "fields": {
+            "type": "object",
+            "description": "Datos de destino de la recarga solicitados por la oferta",
+            "example": {
+              "player_id": "123456789"
+            }
+          }
+        }
+      },
+      "OrderResponse": {
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "example": "FSB2B-3F4A7C9B10D2E58A"
+              },
+              "status": {
+                "type": "string",
+                "example": "completed"
+              },
+              "product": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "example": "free_fire_latam"
+                  },
+                  "name": {
+                    "type": "string",
+                    "example": "Free Fire (LATAM)"
+                  }
+                }
+              },
+              "offer": {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "example": "110_diamonds"
+                  },
+                  "name": {
+                    "type": "string",
+                    "example": "110 Diamantes"
+                  }
+                }
+              },
+              "quantity": {
+                "type": "integer",
+                "example": 1
+              },
+              "unit_price": {
+                "type": "string",
+                "example": "0.7700"
+              },
+              "total": {
+                "type": "string",
+                "example": "0.7700"
+              },
+              "currency": {
+                "type": "string",
+                "example": "USDT"
+              },
+              "delivery": {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "example": "topup"
+                  },
+                  "status": {
+                    "type": "string",
+                    "example": "completed"
+                  },
+                  "destination": {
+                    "type": "object",
+                    "example": {
+                      "player_id": "123456789"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "OrderSummary": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "example": "FSB2B-3F4A7C9B10D2E58A"
+          },
+          "status": {
+            "type": "string",
+            "example": "completed"
+          },
+          "product": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "offer": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              }
+            }
+          },
+          "quantity": {
+            "type": "integer"
+          },
+          "total": {
+            "type": "string"
+          },
+          "currency": {
+            "type": "string"
+          },
+          "created_at": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Parámetros o datos inválidos",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "detail": {
+                  "type": "string",
+                  "example": "Campo 'username' (@usuario de Telegram) es requerido en fields"
+                }
+              }
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "API key ausente, revocada o inválida",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "detail": {
+                  "type": "string",
+                  "example": "API key ausente o inválida"
+                }
+              }
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "Producto, oferta o pedido no encontrado",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "detail": {
+                  "type": "string",
+                  "example": "Producto no encontrado en el catálogo"
+                }
+              }
+            }
+          }
+        }
+      },
+      "UnprocessableEntity": {
+        "description": "Error de validación (ej. Idempotency-Key fuera de longitud)",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "detail": {
+                  "type": "string",
+                  "example": "Idempotency-Key debe tener entre 8 y 128 caracteres"
+                }
+              }
+            }
+          }
+        }
+      },
+      "BadGateway": {
+        "description": "Fallo en la red central (saldo reembolsado automáticamente)",
+        "content": {
+          "application/json": {
+            "schema": {
+              "type": "object",
+              "properties": {
+                "detail": {
+                  "type": "string",
+                  "example": "La orden no pudo ser procesada: target account invalid"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "gamestore",
+  "version": "1.0.0",
+  "description": "Bot de Telegram completo para venta de recargas de juegos con: - ✅ **Sistema dual de precios** (retail vs revendedor) - ✅ **Pagos con OxaPay USDT** - ✅ **Sistema de roles** (user / reseller / admin) - ✅ **Solicitudes de revendedor** con aprobación manual - ✅ **Panel admin completo** con configuración en caliente - ✅ **Audit log + notificaciones** a admins en cada evento - ✅ **Modo mantenimiento** - ✅ **Broadcast segmentado** - ✅ **Anti-abuso** (rate limiting) - ✅ **Alerta automática** de saldo BuffPin bajo",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Frankosmel/Francho_Shop.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Frankosmel/Francho_Shop/issues"
+  },
+  "homepage": "https://github.com/Frankosmel/Francho_Shop#readme"
+}

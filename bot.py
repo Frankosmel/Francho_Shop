@@ -64,6 +64,28 @@ dp = Dispatcher()
 router = Router(name="main")
 dp.include_router(router)
 
+@dp.message.outer_middleware()
+async def check_user_banned_msg(handler, event, data):
+    from_u = getattr(event, "from_user", None)
+    if from_u and await db.is_banned(from_u.id):
+        try:
+            await event.answer("🚫 Tu cuenta ha sido suspendida permanentemente.")
+        except Exception:
+            pass
+        return
+    return await handler(event, data)
+
+@dp.callback_query.outer_middleware()
+async def check_user_banned_cb(handler, event, data):
+    from_u = getattr(event, "from_user", None)
+    if from_u and await db.is_banned(from_u.id):
+        try:
+            await event.answer("🚫 Tu cuenta ha sido suspendida permanentemente.", show_alert=True)
+        except Exception:
+            pass
+        return
+    return await handler(event, data)
+
 buffpin = BuffPinClient()
 oxapay = OxaPayClient()
 
@@ -107,6 +129,7 @@ class AdminFlow(StatesGroup):
     adjust_balance = State()
     ban_user_reason = State()
     reject_application_reason = State()
+    reject_cup_order_reason = State()
 
     # Productos
     search_product = State()
@@ -564,6 +587,39 @@ async def build_main_menu(user_id: int) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+@router.message(F.document | F.video)
+async def handle_admin_file_upload(msg: Message, bot: Bot):
+    if not await is_admin(msg.from_user.id):
+        return
+    media = msg.document or msg.video
+    if not media:
+        return
+    import os
+    import zipfile
+    from pathlib import Path
+
+    file_id = media.file_id
+    file_name = getattr(media, "file_name", None) or f"video_{getattr(media, 'file_unique_id', 'clip')}.mp4"
+    status_msg = await msg.reply(f"⏳ Descargando {file_name}...")
+    try:
+        dest_dir = Path("/home/ubuntu/gamestore/uploads_promo")
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        dest_path = dest_dir / file_name
+        file_obj = await bot.get_file(file_id)
+        await bot.download_file(file_obj.file_path, dest_path)
+
+        extracted_info = ""
+        if file_name.lower().endswith(".zip"):
+            with zipfile.ZipFile(dest_path, "r") as zip_ref:
+                zip_ref.extractall(dest_dir)
+            files = [f.name for f in dest_dir.iterdir() if f.is_file()]
+            extracted_info = f"\n📦 Extraído correctamente:\n" + "\n".join(f"• {f}" for f in files)
+
+        await status_msg.edit_text(f"✅ ¡Archivo recibido y guardado en el servidor!{extracted_info}\n\nYa lo estoy analizando.")
+    except Exception as e:
+        await status_msg.edit_text(f"❌ Error al guardar archivo: {e}")
+
+
 @router.message(CommandStart())
 async def cmd_start(msg: Message, state: FSMContext):
     await state.clear()
@@ -574,6 +630,37 @@ async def cmd_start(msg: Message, state: FSMContext):
         await msg.answer("🚫 Tu cuenta está suspendida. Contacta al soporte.",
                          reply_markup=ReplyKeyboardRemove())
         return
+
+    # Comprobar inicio de sesión web: /start auth_XYZ
+    text = (msg.text or "").strip()
+    parts = text.split(maxsplit=1)
+    if len(parts) > 1 and parts[1].startswith("auth_"):
+        token = parts[1].strip()
+        photo_url = None
+        try:
+            photos = await msg.bot.get_user_profile_photos(msg.from_user.id, limit=1)
+            if photos and photos.total_count > 0:
+                file_id = photos.photos[0][-1].file_id
+                f_obj = await msg.bot.get_file(file_id)
+                photo_url = f"https://api.telegram.org/file/bot{config.BOT_TOKEN}/{f_obj.file_path}"
+        except Exception:
+            pass
+
+        approved = await db.approve_telegram_login_token(
+            token=token,
+            telegram_id=msg.from_user.id,
+            username=msg.from_user.username,
+            first_name=msg.from_user.first_name,
+            photo_url=photo_url
+        )
+        if approved:
+            await msg.answer(
+                "✅ <b>¡Inicio de sesión confirmado!</b>\n\n"
+                "Tu cuenta de Telegram ha sido verificada con éxito.\n"
+                "Ya puedes volver a tu navegador para entrar a <b>Francho Shop</b>.",
+                parse_mode="HTML"
+            )
+            return
 
     # Mantenimiento
     if await check_maintenance(msg.from_user.id):
@@ -2247,6 +2334,23 @@ async def cb_reseller_panel(cq: CallbackQuery):
 #  SECCIÓN 10: PANEL DE ADMIN
 # ══════════════════════════════════════════════════════════════════
 
+@router.message(Command("reportesemanal"))
+@router.message(Command("reporte"))
+@router.message(Command("ventas"))
+async def cmd_weekly_sales_report(message: Message, **kwargs):
+    if not await is_admin(message.from_user.id):
+        return
+    status_msg = await message.answer("⏳ <i>Compilando reporte de ventas de los últimos 7 días...</i>", parse_mode="HTML")
+    try:
+        from modules import sales_report
+        data = await sales_report.get_weekly_report_data(days=7)
+        report_html = sales_report.format_weekly_report_html(data)
+        await status_msg.edit_text(report_html, parse_mode="HTML")
+    except Exception as e:
+        log.exception("Error generando reporte de ventas: %s", e)
+        await status_msg.edit_text(f"❌ <b>Error generando reporte:</b> {e}", parse_mode="HTML")
+
+
 @router.message(Command("admin"))
 @router.callback_query(F.data == "admin_panel")
 async def cmd_admin(event, **kwargs):
@@ -2480,6 +2584,206 @@ async def kb_cfg_apps_toggle(msg: Message):
     await db.audit(msg.from_user.id, "toggle_apps", "setting", "reseller_applications_open",
                    f"{'closed' if current else 'open'}")
     await msg.answer(f"💼 Solicitudes: <b>{'Cerradas' if current else 'Abiertas'}</b>")
+
+
+# ─────── Configuración de Tasas y Métodos CUP ───────
+
+@router.message(Command("tasas"))
+@router.message(F.text == kb.BTN_CFG_CUP)
+async def cmd_tasas_handler(msg: Message):
+    if not await is_admin(msg.from_user.id):
+        return
+
+    from decimal import Decimal, ROUND_HALF_UP
+
+    # Parse arguments if sent as command like "/tasas compra 1050" or "/tasas on"
+    parts = (msg.text or "").strip().split()
+    if parts and parts[0].lower().startswith("/tasas") and len(parts) > 1:
+        subcmd = parts[1].lower()
+        val = parts[2].strip() if len(parts) > 2 else ""
+
+        if subcmd in ("on", "activar", "enable"):
+            await settings.set_value("cup_direct_enabled", "1", msg.from_user.id)
+            await db.audit(msg.from_user.id, "cup_toggle", "setting", "cup_direct_enabled", "1")
+            await msg.answer("🟢 <b>Pagos CUP activados globalmente.</b>")
+        elif subcmd in ("off", "desactivar", "disable", "pausar"):
+            await settings.set_value("cup_direct_enabled", "0", msg.from_user.id)
+            await db.audit(msg.from_user.id, "cup_toggle", "setting", "cup_direct_enabled", "0")
+            await msg.answer("🔴 <b>Pagos CUP pausados globalmente.</b>")
+        elif subcmd in ("compra", "base") and val:
+            try:
+                p_val = float(val.replace(",", "."))
+                if p_val <= 0:
+                    raise ValueError
+                await settings.set_value("cup_usdt_purchase_price", str(p_val), msg.from_user.id)
+                await db.audit(msg.from_user.id, "cup_rate_update", "setting", "cup_usdt_purchase_price", str(p_val))
+                await msg.answer(f"✅ <b>Tasa base de compra USDT actualizada:</b> <code>{p_val:g} CUP</code>")
+            except Exception:
+                await msg.answer("❌ Monto no válido. Ejemplo: <code>/tasas compra 1000</code>")
+        elif subcmd in ("movil", "factor") and val:
+            try:
+                m_val = float(val.replace(",", "."))
+                if m_val <= 0:
+                    raise ValueError
+                await settings.set_value("cup_mobile_credit_value", str(m_val), msg.from_user.id)
+                await db.audit(msg.from_user.id, "cup_rate_update", "setting", "cup_mobile_credit_value", str(m_val))
+                await msg.answer(f"✅ <b>Factor de Saldo Móvil actualizado:</b> <code>{m_val:g}</code>")
+            except Exception:
+                await msg.answer("❌ Factor no válido. Ejemplo: <code>/tasas movil 1.85</code>")
+        elif subcmd in ("tarjeta", "card") and val:
+            card_clean = "".join(ch for ch in val if ch.isalnum() or ch == " ")
+            await settings.set_value("cup_transfer_card_number", card_clean, msg.from_user.id)
+            await db.audit(msg.from_user.id, "cup_dest_update", "setting", "cup_transfer_card_number", card_clean)
+            await msg.answer(f"✅ <b>Tarjeta CUP destino actualizada:</b> <code>{card_clean}</code>")
+        elif subcmd in ("tel", "confirmacion") and val:
+            await settings.set_value("cup_transfer_confirmation_number", val, msg.from_user.id)
+            await db.audit(msg.from_user.id, "cup_dest_update", "setting", "cup_transfer_confirmation_number", val)
+            await msg.answer(f"✅ <b>Teléfono de confirmación actualizado:</b> <code>{val}</code>")
+        elif subcmd in ("telmovil", "cubacel") and val:
+            await settings.set_value("cup_mobile_destination_number", val, msg.from_user.id)
+            await db.audit(msg.from_user.id, "cup_dest_update", "setting", "cup_mobile_destination_number", val)
+            await msg.answer(f"✅ <b>Teléfono destino de Saldo Móvil actualizado:</b> <code>{val}</code>")
+
+    try:
+        purchase_price = Decimal(str(await settings.get("cup_usdt_purchase_price", "1000")))
+        mobile_credit_value = Decimal(str(await settings.get("cup_mobile_credit_value", "1.85")))
+        cup_factor = Decimal("1310") / Decimal("1100")
+        transfer_rate = (purchase_price * cup_factor).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        mobile_rate = (transfer_rate / mobile_credit_value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    except Exception:
+        purchase_price = Decimal("1000")
+        mobile_credit_value = Decimal("1.85")
+        transfer_rate = Decimal("1190.91")
+        mobile_rate = Decimal("643.73")
+
+    enabled = await settings.get_bool("cup_direct_enabled", False)
+    card_enabled = await settings.get_bool("cup_transfer_card_enabled", True)
+    card_number = (await settings.get("cup_transfer_card_number", "")).strip()
+    conf_number = (await settings.get("cup_transfer_confirmation_number", "")).strip()
+    mobile_enabled = await settings.get_bool("cup_mobile_transfer_enabled", True)
+    mobile_number = (await settings.get("cup_mobile_destination_number", "")).strip()
+    max_delivery = await settings.get_int("cup_payment_max_delivery_hours", 24)
+
+    text = (
+        "🇨🇺 <b>Gestión de Tasas y Pagos en CUP</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"⚙️ <b>Estado Global:</b> {'🟢 <b>ACTIVO</b>' if enabled else '🔴 <b>PAUSADO</b>'}\n\n"
+        f"💵 <b>Tasa Base Compra USDT:</b> <code>{purchase_price:,} CUP</code>\n"
+        f"💳 <b>Tasa Venta Tarjeta (x1.1909):</b> <code>{transfer_rate:,} CUP/USDT</code>\n"
+        f"📱 <b>Factor Saldo Móvil:</b> <code>{mobile_credit_value}</code>\n"
+        f"📲 <b>Tasa Venta Saldo Móvil:</b> <code>{mobile_rate:,} CUP/USDT</code>\n"
+        f"⏱ <b>Tiempo Máximo de Entrega:</b> <code>{max_delivery} horas</code>\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🏦 <b>Destinos de Pago:</b>\n"
+        f"• 💳 Tarjeta: <code>{card_number or 'No configurada'}</code> ({'🟢 Activa' if card_enabled else '🔴 Inactiva'})\n"
+        f"• 📞 Tel. Confirmación: <code>{conf_number or 'No configurado'}</code>\n"
+        f"• 📲 Tel. Saldo Móvil (*234#): <code>{mobile_number or 'No configurado'}</code> ({'🟢 Activo' if mobile_enabled else '🔴 Inactivo'})\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "✏️ <b>Comandos rápidos para cambiar valores:</b>\n"
+        "• <code>/tasas compra 1050</code> <i>(Tasa base USDT/CUP)</i>\n"
+        "• <code>/tasas movil 1.85</code> <i>(Factor Saldo Móvil)</i>\n"
+        "• <code>/tasas tarjeta 9204...</code> <i>(Tarjeta CUP)</i>\n"
+        "• <code>/tasas tel +5356246700</code> <i>(Teléfono confirmación)</i>\n"
+        "• <code>/tasas telmovil +5356246700</code> <i>(Teléfono saldo móvil)</i>\n"
+        "• <code>/tasas on</code> o <code>/tasas off</code> <i>(Activar/Pausar)</i>\n\n"
+        "🌐 <i>O entra al Panel Web en la pestaña <b>Ganancias</b> para gestionarlo con interfaz gráfica.</i>"
+    )
+    kb_inline = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🟢 Activar CUP" if not enabled else "🔴 Pausar CUP", callback_data="cup_adm:toggle_global"),
+            InlineKeyboardButton(text="🔄 Refrescar", callback_data="cup_adm:refresh"),
+        ],
+        [
+            InlineKeyboardButton(text="💳 Tarjeta: " + ("ON" if card_enabled else "OFF"), callback_data="cup_adm:toggle_card"),
+            InlineKeyboardButton(text="📱 Saldo Móvil: " + ("ON" if mobile_enabled else "OFF"), callback_data="cup_adm:toggle_mobile"),
+        ]
+    ])
+    await msg.answer(text, reply_markup=kb_inline)
+
+
+@router.callback_query(F.data.startswith("cup_adm:"))
+async def cb_cup_admin_action(cq: CallbackQuery):
+    if not await is_admin(cq.from_user.id):
+        await cq.answer("Sin permiso", show_alert=True)
+        return
+    from decimal import Decimal, ROUND_HALF_UP
+    action = cq.data.split(":")[1]
+    if action == "toggle_global":
+        curr = await settings.get_bool("cup_direct_enabled", False)
+        await settings.set_value("cup_direct_enabled", "0" if curr else "1", cq.from_user.id)
+        await db.audit(cq.from_user.id, "cup_toggle", "setting", "cup_direct_enabled", "0" if curr else "1")
+        await cq.answer("Pagos CUP " + ("desactivados" if curr else "activados"))
+    elif action == "toggle_card":
+        curr = await settings.get_bool("cup_transfer_card_enabled", True)
+        await settings.set_value("cup_transfer_card_enabled", "0" if curr else "1", cq.from_user.id)
+        await db.audit(cq.from_user.id, "cup_toggle_card", "setting", "cup_transfer_card_enabled", "0" if curr else "1")
+        await cq.answer("Transferencia Tarjeta " + ("desactivada" if curr else "activada"))
+    elif action == "toggle_mobile":
+        curr = await settings.get_bool("cup_mobile_transfer_enabled", True)
+        await settings.set_value("cup_mobile_transfer_enabled", "0" if curr else "1", cq.from_user.id)
+        await db.audit(cq.from_user.id, "cup_toggle_mobile", "setting", "cup_mobile_transfer_enabled", "0" if curr else "1")
+        await cq.answer("Saldo Móvil " + ("desactivado" if curr else "activado"))
+    elif action == "refresh":
+        await cq.answer("Actualizado")
+
+    try:
+        purchase_price = Decimal(str(await settings.get("cup_usdt_purchase_price", "1000")))
+        mobile_credit_value = Decimal(str(await settings.get("cup_mobile_credit_value", "1.85")))
+        cup_factor = Decimal("1310") / Decimal("1100")
+        transfer_rate = (purchase_price * cup_factor).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        mobile_rate = (transfer_rate / mobile_credit_value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+    except Exception:
+        purchase_price = Decimal("1000")
+        mobile_credit_value = Decimal("1.85")
+        transfer_rate = Decimal("1190.91")
+        mobile_rate = Decimal("643.73")
+
+    enabled = await settings.get_bool("cup_direct_enabled", False)
+    card_enabled = await settings.get_bool("cup_transfer_card_enabled", True)
+    card_number = (await settings.get("cup_transfer_card_number", "")).strip()
+    conf_number = (await settings.get("cup_transfer_confirmation_number", "")).strip()
+    mobile_enabled = await settings.get_bool("cup_mobile_transfer_enabled", True)
+    mobile_number = (await settings.get("cup_mobile_destination_number", "")).strip()
+    max_delivery = await settings.get_int("cup_payment_max_delivery_hours", 24)
+
+    text = (
+        "🇨🇺 <b>Gestión de Tasas y Pagos en CUP</b>\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        f"⚙️ <b>Estado Global:</b> {'🟢 <b>ACTIVO</b>' if enabled else '🔴 <b>PAUSADO</b>'}\n\n"
+        f"💵 <b>Tasa Base Compra USDT:</b> <code>{purchase_price:,} CUP</code>\n"
+        f"💳 <b>Tasa Venta Tarjeta (x1.1909):</b> <code>{transfer_rate:,} CUP/USDT</code>\n"
+        f"📱 <b>Factor Saldo Móvil:</b> <code>{mobile_credit_value}</code>\n"
+        f"📲 <b>Tasa Venta Saldo Móvil:</b> <code>{mobile_rate:,} CUP/USDT</code>\n"
+        f"⏱ <b>Tiempo Máximo de Entrega:</b> <code>{max_delivery} horas</code>\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "🏦 <b>Destinos de Pago:</b>\n"
+        f"• 💳 Tarjeta: <code>{card_number or 'No configurada'}</code> ({'🟢 Activa' if card_enabled else '🔴 Inactiva'})\n"
+        f"• 📞 Tel. Confirmación: <code>{conf_number or 'No configurado'}</code>\n"
+        f"• 📲 Tel. Saldo Móvil (*234#): <code>{mobile_number or 'No configurado'}</code> ({'🟢 Activo' if mobile_enabled else '🔴 Inactivo'})\n\n"
+        "━━━━━━━━━━━━━━━━━━━━\n"
+        "✏️ <b>Comandos rápidos para cambiar valores:</b>\n"
+        "• <code>/tasas compra 1050</code> <i>(Tasa base USDT/CUP)</i>\n"
+        "• <code>/tasas movil 1.85</code> <i>(Factor Saldo Móvil)</i>\n"
+        "• <code>/tasas tarjeta 9204...</code> <i>(Tarjeta CUP)</i>\n"
+        "• <code>/tasas tel +5356246700</code> <i>(Teléfono confirmación)</i>\n"
+        "• <code>/tasas telmovil +5356246700</code> <i>(Teléfono saldo móvil)</i>\n"
+        "• <code>/tasas on</code> o <code>/tasas off</code> <i>(Activar/Pausar)</i>\n\n"
+        "🌐 <i>O entra al Panel Web en la pestaña <b>Ganancias</b> para gestionarlo con interfaz gráfica.</i>"
+    )
+    kb_inline = InlineKeyboardMarkup(inline_keyboard=[
+        [
+            InlineKeyboardButton(text="🟢 Activar CUP" if not enabled else "🔴 Pausar CUP", callback_data="cup_adm:toggle_global"),
+            InlineKeyboardButton(text="🔄 Refrescar", callback_data="cup_adm:refresh"),
+        ],
+        [
+            InlineKeyboardButton(text="💳 Tarjeta: " + ("ON" if card_enabled else "OFF"), callback_data="cup_adm:toggle_card"),
+            InlineKeyboardButton(text="📱 Saldo Móvil: " + ("ON" if mobile_enabled else "OFF"), callback_data="cup_adm:toggle_mobile"),
+        ]
+    ])
+    try:
+        await cq.message.edit_text(text, reply_markup=kb_inline)
+    except Exception:
+        pass
 
 
 # ─────── Productos admin (botones del teclado) ───────
@@ -3895,6 +4199,196 @@ async def msg_reject_reason(msg: Message, state: FSMContext):
     await msg.answer("✅ Rechazada", reply_markup=back_kb("adm_applications"))
 
 
+# ───────────── PAGOS CUP / SALDO MÓVIL (admin) ─────────────
+
+CUP_PRESET_REASONS = {
+    "monto": "El monto transferido no coincide con el total del pedido.",
+    "comprobante": "El comprobante enviado no es legible o no corresponde al pago.",
+    "no_recibido": "La transferencia no fue recibida en la cuenta de destino.",
+    "referencia": "El número de operación o referencia bancaria no coincide con los registros.",
+}
+
+
+async def execute_cup_order_decision_api(order_id: str, action: str, admin_id: int, admin_name: str, reason: str = "") -> tuple[bool, str]:
+    try:
+        import aiohttp
+        url = "http://127.0.0.1:8001/api/internal/cup-orders/decision"
+        payload = {
+            "action": action,
+            "order_id": order_id,
+            "admin_id": admin_id,
+            "admin_username": admin_name,
+            "reason": reason,
+        }
+        async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=45)) as session:
+            async with session.post(url, json=payload) as resp:
+                data = await resp.json()
+                if resp.status != 200:
+                    return False, str(data.get("detail") or "Error al procesar la solicitud")
+                return True, ""
+    except Exception as e:
+        log.exception("Error comunicando con API para decisión CUP: %s", e)
+        return False, str(e)
+
+
+@router.callback_query(F.data.startswith("cup_ap:"))
+async def cb_cup_approve(cq: CallbackQuery):
+    if not await is_admin(cq.from_user.id):
+        await cq.answer("⛔ No tienes permisos de administrador.", show_alert=True)
+        return
+    order_id = cq.data.split(":", 1)[1]
+    admin_name = cq.from_user.username or cq.from_user.first_name or str(cq.from_user.id)
+
+    success, err = await execute_cup_order_decision_api(order_id, "approve", cq.from_user.id, admin_name)
+    if not success:
+        await cq.answer(f"⚠️ {err}", show_alert=True)
+        return
+
+    admin_tag = f"@{cq.from_user.username}" if cq.from_user.username else f"Admin {cq.from_user.id}"
+    stamp = f"\n\n━━━━━━━━━━━━━━━━━━━━━━━━\n✅ <b>PAGO APROBADO por {admin_tag}</b>\n🚀 Recarga enviada al proveedor."
+    with suppress(Exception):
+        if cq.message.caption:
+            await cq.message.edit_caption(caption=cq.message.caption[:750] + stamp, reply_markup=None)
+        elif cq.message.text:
+            await cq.message.edit_text(text=cq.message.text + stamp, reply_markup=None)
+        else:
+            await cq.message.edit_reply_markup(reply_markup=None)
+
+    await cq.answer("✅ Pago aprobado y procesado con éxito.", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("cup_rj:"))
+async def cb_cup_reject_prompt(cq: CallbackQuery):
+    if not await is_admin(cq.from_user.id):
+        await cq.answer("⛔ No tienes permisos de administrador.", show_alert=True)
+        return
+    order_id = cq.data.split(":", 1)[1]
+    order = await db.get_order(order_id)
+    if not order:
+        await cq.answer("❌ Pedido no encontrado.", show_alert=True)
+        return
+    if str(order.get("payment_status") or "") not in ("awaiting_proof", "pending_verification"):
+        await cq.answer(f"⚠️ El pedido ya está en estado: {order.get('payment_status')}", show_alert=True)
+        return
+
+    kb_reject = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="💸 Monto incompleto", callback_data=f"cup_rs:{order_id}:monto")],
+        [InlineKeyboardButton(text="📄 Comprobante no válido/ilegible", callback_data=f"cup_rs:{order_id}:comprobante")],
+        [InlineKeyboardButton(text="🏦 Transferencia no recibida en cuenta", callback_data=f"cup_rs:{order_id}:no_recibido")],
+        [InlineKeyboardButton(text="🔢 Referencia no coincide", callback_data=f"cup_rs:{order_id}:referencia")],
+        [InlineKeyboardButton(text="✏️ Escribir otro motivo...", callback_data=f"cup_rs:{order_id}:custom")],
+        [InlineKeyboardButton(text="🔙 Cancelar", callback_data=f"cup_cancel:{order_id}")],
+    ])
+    await cq.message.reply(
+        f"❓ <b>Rechazo de pago — Pedido #{order_id}</b>\n\n"
+        f"Selecciona un motivo común o escribe uno personalizado:",
+        reply_markup=kb_reject,
+    )
+    await cq.answer()
+
+
+@router.callback_query(F.data.startswith("cup_rs:"))
+async def cb_cup_reject_reason(cq: CallbackQuery, state: FSMContext):
+    if not await is_admin(cq.from_user.id):
+        await cq.answer("⛔ No tienes permisos.", show_alert=True)
+        return
+    parts = cq.data.split(":", 2)
+    order_id = parts[1]
+    code = parts[2]
+
+    if code == "custom":
+        orig_id = cq.message.reply_to_message.message_id if cq.message.reply_to_message else None
+        await state.set_state(AdminFlow.reject_cup_order_reason)
+        await state.update_data(
+            order_id=order_id,
+            prompt_msg_id=cq.message.message_id,
+            orig_msg_id=orig_id,
+        )
+        await cq.message.edit_text(
+            f"✍️ <b>Escribe el motivo del rechazo</b> para el pedido <code>#{order_id}</code>:\n\n"
+            f"<i>Envía un mensaje de texto con el motivo. Se le notificará al cliente por Telegram y/o Gmail.</i>",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[
+                [InlineKeyboardButton(text="🔙 Cancelar", callback_data=f"cup_cancel:{order_id}")]
+            ]),
+        )
+        await cq.answer()
+        return
+
+    reason = CUP_PRESET_REASONS.get(code, "Comprobante de pago no válido.")
+    admin_name = cq.from_user.username or cq.from_user.first_name or str(cq.from_user.id)
+    success, err = await execute_cup_order_decision_api(order_id, "reject", cq.from_user.id, admin_name, reason)
+    if not success:
+        await cq.answer(f"⚠️ Error: {err}", show_alert=True)
+        return
+
+    admin_tag = f"@{cq.from_user.username}" if cq.from_user.username else f"Admin {cq.from_user.id}"
+    stamp = f"\n\n━━━━━━━━━━━━━━━━━━━━━━━━\n❌ <b>PAGO RECHAZADO por {admin_tag}</b>\n📝 <b>Motivo:</b> {reason}"
+
+    if cq.message.reply_to_message:
+        orig = cq.message.reply_to_message
+        with suppress(Exception):
+            await cq.message.delete()
+        with suppress(Exception):
+            if orig.caption:
+                await orig.edit_caption(caption=orig.caption[:750] + stamp, reply_markup=None)
+            elif orig.text:
+                await orig.edit_text(text=orig.text + stamp, reply_markup=None)
+            else:
+                await orig.edit_reply_markup(reply_markup=None)
+    else:
+        with suppress(Exception):
+            if cq.message.caption:
+                await cq.message.edit_caption(caption=cq.message.caption[:750] + stamp, reply_markup=None)
+            elif cq.message.text:
+                await cq.message.edit_text(text=cq.message.text + stamp, reply_markup=None)
+            else:
+                await cq.message.edit_reply_markup(reply_markup=None)
+
+    await cq.answer(f"❌ Pago rechazado: {reason}", show_alert=True)
+
+
+@router.callback_query(F.data.startswith("cup_cancel:"))
+async def cb_cup_cancel(cq: CallbackQuery, state: FSMContext):
+    await state.clear()
+    with suppress(Exception):
+        await cq.message.delete()
+    await cq.answer("Acción cancelada.")
+
+
+@router.message(AdminFlow.reject_cup_order_reason)
+async def msg_cup_custom_reject_reason(msg: Message, state: FSMContext):
+    if not await is_admin(msg.from_user.id):
+        return
+    data = await state.get_data()
+    order_id = data.get("order_id")
+    prompt_msg_id = data.get("prompt_msg_id")
+    orig_msg_id = data.get("orig_msg_id")
+    await state.clear()
+
+    reason = msg.text.strip()[:300]
+    if not reason:
+        await msg.answer("❌ Motivo no válido.")
+        return
+
+    admin_name = msg.from_user.username or msg.from_user.first_name or str(msg.from_user.id)
+    success, err = await execute_cup_order_decision_api(order_id, "reject", msg.from_user.id, admin_name, reason)
+    if not success:
+        await msg.answer(f"⚠️ Error al rechazar: {err}")
+        return
+
+    if prompt_msg_id:
+        with suppress(Exception):
+            await bot.delete_message(chat_id=msg.chat.id, message_id=prompt_msg_id)
+
+    admin_tag = f"@{msg.from_user.username}" if msg.from_user.username else f"Admin {msg.from_user.id}"
+    await msg.answer(f"❌ <b>Pedido #{order_id} rechazado</b>\n📝 <b>Motivo:</b> {reason}\n👤 Por: {admin_tag}")
+
+    if orig_msg_id:
+        stamp = f"\n\n━━━━━━━━━━━━━━━━━━━━━━━━\n❌ <b>PAGO RECHAZADO por {admin_tag}</b>\n📝 <b>Motivo:</b> {reason}"
+        with suppress(Exception):
+            await bot.edit_message_reply_markup(chat_id=msg.chat.id, message_id=orig_msg_id, reply_markup=None)
+
+
 # ───────────── PRODUCTOS (admin) ─────────────
 
 @router.callback_query(F.data == "adm_products")
@@ -4333,26 +4827,8 @@ async def check_pending_orders():
 
 
 async def check_low_balance_alert():
-    """Cada 5 min verifica si el saldo BuffPin está bajo."""
-    while True:
-        await asyncio.sleep(300)
-        try:
-            threshold = await settings.get_float("low_balance_threshold", 100)
-            last_alert = await settings.get_float("last_low_balance_alert", 0)
-            if time.time() - last_alert < 3600:  # No spammear (1h entre alertas)
-                continue
-            bp = await buffpin.get_balance()
-            bal = bp.get("balance", 0)
-            if bal < threshold:
-                await notify_admins(
-                    f"⚠️ <b>ALERTA: Saldo BuffPin bajo</b>\n\n"
-                    f"💵 Actual: ${bal:.2f}\n"
-                    f"🎯 Umbral: ${threshold:.2f}\n\n"
-                    f"Recarga pronto para evitar interrupciones."
-                )
-                await settings.set_value("last_low_balance_alert", str(time.time()))
-        except Exception as e:
-            log.debug("low_balance check: %s", e)
+    """Desactivado: No se envían alertas de saldo bajo de BuffPin."""
+    return
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -4370,7 +4846,7 @@ async def on_startup():
     if webapp_url:
         try:
             await bot.set_chat_menu_button(menu_button=MenuButtonWebApp(
-                text="🛍 Shop",
+                text="Web",
                 web_app=WebAppInfo(url=webapp_url),
             ))
             log.info("✅ MenuButton configurado: %s", webapp_url)
@@ -4390,7 +4866,6 @@ async def main():
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)
     asyncio.create_task(check_pending_orders())
-    asyncio.create_task(check_low_balance_alert())
 
     if config.WEBHOOK_HOST:
         app = web.Application()

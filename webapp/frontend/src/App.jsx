@@ -1,15 +1,15 @@
 // build:1781971166
 import { useState, useEffect, useRef, useMemo, Component } from 'react'
 import {
-  AlertTriangle, ArrowLeft, ArrowRight, ArrowUpRight, BadgeCheck, Ban, BookOpen, BriefcaseBusiness, Check,
+  AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BadgeCheck, Ban, BookOpen, BriefcaseBusiness, Check, Compass,
   CircleCheck, CircleHelp, CircleX, ClipboardList, Clock, Copy, CreditCard, Crown, DollarSign, ExternalLink, Paperclip,
   Edit3, FileText, Flame, Gamepad2, Gem, Gift, Globe2, Headphones, Home, Inbox, Info, KeyRound,
-  Link as LinkIcon, Loader2, Lock, LockKeyhole, LogOut, Mail, MessageCircle,
+  Link as LinkIcon, Loader2, Lock, LockKeyhole, LogIn, LogOut, Mail, MessageCircle,
   Menu, Package, PackageOpen, Phone, RefreshCcw, Save, Search, Send, Share2, Shield, ShieldAlert,
   ShieldCheck, ShoppingCart, Smile, Smartphone, Sparkles, Store, Trash2, Truck, User,
   WalletCards, Wrench, Zap, Eye, EyeOff, ChevronDown, ChevronRight, X, Bell, Star, Award, TrendingUp, Bot,
   Plus, Minus, LayoutDashboard, Boxes, ReceiptText, ArrowLeftRight,
-  Code2, Terminal, Megaphone, Moon, Tv
+  Code2, Terminal, Megaphone, Moon, Tv, QrCode, Download
 } from 'lucide-react'
 import AdminStreamingPanel from './AdminStreamingPanel'
 import { ResellerB2BDashboard, ResellerB2BCatalog, ResellerB2BOrders, ResellerB2BWallet, ResellerB2BAPI, ResellerB2BSettings, ResellerB2BSupport, OrderDetailModal } from './ResellerB2B'
@@ -26,9 +26,32 @@ import { GUIDE_ARTICLES, GUIDE_BY_SLUG } from './guidesData'
 import { GuidesIndexScreen, GuideDetailScreen } from './GuidesScreens'
 import { AppSidebar } from './AppSidebar'
 import { SwapScreen, TronEnergyScreen, P2PMarketScreen, WalletScreen, VipScreen, KycScreen } from './EcosystemScreens'
+import { VpnStoreScreen, VpnCatalogCard } from './VpnStoreScreen'
+import { StreamingProductPage, streamingProductPath, streamingProductSlug } from './StreamingProductPage'
+import { UserIdentityBadges } from './UserIdentityBadges'
+import { FranchoFMark } from './FranchoFMark'
 
 const iconClass = 'h-5 w-5 flex-shrink-0'
 const bigIconClass = 'h-12 w-12 flex-shrink-0'
+
+function AccountStatusRing({ profile, children }) {
+  const hasKyc = profile?.kyc_status === 'approved'
+  const hasVip = !!(profile?.is_vip || profile?.vip_badge)
+  const isAdmin = profile?.role === 'admin' || !!profile?.is_primary_admin
+  const hasAdminVipRing = isAdmin && hasVip
+  if (!hasKyc && !hasAdminVipRing) return children
+  const ringColor = hasKyc && hasVip
+    ? 'bg-[conic-gradient(#22c55e,#86efac,#facc15,#fde047,#16a34a,#22c55e)]'
+    : hasKyc
+      ? 'bg-[conic-gradient(#16a34a,#86efac,#14b8a6,#4ade80,#22c55e,#16a34a)]'
+      : 'bg-[conic-gradient(#facc15,#fff7bf,#16a34a,#f59e0b,#fde047,#facc15)]'
+  return (
+    <span className="relative inline-flex shrink-0">
+      <span aria-hidden="true" className={`${hasAdminVipRing ? 'fs-account-ring-spin-admin' : 'fs-account-ring-spin'} fs-account-ring-3d pointer-events-none absolute -inset-[3px] rounded-full ${ringColor}`} />
+      <span className="relative inline-flex rounded-full bg-bg p-px">{children}</span>
+    </span>
+  )
+}
 
 function CustomSelect({ value, onChange, options, placeholder = "Seleccionar...", className = "" }) {
   const [isOpen, setIsOpen] = useState(false)
@@ -100,7 +123,7 @@ const DEPOSIT_PRESETS = [5, 10, 25, 50, 100, 250]
 const NAV_STATE_KEY = 'fs_last_nav_v1'
 const WHATSAPP_SUPPORT_URL = 'https://wa.me/5363785631'
 const WHATSAPP_CHANNEL_URL = 'https://whatsapp.com/channel/0029VaRW8KgGehETCBaAnN2K'
-const SAFE_NAV_SCREENS = new Set(['home', 'regions', 'products', 'detail', 'profile', 'orders', 'help', 'terms', 'terms-conditions', 'privacy', 'privacy-policy', 'faq', 'cookies', 'cookies-policy', 'contact', 'partner-help', 'seller-store', 'guides', 'guide-detail', 'case', 'sms', 'smm', 'telegram', 'capcut', 'fzr-catalog', 'api-docs', 'api', 'seller', 'referrals', 'swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc'])
+const SAFE_NAV_SCREENS = new Set(['home', 'regions', 'products', 'detail', 'streaming-product', 'profile', 'orders', 'help', 'terms', 'terms-conditions', 'privacy', 'privacy-policy', 'faq', 'cookies', 'cookies-policy', 'contact', 'partner-help', 'seller-store', 'guides', 'guide-detail', 'case', 'sms', 'smm', 'telegram', 'capcut', 'fzr-catalog', 'api-docs', 'api', 'seller', 'referrals', 'swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc', 'vpn', 'wireguard'])
 const PRIVATE_NAV_SCREENS = new Set(['panel', 'admin', 'admin-edit'])
 const CATALOG_ROUTE_PARAMS = ['product', 'manual_product', 'game', 'region', 'case', 'seguimiento', 'screen', 'sms_country', 'sms_service', 'sms_operator', 'fzr_type', 'fzr_category', 'category', 'juego', 'game_id', 'type']
 
@@ -115,7 +138,7 @@ const RESERVED_URL_SLUGS = new Set([
   'support', 'inbox', 'register', 'login', 'forgot', 'verify', 'reset',
   'downloads', 'capturas_admin', 'favicon.ico', 'manifest.json', 'robots.txt',
   'sitemap.xml', 'index.html', 'admin.html', 'og-image.png', 'fzr-catalog',
-  'swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc'
+  'swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc', 'vpn', 'wireguard'
 ])
 
 function resolveCatalogCategoryFromUrl(params) {
@@ -219,8 +242,42 @@ const PREMIUM_STICKER_MAP = Object.fromEntries(PREMIUM_STICKERS.map(s => [s.code
 const PREMIUM_STICKER_RE = /(:fs_[a-z0-9_]+:)/g
 const GUEST_USER = { user_id: null, name: 'Visitante', balance: 0, role: 'guest', pricing_role: 'user', is_guest: true }
 const GOOGLE_CLIENT_ID = "1064239228300-nbntbj1rvv1o8rkl4je9ccraj6glsqsv.apps.googleusercontent.com"
+
+// Google Identity Services keeps one global configuration per page. Both One Tap
+// and the fixed auth button use this dispatcher so neither can replace the other.
+const ensureGoogleIdentity = () => {
+  if (!window.google?.accounts?.id) return false
+  if (window.__franchoshopGoogleInitialized) return true
+  window.google.accounts.id.initialize({
+    client_id: GOOGLE_CLIENT_ID,
+    callback: (response) => {
+      const handler = window.__franchoshop_googleCredentialHandler
+        || window.__franchoshop_handleGlobalGoogleCredential
+      if (typeof handler === 'function') handler(response)
+    },
+    auto_select: false,
+    cancel_on_tap_outside: true,
+    // Evita la ventana about:blank del flujo GIS clásico en Chrome compatible.
+    use_fedcm_for_button: true,
+  })
+  window.__franchoshopGoogleInitialized = true
+  return true
+}
 const stripEmoji = (value = '') => String(value).replace(/^\s*[\p{Extended_Pictographic}\p{Emoji_Presentation}\p{Emoji}\uFE0F]+\s*/u, '').trim()
-const storeAssetUrl = (value = '') => String(value || '').replace(/^https?:\/\/\/api\//i, '/api/')
+const STORE_ORIGIN = 'https://franchoshop.com'
+const isNativeFranchoApp = () => {
+  try { return Boolean(window.Capacitor?.isNativePlatform?.()) } catch { return false }
+}
+// Android runs the WebView at https://localhost, so uploaded /api assets need the public origin.
+const storeAssetUrl = (value = '') => {
+  const raw = String(value || '').trim()
+  if (!raw || /^(data:|blob:)/i.test(raw)) return raw
+  const normalized = raw.replace(/^https?:\/{3,}/, '/')
+  if (normalized.startsWith('//')) return `https:${normalized}`
+  if (/^https?:\/\//i.test(normalized)) return normalized
+  const path = normalized.startsWith('/') ? normalized : `/${normalized}`
+  return isNativeFranchoApp() ? `${STORE_ORIGIN}${path}` : path
+}
 const copyText = async (text) => {
   try { await navigator.clipboard.writeText(text); return true }
   catch { window.prompt('Copia este enlace', text); return false }
@@ -269,7 +326,9 @@ function applySeoMeta({ title, description }) {
 const readSavedNav = () => {
   try {
     const saved = JSON.parse(localStorage.getItem(NAV_STATE_KEY) || 'null')
-    if (!saved || PRIVATE_NAV_SCREENS.has(saved.screen) || !SAFE_NAV_SCREENS.has(saved.screen)) {
+    // VPN is a destination, not a startup screen. Restoring it traps a user in
+    // the product page when reopening the installed app.
+    if (!saved || ['vpn', 'wireguard'].includes(saved.screen) || PRIVATE_NAV_SCREENS.has(saved.screen) || !SAFE_NAV_SCREENS.has(saved.screen)) {
       try { localStorage.removeItem(NAV_STATE_KEY) } catch {}
       return null
     }
@@ -302,9 +361,9 @@ function OptimizedImage({ src, alt = '', className = '', eager = false, onError,
       src={storeAssetUrl(src)}
       alt={alt}
       className={className}
-      loading={eager ? 'eager' : 'lazy'}
-      decoding="async"
-      fetchPriority={eager ? 'high' : 'low'}
+      loading={eager || isNativeFranchoApp() ? 'eager' : 'lazy'}
+      decoding={isNativeFranchoApp() ? 'sync' : 'async'}
+      fetchPriority={eager || isNativeFranchoApp() ? 'high' : 'low'}
       onError={onError}
       onLoad={onLoad}
     />
@@ -406,7 +465,7 @@ class ErrorBoundary extends Component {
     return { hasError: true, error }
   }
   componentDidCatch(error, info) {
-    console.error('UI Error:', error, info)
+    console.error('UI Error:', error?.message, error?.stack, info)
   }
   render() {
     if (this.state.hasError) {
@@ -435,7 +494,97 @@ export default function App({ adminPortal = false } = {}) {
   )
 }
 
+function FranchoNoticeModal({ notice, onClose }) {
+  if (!notice) return null
+  const message = String(notice.message || '')
+  const normalized = message.toLowerCase()
+  const insufficientBalance = normalized.includes('saldo insuficiente')
+  const isSuccess = /éxito|correctamente|copiado|guardado/.test(normalized)
+  const title = insufficientBalance
+    ? 'Saldo insuficiente'
+    : isSuccess
+      ? 'Listo'
+      : normalized.startsWith('error') || normalized.includes('no se pudo')
+        ? 'No se pudo completar'
+        : 'Aviso de Francho Shop'
+  const Icon = insufficientBalance || !isSuccess ? AlertTriangle : CircleCheck
+  const accent = insufficientBalance || !isSuccess
+    ? 'border-amber-300/25 bg-amber-400/10 text-amber-200'
+    : 'border-emerald-300/25 bg-emerald-400/10 text-emerald-200'
+
+  return (
+    <div className="fixed inset-0 z-[250] flex items-end justify-center bg-black/60 p-3 backdrop-blur-sm sm:items-center sm:p-5" role="presentation" onMouseDown={onClose}>
+      <section
+        className="w-full max-w-sm overflow-hidden rounded-3xl border border-white/10 bg-[#11171a] shadow-[0_28px_90px_rgba(0,0,0,.65)]"
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby="francho-notice-title"
+        onMouseDown={(event) => event.stopPropagation()}
+      >
+        <div className="relative overflow-hidden px-5 pb-4 pt-5">
+          <div className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-accent/20 blur-3xl" />
+          <div className="relative flex items-start gap-3">
+            <div className={`grid h-11 w-11 shrink-0 place-items-center rounded-2xl border ${accent}`}>
+              <Icon className="h-5 w-5" strokeWidth={3} />
+            </div>
+            <div className="min-w-0 flex-1 pt-0.5">
+              <div className="flex items-center gap-2">
+                <h2 id="francho-notice-title" className="text-sm font-black text-white">{title}</h2>
+                <FranchoFMark className="h-4 w-4 text-accent" title="Francho Shop" />
+              </div>
+              <p className="mt-1.5 text-xs leading-relaxed text-white/65">{message}</p>
+            </div>
+            <button type="button" onClick={onClose} className="grid h-8 w-8 shrink-0 place-items-center rounded-xl text-white/45 transition hover:bg-white/10 hover:text-white" aria-label="Cerrar aviso">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+        <div className="border-t border-white/8 bg-black/15 p-3">
+          <button type="button" onClick={onClose} className="fs-wallet-button-primary w-full rounded-2xl py-3 text-xs font-black transition active:translate-y-[2px]">
+            Entendido
+          </button>
+        </div>
+      </section>
+    </div>
+  )
+}
+
 function AppInner({ adminPortal = false }) {
+  // Warm the Android WebView cache before a catalog screen is opened.
+  useEffect(() => {
+    if (!isNativeFranchoApp()) return undefined
+    let cancelled = false
+    const timer = window.setTimeout(async () => {
+      try {
+        const [games, manualProducts, smsSettings, smmSettings] = await Promise.all([
+          api.publicGames().catch(() => []),
+          api.publicManualProducts().catch(() => []),
+          api.smsSettingsGet().catch(() => null),
+          api.smmSettingsGet().catch(() => null),
+        ])
+        if (cancelled) return
+        const urls = [
+          ...(Array.isArray(games) ? games : []).flatMap((game) => [game.icon_url, game.image_url, game.banner_image]),
+          ...(Array.isArray(manualProducts) ? manualProducts : []).flatMap((product) => [product.icon_url, product.image_url]),
+          smsSettings?.sms_catalog_image_url,
+          smsSettings?.category_logo_url,
+          smmSettings?.smm_catalog_image_url,
+        ].filter(Boolean).map(storeAssetUrl)
+        const uniqueUrls = [...new Set(urls)].slice(0, 80)
+        const cache = 'caches' in window ? await caches.open('francho-catalog-images-v1').catch(() => null) : null
+        uniqueUrls.forEach((url) => {
+          const image = new Image()
+          image.decoding = 'sync'
+          image.src = url
+          if (cache) fetch(url, { cache: 'force-cache' }).then((response) => {
+            if (response.ok) return cache.put(url, response.clone())
+            return null
+          }).catch(() => {})
+        })
+      } catch {}
+    }, 250)
+    return () => { cancelled = true; window.clearTimeout(timer) }
+  }, [])
   const [me, setMe] = useState(null)
   const [screen, setScreen] = useState(adminPortal ? 'panel' : 'home')
   const [catalogFilter, setCatalogFilter] = useState('all')
@@ -447,11 +596,15 @@ function AppInner({ adminPortal = false }) {
   const [fzrType, setFzrType] = useState('topup')
   const [fzrCategory, setFzrCategory] = useState(null)
   const [fzrSelectedGame, setFzrSelectedGame] = useState(null)
+  const [streamingProductSlugRoute, setStreamingProductSlugRoute] = useState('')
+  const [streamingProductToBuy, setStreamingProductToBuy] = useState(null)
+  const [streamingProductBuyResult, setStreamingProductBuyResult] = useState(null)
   const [panelReturnRole, setPanelReturnRole] = useState(null)
   const [panelReturnTab, setPanelReturnTab] = useState(null)
   const [orderResult, setOrderResult] = useState(null)
   const [regionsCount, setRegionsCount] = useState({})
   const [authScreen, setAuthScreen] = useState(null) // login, register, forgot, verify, reset
+  const [verificationEmail, setVerificationEmail] = useState('')
   const [googleWelcomeEmail, setGoogleWelcomeEmail] = useState(null)
   const [showTopUp, setShowTopUp] = useState(false)
   const [topUpInitialAmount, setTopUpInitialAmount] = useState('25')
@@ -460,6 +613,7 @@ function AppInner({ adminPortal = false }) {
   const [guideSlug, setGuideSlug] = useState('')
   const [shareEarnings, setShareEarnings] = useState(null)
   const [showExitToast, setShowExitToast] = useState(false)
+  const [franchoNotice, setFranchoNotice] = useState(null)
   const lastBackPress = useRef(0)
   const isPopStateNavigation = useRef(false)
   const hasInitializedHistory = useRef(false)
@@ -467,6 +621,16 @@ function AppInner({ adminPortal = false }) {
   const [caseOrderId, setCaseOrderId] = useState(null)
   const [caseIsAdmin, setCaseIsAdmin] = useState(false)
   const [caseReviewOnOpen, setCaseReviewOnOpen] = useState(false)
+
+  useEffect(() => {
+    const nativeAlert = window.alert
+    window.alert = (message) => {
+      setFranchoNotice({ message: String(message || ''), id: Date.now() })
+    }
+    return () => {
+      window.alert = nativeAlert
+    }
+  }, [])
   const [initialChatRoomId, setInitialChatRoomId] = useState(() => {
     try {
       const p = new URLSearchParams(window.location.search)
@@ -514,10 +678,13 @@ function AppInner({ adminPortal = false }) {
       let storeSlug = null
       if (host.endsWith('.franchoshop.com') && host !== 'franchoshop.com' && host !== 'www.franchoshop.com') {
         storeSlug = host.replace('.franchoshop.com', '')
-      } else if (p.get('web_store') || p.get('tienda_web')) {
-        storeSlug = p.get('web_store') || p.get('tienda_web')
-      } else if (pathname.startsWith('/store/') || pathname.startsWith('/w/') || pathname.startsWith('/tienda-web/')) {
-        storeSlug = pathname.split('/')[2]
+      } else if (p.get('tgWebAppStartParam') || window.Telegram?.WebApp?.initDataUnsafe?.start_param) {
+        storeSlug = p.get('tgWebAppStartParam') || window.Telegram?.WebApp?.initDataUnsafe?.start_param
+      } else if (p.get('web_store') || p.get('tienda_web') || p.get('s')) {
+        storeSlug = p.get('web_store') || p.get('tienda_web') || p.get('s')
+      } else if (pathname.startsWith('/s/') || pathname.startsWith('/store/') || pathname.startsWith('/w/') || pathname.startsWith('/tienda-web/')) {
+        const parts = pathname.split('/').filter(Boolean)
+        storeSlug = parts[1] || null
       } else if (!host.includes('franchoshop.') && !host.includes('reenvioplusbot.') && host !== 'localhost' && host !== '127.0.0.1') {
         storeSlug = host
       }
@@ -809,13 +976,22 @@ function AppInner({ adminPortal = false }) {
     const handleOpenResellerPricing = () => {
       setShowResellerPricing(true)
     }
+    const handleOpenAuthPolicy = (event) => {
+      const target = event?.detail?.screen === 'privacy' ? 'privacy' : 'terms'
+      const path = target === 'privacy' ? '/privacy-policy' : '/terms-conditions'
+      setAuthScreen(null)
+      setScreen(target)
+      if (window.location.pathname !== path) window.history.pushState({ screen: target }, '', path)
+    }
     window.addEventListener('franchoshop:refresh-me', handleRefreshMe)
     window.addEventListener('open-deposit', handleOpenDeposit)
     window.addEventListener('open-reseller-pricing', handleOpenResellerPricing)
+    window.addEventListener('franchoshop:open-policy', handleOpenAuthPolicy)
     return () => {
       window.removeEventListener('franchoshop:refresh-me', handleRefreshMe)
       window.removeEventListener('open-deposit', handleOpenDeposit)
       window.removeEventListener('open-reseller-pricing', handleOpenResellerPricing)
+      window.removeEventListener('franchoshop:open-policy', handleOpenAuthPolicy)
     }
   }, [])
 
@@ -919,6 +1095,15 @@ function AppInner({ adminPortal = false }) {
           setLoading(false)
           return
         }
+        const streamingProductParts = cleanPath.split('/').filter(Boolean)
+        const streamingProductSlugFromPath = ['streaming', 'apps', 'cuentas'].includes(streamingProductParts[0]) && streamingProductParts.length === 2 ? streamingProductParts[1] : ''
+        const streamingProductMatch = Boolean(streamingProductSlugFromPath)
+        if (streamingProductMatch) {
+          setStreamingProductSlugRoute(decodeURIComponent(streamingProductSlugFromPath))
+          setScreen('streaming-product')
+          setLoading(false)
+          return
+        }
         if (cleanPath === '/streaming' || cleanPath === '/cuentas') {
           setCatalogFilter('streaming')
           setScreen('home')
@@ -941,6 +1126,11 @@ function AppInner({ adminPortal = false }) {
           setLoading(false)
           return
         }
+        if (cleanPath === '/vpn' || cleanPath === '/wireguard') {
+          setScreen('vpn')
+          setLoading(false)
+          return
+        }
         const productId = params.get('product')
         const gameParam = params.get('game')
         const caseParam = params.get('case') || params.get('seguimiento')
@@ -952,9 +1142,11 @@ function AppInner({ adminPortal = false }) {
         } else if (screenParam === 'streaming') {
           setCatalogFilter('streaming')
           setScreen('home')
-        } else if (['sms', 'smm', 'telegram', 'capcut', 'profile', 'orders', 'support', 'inbox', 'help', 'contact', 'referrals', 'partner-help', 'swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc'].includes(screenParam)) {
+        } else if (['sms', 'smm', 'telegram', 'capcut', 'profile', 'orders', 'support', 'inbox', 'help', 'contact', 'referrals', 'partner-help', 'swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc', 'vpn', 'wireguard'].includes(screenParam)) {
           if (['swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc'].includes(screenParam) && !canCrypto) {
             setScreen('home')
+          } else if (screenParam === 'wireguard' || screenParam === 'vpn') {
+            setScreen('vpn')
           } else {
             setScreen(screenParam === 'inbox' ? 'support' : screenParam)
           }
@@ -1153,6 +1345,12 @@ function AppInner({ adminPortal = false }) {
             setLoading(false)
             return
           }
+          if (cleanPath2 === '/vpn' || cleanPath2 === '/wireguard') {
+            setScreen('vpn')
+            setMe(GUEST_USER)
+            setLoading(false)
+            return
+          }
           const productId = params.get('product')
           const gameParam2 = params.get('game')
           const caseParam2 = params.get('case') || params.get('seguimiento')
@@ -1161,9 +1359,11 @@ function AppInner({ adminPortal = false }) {
             setFzrType(resolvedCategory2.providerType)
             setFzrCategory(resolvedCategory2.categoryId)
             setScreen('fzr-catalog')
-          } else if (['sms', 'smm', 'telegram', 'capcut', 'help', 'contact', 'partner-help', 'api-docs', 'swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc'].includes(screenParam2)) {
+          } else if (['sms', 'smm', 'telegram', 'capcut', 'help', 'contact', 'partner-help', 'api-docs', 'swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc', 'vpn', 'wireguard'].includes(screenParam2)) {
             if (['swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc'].includes(screenParam2) && !canCrypto2) {
               setScreen('home')
+            } else if (screenParam2 === 'wireguard' || screenParam2 === 'vpn') {
+              setScreen('vpn')
             } else {
               setScreen(screenParam2)
             }
@@ -1267,6 +1467,12 @@ function AppInner({ adminPortal = false }) {
             setLoading(false)
             return
           }
+          if (cleanPath3 === '/vpn' || cleanPath3 === '/wireguard') {
+            setScreen('vpn')
+            setMe(GUEST_USER)
+            setLoading(false)
+            return
+          }
           const productId = params.get('product')
           const gameParam3 = params.get('game')
           const caseParam3 = params.get('case') || params.get('seguimiento')
@@ -1275,8 +1481,12 @@ function AppInner({ adminPortal = false }) {
             setFzrType(resolvedCategory3.providerType)
             setFzrCategory(resolvedCategory3.categoryId)
             setScreen('fzr-catalog')
-          } else if (['sms', 'smm', 'telegram', 'capcut', 'help', 'contact', 'partner-help', 'api-docs', 'swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc'].includes(screenParam3)) {
-            setScreen(screenParam3)
+          } else if (['sms', 'smm', 'telegram', 'capcut', 'help', 'contact', 'partner-help', 'api-docs', 'swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc', 'vpn', 'wireguard'].includes(screenParam3)) {
+            if (screenParam3 === 'wireguard' || screenParam3 === 'vpn') {
+              setScreen('vpn')
+            } else {
+              setScreen(screenParam3)
+            }
           } else if (productId && Number(productId)) {
             setCurrentRegion(params.get('region') || '__standard__')
             setCurrentProduct({ id: Number(productId) })
@@ -1301,60 +1511,116 @@ function AppInner({ adminPortal = false }) {
   useEffect(() => {
     const isInsideTelegram = !!(tg && tg.platform && tg.platform !== 'unknown')
     if (isInsideTelegram) return
+    // La APK usa un navegador seguro externo y vuelve mediante deep link; no
+    // inicializar One Tap dentro del WebView evita dos flujos de Google a la vez.
+    if (window.Capacitor?.isNativePlatform?.()) return
     if (loading) return
     if (isPrivatePortal) return
-    if (!me || !me.is_guest) return
-    if (authScreen === 'reset' || authScreen === 'verify') return
+
+    const handleCredential = async (res) => {
+      if (!res?.credential) return
+      try {
+        const result = await api.loginWithGoogle(res.credential)
+        let userData = null
+        try {
+          userData = await api.me()
+        } catch {
+          if (result?.user) {
+            userData = {
+              user_id: result.user.id,
+              name: result.user.name,
+              display_name: result.user.name,
+              photo_url: result.user.photo_url || '',
+              balance: 0.0,
+              role: 'user',
+              is_guest: false,
+              pricing_role: 'user',
+              has_password: result.user.has_password,
+              email: result.user.email,
+            }
+          }
+        }
+        if (userData) {
+          setMe(userData)
+          setAuthScreen(null)
+          if (window.location.pathname === '/login' || window.location.pathname === '/registro') {
+            window.history.replaceState({}, '', '/')
+          }
+          if (window.__franchoshop_activeGoogleCallback) {
+            try { window.__franchoshop_activeGoogleCallback(userData); } catch(e){}
+          }
+          if (result?.user?.is_new_user || !result?.user?.has_password || !userData?.has_password) {
+            setGoogleWelcomeEmail(result?.user?.email || userData?.email || '')
+          }
+        }
+      } catch (err) {
+        console.error('[Google Auth] Error durante login:', err)
+      }
+    }
+
+    window.__franchoshop_handleGlobalGoogleCredential = handleCredential
+
+    // Escuchar mensajes de autenticación Google provenientes de popups / pestañas externas
+    const onMessage = (event) => {
+      if (event.data?.type === 'FRANCHOSHOP_GOOGLE_AUTH_SUCCESS' && event.data?.credential) {
+        handleCredential({ credential: event.data.credential })
+      }
+    }
+    window.addEventListener('message', onMessage)
+
+    // Escuchar eventos de Deep Links desde Capacitor (franchoshop://auth?credential=...)
+    const onDeepLink = (e) => {
+      const { rawUrl } = e.detail || {}
+      if (!rawUrl) return
+      try {
+        const urlStr = rawUrl.startsWith('franchoshop://') ? rawUrl.replace('franchoshop://', 'https://franchoshop.com/') : rawUrl
+        const p = new URL(urlStr).searchParams
+        const cred = p.get('credential') || p.get('google_credential')
+        if (cred) {
+          handleCredential({ credential: cred })
+        }
+      } catch (err) {
+        console.warn('[DeepLink] Error procesando credencial:', err)
+      }
+    }
+    window.addEventListener('franchoshop:navigate', onDeepLink)
+
+    // Si Android entregó el enlace antes de que React montara la pantalla, procesarlo ahora.
+    const pendingDeepLink = window.__franchoshopPendingDeepLink
+    if (pendingDeepLink) {
+      window.__franchoshopPendingDeepLink = null
+      setTimeout(() => onDeepLink({ detail: { rawUrl: pendingDeepLink } }), 0)
+    }
+
+    // Comprobar parámetros de URL al inicio (?credential=... o ?google_credential=...)
+    try {
+      const initParams = new URLSearchParams(window.location.search)
+      const cred = initParams.get('credential') || initParams.get('google_credential')
+      if (cred) {
+        handleCredential({ credential: cred })
+        initParams.delete('credential')
+        initParams.delete('google_credential')
+        const nextQ = initParams.toString() ? `?${initParams.toString()}` : ''
+        window.history.replaceState({}, '', window.location.pathname + nextQ)
+      }
+    } catch (_) {}
+
+    if (!me || !me.is_guest) return () => {
+      window.removeEventListener('message', onMessage)
+      window.removeEventListener('franchoshop:navigate', onDeepLink)
+    }
+    if (authScreen || window.location.pathname.startsWith('/login') || window.location.pathname.startsWith('/registro')) return () => {
+      window.removeEventListener('message', onMessage)
+      window.removeEventListener('franchoshop:navigate', onDeepLink)
+    }
 
     let checkTimer = null
     let attempts = 0
 
     const triggerOneTap = () => {
       attempts++
-      if (!window.google?.accounts?.id) return false
+      if (!ensureGoogleIdentity()) return false
       try {
-        window.google.accounts.id.initialize({
-          client_id: GOOGLE_CLIENT_ID,
-          callback: async (res) => {
-            if (!res?.credential) return
-            try {
-              const result = await api.loginWithGoogle(res.credential)
-              let userData = null
-              try {
-                userData = await api.me()
-              } catch {
-                if (result?.user) {
-                  userData = {
-                    user_id: result.user.id,
-                    name: result.user.name,
-                    display_name: result.user.name,
-                    photo_url: result.user.photo_url || '',
-                    balance: 0.0,
-                    role: 'user',
-                    is_guest: false,
-                    pricing_role: 'user',
-                    has_password: result.user.has_password,
-                    email: result.user.email,
-                  }
-                }
-              }
-              if (userData) {
-                setMe(userData)
-                setAuthScreen(null)
-                if (result?.user?.is_new_user || !result?.user?.has_password || !userData?.has_password) {
-                  setGoogleWelcomeEmail(result?.user?.email || userData?.email || '')
-                }
-              }
-            } catch (err) {
-              console.error('[Google One Tap] Error durante login:', err)
-            }
-          },
-          auto_select: false,
-          cancel_on_tap_outside: true,
-          itp_support: true,
-          use_fedcm_for_prompt: true,
-        })
-
         window.google.accounts.id.prompt((notification) => {
           if (notification.isNotDisplayed()) {
             console.log('[Google One Tap] No desplegado:', notification.getNotDisplayedReason())
@@ -1380,6 +1646,8 @@ function AppInner({ adminPortal = false }) {
     }
 
     return () => {
+      window.removeEventListener('message', onMessage)
+      window.removeEventListener('franchoshop:navigate', onDeepLink)
       if (checkTimer) clearInterval(checkTimer)
     }
   }, [me, loading, isPrivatePortal, authScreen])
@@ -1444,9 +1712,15 @@ function AppInner({ adminPortal = false }) {
       window.history.replaceState({ screen: 'exit_sentinel' }, '', window.location.pathname + window.location.search)
       window.history.pushState({ screen: 'home' }, '', window.location.pathname + window.location.search)
       window.history.pushState({ screen: 'case', caseOrderId, caseIsAdmin }, '', window.location.pathname + window.location.search)
+    } else if (screen === 'vpn') {
+      // A direct /vpn visit needs a real Home entry before it so Android/Chrome
+      // back returns to the shop instead of triggering the exit sentinel.
+      window.history.replaceState({ screen: 'exit_sentinel' }, '', '/')
+      window.history.pushState({ screen: 'home', catalogFilter: 'all' }, '', '/')
+      window.history.pushState({ screen: 'vpn' }, '', '/vpn')
     } else {
       window.history.replaceState({ screen: 'exit_sentinel' }, '', window.location.pathname + window.location.search)
-      window.history.pushState({ screen: 'home' }, '', window.location.pathname + window.location.search)
+      window.history.pushState({ screen: screen || 'home' }, '', window.location.pathname + window.location.search)
     }
   }, [loading])
 
@@ -1455,6 +1729,15 @@ function AppInner({ adminPortal = false }) {
     const handlePopState = (event) => {
       const state = event.state
       if (state?.screen === 'exit_sentinel') {
+        // Si la sección fue abierta desde un enlace directo, el historial solo
+        // contiene el centinela. En ese caso "volver" debe abrir Inicio.
+        if (screen !== 'home') {
+          isPopStateNavigation.current = true
+          setCatalogFilter('all')
+          setScreen('home')
+          window.history.replaceState({ screen: 'home', catalogFilter: 'all' }, '', '/')
+          return
+        }
         const now = Date.now()
         if (now - lastBackPress.current < 2000) {
           const isInsideTelegram = !!(tg && tg.platform && tg.platform !== 'unknown')
@@ -1506,7 +1789,7 @@ function AppInner({ adminPortal = false }) {
     }
     if (screen === 'home') {
       const isPortal = window.location.pathname.startsWith('/panel') || window.location.pathname.startsWith('/admin')
-      const isStore = window.location.pathname.startsWith('/store/') || window.location.pathname.startsWith('/w/') || window.location.pathname.startsWith('/tienda-web/') || Boolean(activeWebStore)
+      const isStore = window.location.pathname.startsWith('/s/') || window.location.pathname.startsWith('/store/') || window.location.pathname.startsWith('/w/') || window.location.pathname.startsWith('/tienda-web/') || Boolean(activeWebStore)
       const homePath = (isPortal || isStore) ? window.location.pathname : '/'
       window.history.replaceState({ screen: 'exit_sentinel' }, '', homePath)
       window.history.pushState({ screen: 'home', catalogFilter }, '', homePath)
@@ -1515,7 +1798,7 @@ function AppInner({ adminPortal = false }) {
         let targetUrl = window.location.pathname + window.location.search
         if (screen === 'fzr-catalog' && fzrCategory) {
           targetUrl = '/' + encodeURIComponent(fzrCategory)
-        } else if (['swap', 'energy', 'p2p', 'wallet', 'orders', 'profile', 'support', 'api-docs'].includes(screen)) {
+        } else if (['swap', 'energy', 'p2p', 'wallet', 'orders', 'profile', 'support', 'api-docs', 'vpn'].includes(screen)) {
           targetUrl = '/' + screen
         }
         if (replaceNextHistory.current) {
@@ -1656,6 +1939,7 @@ function AppInner({ adminPortal = false }) {
     }
     return (
       <div className="min-h-screen bg-bg">
+        <div key={authScreen} className="fs-auth-route-transition">
         {authScreen === 'login' && (
           <LoginScreen
             privatePortal={isPrivatePortal}
@@ -1667,7 +1951,7 @@ function AppInner({ adminPortal = false }) {
         )}
         {authScreen === 'register' && (
           <RegisterScreen
-            onSuccess={(email) => { setAuthScreen('verify'); }}
+            onSuccess={(email) => { setVerificationEmail(email); setAuthScreen('verify'); }}
             onLoginSuccess={onLoginSuccess}
             onLogin={() => setAuthScreen('login')}
             onClose={handleDismissAuth}
@@ -1681,7 +1965,7 @@ function AppInner({ adminPortal = false }) {
           />
         )}
         {authScreen === 'verify' && (
-          <VerifyScreen onSuccess={() => setAuthScreen('login')} />
+          <VerifyScreen defaultEmail={verificationEmail} onSuccess={() => { setVerificationEmail(''); setAuthScreen('login') }} />
         )}
         {authScreen === 'reset' && (
           <ResetScreen
@@ -1691,6 +1975,7 @@ function AppInner({ adminPortal = false }) {
             defaultEmail={me?.email || ''}
           />
         )}
+        </div>
       </div>
     )
   }
@@ -1775,6 +2060,11 @@ function AppInner({ adminPortal = false }) {
       setScreen('api-docs')
       return
     }
+    if (target === 'vpn' || target === 'wireguard') {
+      window.history.pushState({ screen: 'vpn' }, '', '/vpn')
+      setScreen('vpn')
+      return
+    }
     if (target === 'guides') {
       openGuide('')
       return
@@ -1838,10 +2128,11 @@ function AppInner({ adminPortal = false }) {
     setScreen(target)
   }
 
-  const showAppSidebar = !isPrivatePortal && !activeWebStore && screen !== 'panel' && screen !== 'case'
+  const isPolicyScreen = ['terms', 'privacy', 'faq', 'cookies'].includes(screen)
+  const showAppSidebar = !isPrivatePortal && !activeWebStore && screen !== 'panel' && screen !== 'case' && !isPolicyScreen
 
   return (
-    <div className={showAppSidebar ? "flex h-screen w-full bg-bg text-white overflow-hidden select-none" : ((activeWebStore && screen === 'home') ? "min-h-screen bg-bg" : (screen === 'panel' || screen === 'sms' || screen === 'smm' || screen === 'telegram' || screen === 'capcut' || screen === 'fzr-catalog' || screen === 'home') ? "h-screen bg-bg overflow-hidden flex flex-col" : "min-h-screen bg-bg pb-24")}>
+    <div className={showAppSidebar ? "flex h-screen w-full bg-bg text-white overflow-hidden select-text" : ((activeWebStore && screen === 'home') ? "min-h-screen bg-bg" : (screen === 'panel' || screen === 'sms' || screen === 'smm' || screen === 'telegram' || screen === 'capcut' || screen === 'fzr-catalog' || screen === 'home' || screen === 'vpn') ? "h-screen bg-bg overflow-hidden flex flex-col" : "min-h-screen bg-bg pb-24")}>
       {/* 1. Barra Lateral Persistente en Desktop / Tablets (md+) */}
       {showAppSidebar && (
         <AppSidebar
@@ -1889,7 +2180,7 @@ function AppInner({ adminPortal = false }) {
 
       {/* 3. Área Principal de Contenido */}
       <div className={showAppSidebar ? "flex-1 min-w-0 flex flex-col h-full overflow-hidden relative" : "contents"}>
-        {screen !== 'home' && screen !== 'profile' && screen !== 'panel' && screen !== 'sms' && screen !== 'smm' && screen !== 'telegram' && screen !== 'capcut' && screen !== 'fzr-catalog' && screen !== 'orders' && screen !== 'api' && screen !== 'api-docs' && screen !== 'support' && screen !== 'inbox' && screen !== 'case' && screen !== 'swap' && screen !== 'energy' && screen !== 'p2p' && screen !== 'wallet' && screen !== 'vip' && screen !== 'kyc' && (
+        {!isPolicyScreen && screen !== 'home' && screen !== 'profile' && screen !== 'panel' && screen !== 'sms' && screen !== 'smm' && screen !== 'telegram' && screen !== 'capcut' && screen !== 'fzr-catalog' && screen !== 'streaming-product' && screen !== 'orders' && screen !== 'api' && screen !== 'api-docs' && screen !== 'support' && screen !== 'inbox' && screen !== 'case' && screen !== 'swap' && screen !== 'energy' && screen !== 'p2p' && screen !== 'wallet' && screen !== 'vip' && screen !== 'kyc' && screen !== 'vpn' && (
           <Header me={me} onBack={goBack}
                   onOpenSidebar={() => setSidebarOpen(true)}
                   onProfile={() => isGuest ? requireLogin() : setScreen('profile')}
@@ -1952,6 +2243,14 @@ function AppInner({ adminPortal = false }) {
               setScreen('regions')
             }}
             onNav={handleNav}
+            onOpenStreamingProduct={(product) => {
+              const path = streamingProductPath(product)
+              const slug = streamingProductSlug(product)
+              setStreamingProductSlugRoute(slug)
+              setStreamingProductBuyResult(null)
+              window.history.pushState({ screen: 'streaming-product', streamingProductSlug: slug }, '', path)
+              setScreen('streaming-product')
+            }}
             onOpenNotifications={() => isGuest ? requireLogin() : setShowNotifsDropdown(true)}
             unreadNotifsCount={unreadNotifsCount}
             activeWebStore={activeWebStore}
@@ -2009,7 +2308,11 @@ function AppInner({ adminPortal = false }) {
           }} />
       )}
       {screen === 'result' && orderResult && (
-        <ResultScreen result={orderResult} onHome={() => { setScreen('home'); setOrderResult(null) }} />
+        <ResultScreen
+          result={orderResult}
+          onHome={() => { setScreen('home'); setOrderResult(null) }}
+          onOrders={() => { setScreen('orders'); setOrderResult(null) }}
+        />
       )}
       {screen === 'sms' && (
         <SmsNumbersScreen
@@ -2064,6 +2367,24 @@ function AppInner({ adminPortal = false }) {
             setScreen('home')
             try { window.history.pushState({}, '', '/') } catch {}
           }}
+        />
+      )}
+      {screen === 'streaming-product' && (
+        <StreamingProductPage
+          slug={streamingProductSlugRoute}
+          onBack={() => { window.history.back() }}
+          onBuy={(product) => { setStreamingProductToBuy(product); setStreamingProductBuyResult(null) }}
+        />
+      )}
+      {streamingProductToBuy && (
+        <StreamingBuyModal
+          me={me}
+          onLoginRequired={requireLogin}
+          onTopUp={() => isGuest ? requireLogin() : setShowTopUp(true)}
+          product={streamingProductToBuy}
+          onClose={() => { setStreamingProductToBuy(null); setStreamingProductBuyResult(null) }}
+          onBought={(result) => { setStreamingProductBuyResult(result); api.me().then(setMe).catch(() => {}) }}
+          buyResult={streamingProductBuyResult}
         />
       )}
       {screen === 'profile' && (
@@ -2313,6 +2634,23 @@ function AppInner({ adminPortal = false }) {
           onNav={handleNav}
         />
       )}
+      {screen === 'vpn' && (
+        <VpnStoreScreen
+          me={me}
+          onBack={goBack}
+          onLoginRequired={requireLogin}
+          onTopUp={() => isGuest ? requireLogin() : setShowTopUp(true)}
+          onBought={(updatedMe) => {
+            if (updatedMe) setMe(updatedMe)
+            try { window.dispatchEvent(new CustomEvent('franchoshop:refresh-me')) } catch {}
+          }}
+          onOpenCase={(orderId) => {
+            setInitialChatOrderId(orderId)
+            setScreen('support')
+          }}
+          onNavOrders={() => handleNav('orders')}
+        />
+      )}
 
       {showTopUp && (
         <TopUpModal 
@@ -2404,7 +2742,7 @@ function AppInner({ adminPortal = false }) {
           `}</style>
           <div className="absolute inset-0" onClick={() => setShowNotifsDropdown(false)} />
           
-          <div className="relative w-full max-w-md bg-bg border-l border-white/10 flex flex-col h-full shadow-2xl animate-slide-in-right">
+          <div data-tour="notifs-panel" className="relative w-full max-w-md bg-bg border-l border-white/10 flex flex-col h-full shadow-2xl animate-slide-in-right">
             {/* Header del drawer */}
             <div className="p-4 border-b border-white/10 flex items-center justify-between bg-card">
               <div className="flex items-center gap-2">
@@ -2444,7 +2782,7 @@ function AppInner({ adminPortal = false }) {
 
             {/* Banner de Permiso de Notificaciones de Escritorio */}
             {notifPermission === 'default' && 'Notification' in window && (
-              <div className="bg-accent/10 border-b border-white/5 px-4 py-2.5 flex items-center justify-between gap-3 text-xs">
+              <div data-tour="notifs-push-permission" className="bg-accent/10 border-b border-white/5 px-4 py-2.5 flex items-center justify-between gap-3 text-xs">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="text-accent text-sm flex-shrink-0 animate-bounce">🔔</span>
                   <p className="text-white/80 font-medium truncate">Activa notificaciones de escritorio para enterarte al instante.</p>
@@ -2518,16 +2856,20 @@ function AppInner({ adminPortal = false }) {
           onClearForcedRoom={() => setInitialChatRoomId(null)} 
           isOpen={aiWidgetOpen}
           onToggleOpen={setAiWidgetOpen}
+          screen={screen}
+          onOpenTopUp={() => setShowTopUp(true)}
+          onNavigateScreen={(s) => setScreen(s)}
+          onOpenNotifications={() => setShowNotifsDropdown(true)}
         />
       )}
 
-      {!activeWebStore && screen !== 'case' && screen !== 'panel' && screen !== 'admin' && screen !== 'sms' && screen !== 'smm' && screen !== 'telegram' && screen !== 'capcut' && screen !== 'fzr-catalog' && (
+      {!activeWebStore && screen !== 'case' && screen !== 'panel' && screen !== 'admin' && screen !== 'sms' && screen !== 'smm' && screen !== 'telegram' && screen !== 'capcut' && screen !== 'fzr-catalog' && screen !== 'vpn' && (
         <BottomNav active={screen} me={me} onNav={handleNav} showCryptoFeatures={showCryptoFeatures} />
       )}
 
       {/* Fallback: si el screen no matchea ningún componente, mostrar home */}
       {!['home', 'regions', 'products', 'detail', 'confirm', 'result',
-         'profile', 'orders', 'support', 'inbox', 'help', 'terms', 'terms-conditions', 'privacy', 'privacy-policy', 'faq', 'faqs', 'cookies', 'cookies-policy', 'contact', 'guides', 'guide-detail', 'seller-store', 'partner-help', 'admin', 'admin-edit', 'case', 'panel', 'sms', 'smm', 'telegram', 'capcut', 'fzr-catalog', 'api-docs', 'api', 'seller', 'referrals', 'swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc'].includes(screen) && (
+         'streaming-product', 'profile', 'orders', 'support', 'inbox', 'help', 'terms', 'terms-conditions', 'privacy', 'privacy-policy', 'faq', 'faqs', 'cookies', 'cookies-policy', 'contact', 'guides', 'guide-detail', 'seller-store', 'partner-help', 'admin', 'admin-edit', 'case', 'panel', 'sms', 'smm', 'telegram', 'capcut', 'fzr-catalog', 'api-docs', 'api', 'seller', 'referrals', 'swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc', 'vpn', 'wireguard'].includes(screen) && (
         <div className="p-8 text-center">
           <p className="text-white/60 mb-4">Estado no reconocido: {screen}</p>
           <button onClick={() => setScreen('home')} className="btn-primary max-w-xs mx-auto">
@@ -2535,6 +2877,8 @@ function AppInner({ adminPortal = false }) {
           </button>
         </div>
       )}
+
+      <FranchoNoticeModal notice={franchoNotice} onClose={() => setFranchoNotice(null)} />
 
       {showExitToast && (
         <div
@@ -2583,7 +2927,7 @@ function BottomNav({ active, me, onNav, showCryptoFeatures = false }) {
       <div className="mx-auto grid max-w-md gap-1" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
         {items.map((item) => {
           const Icon = item.icon
-          const selected = active === item.id || (item.id === 'home' && ['result', 'regions', 'products', 'detail', 'fzr-catalog'].includes(active))
+          const selected = active === item.id || (item.id === 'home' && ['result', 'regions', 'products', 'detail', 'fzr-catalog', 'streaming-product'].includes(active))
           return (
             <button
               key={item.id}
@@ -2687,6 +3031,547 @@ function FormattedAiMessage({ text, isMine }) {
   )
 }
 
+// ─── Componente Oficial 100% Código Vectorial de Franchito (Curvo, Aerodinámico, Rascarse Cabeza, Saludo y Modo Tierno 😍 al Frotar) ───
+function FranchitoAvatar({ size = "md", isThinking = false, isSpeaking = false, className = "" }) {
+  const dim = size === "xs" ? 22 : size === "sm" ? 30 : size === "md" ? 40 : size === "lg" ? 52 : size === "floating" ? 66 : 40
+  const idPrefix = useMemo(() => `fra-${Math.random().toString(36).substr(2, 6)}`, [])
+  const [isCute, setIsCute] = useState(false)
+  const rubCountRef = useRef(0)
+  const rubTimerRef = useRef(null)
+
+  const handleRub = () => {
+    rubCountRef.current += 1
+    if (rubCountRef.current >= 3) {
+      setIsCute(true)
+    }
+    if (rubTimerRef.current) clearTimeout(rubTimerRef.current)
+    rubTimerRef.current = setTimeout(() => {
+      setIsCute(false)
+      rubCountRef.current = 0
+    }, 3800)
+  }
+
+  return (
+    <div
+      className={`relative inline-flex items-center justify-center shrink-0 select-none ${className} fra-mascot-root ${isCute ? 'fra-is-cute' : ''}`}
+      style={{ width: dim, height: dim }}
+      onMouseMove={handleRub}
+      onTouchMove={handleRub}
+      onMouseEnter={() => {
+        rubCountRef.current += 2
+        handleRub()
+      }}
+      title={isCute ? "¡Franchito te quiere mucho! 😍" : "Franchito Asistente (¡Frótame con el mouse o pasa el cursor!)"}
+    >
+      <style>{`
+        @keyframes fra-float {
+          0%, 100% { transform: translateY(0px) rotate(0deg); }
+          50% { transform: translateY(-5px) rotate(0.6deg); }
+        }
+        @keyframes fra-head-cycle {
+          0%, 50%, 100% { transform: rotate(0deg) translateY(0); }
+          25% { transform: rotate(-2deg) translateY(-0.4px); }
+          35% { transform: rotate(0deg); }
+          53% { transform: rotate(-8deg) translateY(-1px); }
+          56% { transform: rotate(-10deg) translateY(-1.5px); }
+          60% { transform: rotate(-7deg) translateY(-1px); }
+          64% { transform: rotate(-9deg) translateY(-1.5px); }
+          68% { transform: rotate(0deg) translateY(0); }
+          87% { transform: rotate(3deg) translateY(-0.5px); }
+          95% { transform: rotate(3deg); }
+          98% { transform: rotate(0deg); }
+        }
+        @keyframes fra-eyes-look {
+          0%, 25%, 100% { transform: translateX(0px); }
+          30%, 48% { transform: translateX(-2.5px); }
+          52%, 67% { transform: translateY(-2px) translateX(-1px); }
+          72%, 80% { transform: translateX(0px); }
+          85%, 96% { transform: translateX(2.5px); }
+        }
+        @keyframes fra-blink {
+          0%, 94%, 98%, 100% { transform: scaleY(1); }
+          96% { transform: scaleY(0.08); }
+        }
+        @keyframes fra-scratch-cycle {
+          0%, 50%, 70%, 100% { transform: rotate(0deg) translate(0, 0); }
+          53% { transform: translate(-3px, -32px) rotate(105deg); }
+          55% { transform: translate(-4px, -35px) rotate(115deg); }
+          57% { transform: translate(-2px, -31px) rotate(102deg); }
+          59% { transform: translate(-5px, -36px) rotate(116deg); }
+          61% { transform: translate(-3px, -32px) rotate(104deg); }
+          63% { transform: translate(-5px, -36px) rotate(116deg); }
+          65% { transform: translate(-3px, -33px) rotate(106deg); }
+          68% { transform: rotate(15deg) translate(-1px, -5px); }
+          70% { transform: rotate(0deg) translate(0, 0); }
+        }
+        @keyframes fra-wave-cycle {
+          0%, 82%, 100% { transform: rotate(0deg); }
+          85% { transform: rotate(-65deg); }
+          87% { transform: rotate(-78deg); }
+          89% { transform: rotate(-62deg); }
+          91% { transform: rotate(-78deg); }
+          93% { transform: rotate(-65deg); }
+          96% { transform: rotate(0deg); }
+        }
+        @keyframes fra-cute-bounce {
+          0%, 100% { transform: translateY(0px) rotate(0deg) scale(1); }
+          25% { transform: translateY(-3px) rotate(1.5deg) scale(1.03); }
+          50% { transform: translateY(-1px) rotate(-1deg) scale(1.02); }
+          75% { transform: translateY(-4px) rotate(1.5deg) scale(1.03); }
+        }
+        @keyframes fra-cute-head {
+          0%, 100% { transform: rotate(6deg) translateY(-1px); }
+          50% { transform: rotate(9deg) translateY(-2px); }
+        }
+        @keyframes fra-heart-float-1 {
+          0% { opacity: 0; transform: translate(0, 0) scale(0.4); }
+          30% { opacity: 0.95; transform: translate(-6px, -14px) scale(1.1); }
+          70% { opacity: 0.8; transform: translate(-12px, -30px) scale(0.9); }
+          100% { opacity: 0; transform: translate(-16px, -45px) scale(0.6); }
+        }
+        @keyframes fra-heart-float-2 {
+          0% { opacity: 0; transform: translate(0, 0) scale(0.4); }
+          30% { opacity: 0.95; transform: translate(7px, -16px) scale(1.1); }
+          70% { opacity: 0.8; transform: translate(14px, -32px) scale(0.9); }
+          100% { opacity: 0; transform: translate(18px, -48px) scale(0.6); }
+        }
+        @keyframes fra-blush-pulse {
+          0%, 100% { opacity: 0.75; transform: scale(1); }
+          50% { opacity: 1; transform: scale(1.15); }
+        }
+        @keyframes fra-mouth-talk {
+          0%, 100% { transform: scaleY(0.35); opacity: 0.6; }
+          50% { transform: scaleY(1.35); opacity: 1; }
+        }
+        @keyframes fra-thruster {
+          0%, 100% { opacity: 0.35; transform: scale(0.9); }
+          50% { opacity: 0.8; transform: scale(1.15); }
+        }
+        @keyframes fra-core-pulse {
+          0%, 100% { opacity: 0.75; filter: drop-shadow(0 0 3px rgba(0, 245, 160, 0.4)); }
+          50% { opacity: 1; filter: drop-shadow(0 0 9px rgba(0, 245, 160, 0.85)); }
+        }
+        @keyframes fra-scan {
+          0% { transform: translateX(-12px); opacity: 0.8; }
+          50% { transform: translateX(12px); opacity: 1; }
+          100% { transform: translateX(-12px); opacity: 0.8; }
+        }
+        .fra-body-anim { animation: fra-float 4s ease-in-out infinite; transform-origin: center bottom; }
+        .fra-head-anim { animation: fra-head-cycle 24s ease-in-out infinite; transform-origin: 60px 60px; }
+        .fra-eyes-anim { animation: fra-eyes-look 6s ease-in-out infinite; }
+        .fra-blink-anim { animation: fra-blink 3.6s ease-in-out infinite; transform-origin: 60px 43px; }
+        .fra-left-arm-anim {
+          animation: fra-scratch-cycle 24s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+          transform-origin: 40px 74px;
+        }
+        .fra-right-arm-anim {
+          animation: fra-wave-cycle 24s ease-in-out infinite;
+          transform-origin: 80px 74px;
+        }
+        .fra-is-cute .fra-body-anim { animation: fra-cute-bounce 1.6s ease-in-out infinite !important; }
+        .fra-is-cute .fra-head-anim { animation: fra-cute-head 2s ease-in-out infinite !important; }
+        .fra-heart-1 { animation: fra-heart-float-1 2s ease-out infinite; transform-origin: center; }
+        .fra-heart-2 { animation: fra-heart-float-2 2.3s ease-out 0.8s infinite; transform-origin: center; }
+        .fra-blush { animation: fra-blush-pulse 1.8s ease-in-out infinite; transform-origin: center; }
+        .fra-mouth-1 { animation: fra-mouth-talk 0.34s ease-in-out infinite; transform-origin: center; }
+        .fra-mouth-2 { animation: fra-mouth-talk 0.26s ease-in-out 0.08s infinite; transform-origin: center; }
+        .fra-mouth-3 { animation: fra-mouth-talk 0.38s ease-in-out 0.04s infinite; transform-origin: center; }
+        .fra-mouth-4 { animation: fra-mouth-talk 0.30s ease-in-out 0.12s infinite; transform-origin: center; }
+        .fra-mouth-5 { animation: fra-mouth-talk 0.35s ease-in-out 0.06s infinite; transform-origin: center; }
+        .fra-thruster-anim { animation: fra-thruster 4s ease-in-out infinite; transform-origin: 60px 113px; }
+        .fra-core-anim { animation: fra-core-pulse 2.5s ease-in-out infinite; }
+        .fra-scanner-anim { animation: fra-scan 1.2s ease-in-out infinite; }
+      `}</style>
+
+      <svg
+        viewBox="0 0 120 120"
+        fill="none"
+        xmlns="http://www.w3.org/2000/svg"
+        className="w-full h-full overflow-visible drop-shadow-[0_4px_16px_rgba(0,245,160,0.3)]"
+      >
+        <defs>
+          <linearGradient id={`${idPrefix}-neon`} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#00F5A0" />
+            <stop offset="100%" stopColor="#00D9F5" />
+          </linearGradient>
+          <linearGradient id={`${idPrefix}-titanium`} x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#253548" />
+            <stop offset="40%" stopColor="#141e2a" />
+            <stop offset="100%" stopColor="#080e15" />
+          </linearGradient>
+          <linearGradient id={`${idPrefix}-armor`} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#1f2c3c" />
+            <stop offset="100%" stopColor="#0b1219" />
+          </linearGradient>
+          <linearGradient id={`${idPrefix}-gloss`} x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#ffffff" stopOpacity="0.3" />
+            <stop offset="35%" stopColor="#ffffff" stopOpacity="0.05" />
+            <stop offset="100%" stopColor="#000000" stopOpacity="0.4" />
+          </linearGradient>
+          <linearGradient id={`${idPrefix}-visor`} x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor="#0a121c" />
+            <stop offset="50%" stopColor="#04070c" />
+            <stop offset="100%" stopColor="#020407" />
+          </linearGradient>
+          <linearGradient id={`${idPrefix}-heart`} x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stopColor="#ff5e9a" />
+            <stop offset="100%" stopColor="#ff1f6d" />
+          </linearGradient>
+          <filter id={`${idPrefix}-glow`} x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="2.5" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+          <filter id={`${idPrefix}-heart-glow`} x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
+        {/* Corazones flotantes al ponerse tierno 😍 */}
+        {isCute && (
+          <g>
+            <g className="fra-heart-1" filter={`url(#${idPrefix}-heart-glow)`}>
+              <path d="M42 22 C42 17 35 15 33 19 C31 15 24 17 24 22 C24 28 33 34 33 34 C33 34 42 28 42 22 Z" fill={`url(#${idPrefix}-heart)`} />
+            </g>
+            <g className="fra-heart-2" filter={`url(#${idPrefix}-heart-glow)`}>
+              <path d="M96 20 C96 15 90 13 88 17 C86 13 80 15 80 20 C80 26 88 32 88 32 C88 32 96 26 96 20 Z" fill={`url(#${idPrefix}-heart)`} />
+            </g>
+          </g>
+        )}
+
+        {/* Propulsión de levitación magnética */}
+        <g className="fra-thruster-anim">
+          <ellipse cx="60" cy="113" rx="22" ry="4" fill={`url(#${idPrefix}-neon)`} opacity="0.35" filter={`url(#${idPrefix}-glow)`} />
+          <ellipse cx="60" cy="113" rx="10" ry="2" fill="#00F5A0" opacity="0.75" />
+        </g>
+
+        {/* CUERPO PRINCIPAL CON FLOTACIÓN */}
+        <g className="fra-body-anim">
+          {/* Brazo Izquierdo (Rascándose la cabeza curiosamente en ciclo de 24s) */}
+          <g className="fra-left-arm-anim">
+            <ellipse cx="40" cy="74" rx="5" ry="4.5" fill={`url(#${idPrefix}-armor)`} stroke={`url(#${idPrefix}-neon)`} strokeWidth="1.2" />
+            <circle cx="40" cy="74" r="1.8" fill="#00F5A0" />
+            <path d="M39 77 C36 82 32 87 31 92" stroke="#182332" strokeWidth="4.5" strokeLinecap="round" />
+            <circle cx="31" cy="92" r="3" fill="#091018" stroke={`url(#${idPrefix}-neon)`} strokeWidth="1" />
+            <path d="M31 92 C33 97 35 101 37 103" stroke="#253548" strokeWidth="4" strokeLinecap="round" />
+            <g>
+              <ellipse cx="37" cy="103" rx="3.5" ry="3" fill="#0b1118" stroke={`url(#${idPrefix}-neon)`} strokeWidth="1" />
+              <path d="M36 104 C35 106 34 106 33 105" stroke="#00F5A0" strokeWidth="1.6" strokeLinecap="round" />
+              <path d="M38 104 C38 106 37 107 36 106" stroke="#00F5A0" strokeWidth="1.6" strokeLinecap="round" />
+            </g>
+          </g>
+
+          {/* Torso / Chasis Aerodinámico Curvo */}
+          <g>
+            <rect x="55" y="63" width="10" height="7" rx="3.5" fill="#0b1118" stroke="#1a2636" strokeWidth="1" />
+            <line x1="57" y1="66.5" x2="63" y2="66.5" stroke="#00F5A0" strokeWidth="1" opacity="0.8" />
+
+            <path
+              d="M45 71 C53 68 67 68 75 71 C78 84 73 98 60 102 C47 98 42 84 45 71 Z"
+              fill={`url(#${idPrefix}-titanium)`}
+              stroke={isCute ? '#ff4d8d' : `url(#${idPrefix}-neon)`}
+              strokeWidth="1.5"
+            />
+            <path
+              d="M46 72 C53 69 67 69 74 72 C71 78 49 78 46 72 Z"
+              fill={`url(#${idPrefix}-gloss)`}
+            />
+
+            <path
+              d="M49 76 C55 74 65 74 71 76 C70 85 66 90 60 92 C54 90 50 85 49 76 Z"
+              fill={`url(#${idPrefix}-armor)`}
+              stroke="#1a2636"
+              strokeWidth="0.8"
+            />
+
+            {/* Reactor / Núcleo Circular Francho Shop */}
+            <g className="fra-core-anim">
+              <circle cx="60" cy="85" r="7" fill="#050910" stroke={isCute ? '#ff4d8d' : `url(#${idPrefix}-neon)`} strokeWidth="1.2" />
+              <circle cx="60" cy="85" r="4.5" fill={isCute ? '#ff4d8d' : '#00F5A0'} opacity="0.85" />
+              <circle cx="58.5" cy="83.5" r="1.5" fill="#ffffff" />
+            </g>
+          </g>
+
+          {/* Brazo Derecho (Reposo natural y saludo suave en ciclo) */}
+          <g className="fra-right-arm-anim">
+            <ellipse cx="80" cy="74" rx="5" ry="4.5" fill={`url(#${idPrefix}-armor)`} stroke={`url(#${idPrefix}-neon)`} strokeWidth="1.2" />
+            <circle cx="80" cy="74" r="1.8" fill="#00D9F5" />
+            <path d="M81 77 C84 82 88 87 89 92" stroke="#182332" strokeWidth="4.5" strokeLinecap="round" />
+            <circle cx="89" cy="92" r="3" fill="#091018" stroke={`url(#${idPrefix}-neon)`} strokeWidth="1" />
+            <path d="M89 92 C87 97 85 101 83 103" stroke="#253548" strokeWidth="4" strokeLinecap="round" />
+            <g>
+              <ellipse cx="82" cy="103" rx="3.5" ry="3" fill="#0b1118" stroke={`url(#${idPrefix}-neon)`} strokeWidth="1" />
+              <path d="M81 104 C80 106 79 106 78 105" stroke="#00D9F5" strokeWidth="1.6" strokeLinecap="round" />
+              <path d="M83 104 C83 106 82 107 81 106" stroke="#00D9F5" strokeWidth="1.6" strokeLinecap="round" />
+            </g>
+          </g>
+
+          {/* CABEZA CURVA AERODINÁMICA */}
+          <g className="fra-head-anim">
+            <rect x="26.5" y="36" width="6" height="20" rx="3" fill="#0b1118" stroke={`url(#${idPrefix}-neon)`} strokeWidth="1.1" />
+            <rect x="87.5" y="36" width="6" height="20" rx="3" fill="#0b1118" stroke={`url(#${idPrefix}-neon)`} strokeWidth="1.1" />
+            <circle cx="29.5" cy="46" r="1.5" fill="#00F5A0" />
+            <circle cx="90.5" cy="46" r="1.5" fill="#00D9F5" />
+
+            {/* Sensor superior estilizado */}
+            <path d="M57 15 C58 8 62 8 63 15 Z" fill={isCute ? '#ff4d8d' : `url(#${idPrefix}-neon)`} />
+            <circle cx="60" cy="8" r="2.5" fill={isCute ? '#ff4d8d' : '#00F5A0'} filter={`url(#${idPrefix}-glow)`} />
+
+            {/* Casco Curvo de Domo Aerodinámico */}
+            <path
+              d="M60 14 C78 14 91 26 91 44 C91 61 78 67 60 67 C42 67 29 61 29 44 C29 26 42 14 60 14 Z"
+              fill={`url(#${idPrefix}-titanium)`}
+              stroke={isCute ? '#ff4d8d' : `url(#${idPrefix}-neon)`}
+              strokeWidth="1.6"
+            />
+            {/* Reflejo de luz en el domo superior */}
+            <path
+              d="M60 16 C73 16 83 23 85 34 C76 25 64 22 60 22 C56 22 44 25 35 34 C37 23 47 16 60 16 Z"
+              fill={`url(#${idPrefix}-gloss)`}
+            />
+
+            {/* Visor Curvo Cápsula Stealth Glossy */}
+            <path
+              d="M60 24 C74 24 84 32 84 44 C84 56 74 61 60 61 C46 61 36 56 36 44 C36 32 46 24 60 24 Z"
+              fill={`url(#${idPrefix}-visor)`}
+              stroke="#162330"
+              strokeWidth="1"
+            />
+            {/* Reflejo curvo del cristal del visor */}
+            <path
+              d="M44 28 C52 25 68 25 76 28 C70 32 50 32 44 28 Z"
+              fill="#ffffff"
+              opacity="0.12"
+            />
+
+            {/* MEJILLAS SONROJADAS (BLUSH TIERNO) */}
+            {isCute && (
+              <g>
+                <ellipse className="fra-blush" cx="42" cy="51" rx="4.5" ry="2.2" fill="#ff4d8d" opacity="0.9" filter={`url(#${idPrefix}-heart-glow)`} />
+                <ellipse className="fra-blush" cx="78" cy="51" rx="4.5" ry="2.2" fill="#ff4d8d" opacity="0.9" filter={`url(#${idPrefix}-heart-glow)`} />
+              </g>
+            )}
+
+            {/* OJOS DIGITALES: Modo Tierno (^ _ ^), Modo Pensando / Escáner o Mirada Curva */}
+            {isCute ? (
+              <g filter={`url(#${idPrefix}-glow)`}>
+                <path d="M43 45 C45 38 53 38 55 45" stroke="#ff4d8d" strokeWidth="3.2" strokeLinecap="round" fill="none" />
+                <path d="M65 45 C67 38 75 38 77 45" stroke="#ff5e9a" strokeWidth="3.2" strokeLinecap="round" fill="none" />
+                <circle cx="49" cy="40" r="1.3" fill="#ffffff" />
+                <circle cx="71" cy="40" r="1.3" fill="#ffffff" />
+              </g>
+            ) : isThinking ? (
+              <g filter={`url(#${idPrefix}-glow)`} className="fra-scanner-anim">
+                <rect x="42" y="41.5" width="24" height="3" rx="1.5" fill={`url(#${idPrefix}-neon)`} />
+              </g>
+            ) : (
+              <g className="fra-eyes-anim">
+                <g className="fra-blink-anim" filter={`url(#${idPrefix}-glow)`}>
+                  <ellipse cx="49" cy="42.5" rx="5.5" ry="4.2" fill="#00F5A0" />
+                  <ellipse cx="50" cy="41.5" rx="2" ry="1.4" fill="#ffffff" />
+                  <ellipse cx="71" cy="42.5" rx="5.5" ry="4.2" fill="#00D9F5" />
+                  <ellipse cx="72" cy="41.5" rx="2" ry="1.4" fill="#ffffff" />
+                </g>
+              </g>
+            )}
+
+            {/* BOCA MODULADORA DE VOZ HABLADA (Onda Acústica) */}
+            <g filter={`url(#${idPrefix}-glow)`}>
+              <line className={isSpeaking ? "fra-mouth-1" : "fra-mouth-1 opacity-75"} x1="53" y1="54" x2="53" y2="57" stroke={isCute ? '#ff4d8d' : '#00F5A0'} strokeWidth="1.6" strokeLinecap="round" />
+              <line className={isSpeaking ? "fra-mouth-2" : "fra-mouth-2 opacity-75"} x1="56.5" y1="53" x2="56.5" y2="58" stroke={isCute ? '#ff4d8d' : '#00F5A0'} strokeWidth="1.6" strokeLinecap="round" />
+              <line className={isSpeaking ? "fra-mouth-3" : "fra-mouth-3 opacity-90"} x1="60" y1="52" x2="60" y2="59" stroke={isCute ? '#ff5e9a' : `url(#${idPrefix}-neon)`} strokeWidth="1.8" strokeLinecap="round" />
+              <line className={isSpeaking ? "fra-mouth-4" : "fra-mouth-4 opacity-75"} x1="63.5" y1="53" x2="63.5" y2="58" stroke={isCute ? '#00D9F5' : '#00D9F5'} strokeWidth="1.6" strokeLinecap="round" />
+              <line className={isSpeaking ? "fra-mouth-5" : "fra-mouth-5 opacity-75"} x1="67" y1="54" x2="67" y2="57" stroke={isCute ? '#00D9F5' : '#00D9F5'} strokeWidth="1.6" strokeLinecap="round" />
+            </g>
+          </g>
+        </g>
+      </svg>
+    </div>
+  )
+}
+
+const FRANCHITO_TOURS = {
+  recharge: {
+    id: 'recharge',
+    title: 'Guía de Recarga de Saldo',
+    badge: 'Recargar Saldo',
+    steps: [
+      {
+        id: 'step-balance',
+        targetSelector: '[data-tour="header-balance"], [data-tour="sidebar-deposit"]',
+        title: '1. Tu Saldo Francho Shop',
+        description: 'Aquí arriba puedes ver tu saldo disponible en todo momento. Toca este botón o pulsa "Abrir Recarga" para ver las formas de pago y recargar saldo.',
+        tip: 'Aceptamos CUP por Transfermóvil y EnZona, Tarjeta CUP, USDT, TRX y más métodos con acreditación automática.',
+        actionLabel: 'Abrir Recarga ⚡',
+        actionType: 'open-topup'
+      },
+      {
+        id: 'step-amounts',
+        targetSelector: '[data-tour="topup-amount-chips"]',
+        title: '2. Elige el Monto a Recargar',
+        description: 'Selecciona una de las cantidades rápidas ($10, $25, $50, $100 USD...) o escribe la cantidad exacta que desees ingresar en el campo de texto.',
+        tip: 'A mayor recarga desbloqueas niveles con descuentos exclusivos en juegos, VPN y diamantes.',
+        actionLabel: 'Siguiente: Pagar ➔'
+      },
+      {
+        id: 'step-pay',
+        targetSelector: '[data-tour="topup-pay-btn"]',
+        title: '3. Confirma y Acredita',
+        description: 'Presiona este botón para generar tu orden de pago segura por pasarela oficial o manual. Al confirmarse el pago, tus fondos se acreditarán en segundos.',
+        tip: '¡Listo! Tu saldo estará disponible de inmediato para cualquier producto o servicio.',
+        actionLabel: '¡Entendido, Todo Claro! 🎉'
+      }
+    ]
+  },
+  profile: {
+    id: 'profile',
+    title: 'Guía de Mi Perfil y Seguridad',
+    badge: 'Mi Perfil',
+    steps: [
+      {
+        id: 'step-profile-card',
+        targetSelector: '[data-tour="profile-card"]',
+        title: '1. Tu Identidad y Foto de Avatar',
+        description: 'Aquí visualizas tu avatar, rol oficial en Francho Shop y fecha de registro. Pulsa "Editar" para actualizar tu foto, nombre visible o email de contacto.',
+        tip: 'Mantener tus datos al día ayuda a verificar tus compras y agilizar la atención de soporte.',
+        actionLabel: 'Siguiente: Saldo ➔'
+      },
+      {
+        id: 'step-profile-balance',
+        targetSelector: '[data-tour="profile-balance"]',
+        title: '2. Billetera y Saldo USDT',
+        description: 'Consulta tu saldo disponible en todo momento. Con el botón "Recargar" puedes añadir fondos con CUP (Transfermóvil, EnZona) o cripto.',
+        tip: 'El saldo se descuenta automáticamente con cada compra sin comisiones ocultas.',
+        actionLabel: 'Siguiente: Cuentas ➔'
+      },
+      {
+        id: 'step-profile-linked',
+        targetSelector: '[data-tour="profile-linked-accounts"]',
+        title: '3. Cuentas Vinculadas (Telegram & Email)',
+        description: 'Vincula tu cuenta de Telegram y correo electrónico para acceder desde cualquier celular o PC sin perder jamás tu historial ni saldo.',
+        tip: 'Tener ambos vinculados garantiza la máxima seguridad y recuperación rápida de tu cuenta.',
+        actionLabel: 'Siguiente: Contraseña ➔'
+      },
+      {
+        id: 'step-profile-password',
+        targetSelector: '[data-tour="profile-password"]',
+        title: '4. Contraseña de Acceso Web',
+        description: 'Configura o cambia tu contraseña de acceso para entrar directamente por la web desde cualquier navegador sin depender de enlaces externos.',
+        tip: 'Usa una clave de al menos 8 caracteres para proteger tus fondos con cifrado de grado bancario.',
+        actionLabel: 'Siguiente: Referidos ➔'
+      },
+      {
+        id: 'step-profile-referrals',
+        targetSelector: '[data-tour="profile-referrals"]',
+        title: '5. Programa de Referidos (Gana el 5%)',
+        description: 'Obtén tu enlace y código único de invitación. Por cada amigo que invites, ganarás el 5% de comisión de todas sus compras de por vida.',
+        tip: 'Tus ganancias se acreditan automáticamente a tu saldo y puedes retirarlas o comprar gratis.',
+        actionLabel: '¡Entendido, Todo Claro! 🎉'
+      }
+    ]
+  },
+  notifications: {
+    id: 'notifications',
+    title: 'Guía de Notificaciones y Alertas',
+    badge: 'Notificaciones',
+    steps: [
+      {
+        id: 'step-notifs-bell',
+        targetSelector: '[data-tour="header-notifications"]',
+        title: '1. Centro de Alertas y Campana',
+        description: 'Toca esta campana para abrir tu bandeja de avisos en tiempo real. La insignia verde te avisa cuántas novedades tienes sin leer.',
+        tip: 'Se actualiza automáticamente al segundo sin que tengas que refrescar la página.',
+        actionLabel: 'Abrir Bandeja 🔔',
+        actionType: 'open-notifications'
+      },
+      {
+        id: 'step-notifs-types',
+        targetSelector: '[data-tour="notifs-panel"], [data-tour="header-notifications"]',
+        title: '2. Compras, Recargas y Códigos',
+        description: 'Aquí recibes confirmaciones al instante: acreditación de saldo, entrega de cuentas streaming, pines de juegos y respuestas de soporte.',
+        tip: 'Cada notificación incluye un acceso directo a la orden para que copies tus códigos en 1 clic.',
+        actionLabel: 'Siguiente: Alertas Push ➔'
+      },
+      {
+        id: 'step-notifs-push',
+        targetSelector: '[data-tour="notifs-push-permission"], [data-tour="notifs-panel"], [data-tour="header-notifications"]',
+        title: '3. Alertas Push en tu Dispositivo',
+        description: 'Activa las notificaciones del navegador para recibir avisos instantáneos en tu móvil o PC incluso con la app cerrada cuando tu compra esté lista.',
+        tip: 'Es 100% privado y seguro. Solo recibirás avisos importantes de tus compras y promociones clave.',
+        actionLabel: '¡Entendido, Todo Claro! 🎉'
+      }
+    ]
+  },
+  orders: {
+    id: 'orders',
+    title: 'Guía de Mis Pedidos y Entregas',
+    badge: 'Mis Pedidos',
+    steps: [
+      {
+        id: 'step-orders-header',
+        targetSelector: '[data-tour="orders-header"], [data-tour="orders-list"]',
+        title: '1. Historial de Compras en Vivo',
+        description: 'Visualiza todas tus compras organizadas cronológicamente con su estado en vivo: "Completado", "Procesando" o "Pendiente".',
+        tip: 'Las recargas automáticas y licencias suelen entregarse en menos de 60 segundos.',
+        actionLabel: 'Siguiente: Entregas ➔'
+      },
+      {
+        id: 'step-orders-items',
+        targetSelector: '[data-tour="orders-item-first"], [data-tour="orders-list"]',
+        title: '2. Claves, Vouchers y Recibos',
+        description: 'Toca cualquier orden para desplegar los detalles: códigos de tarjetas de regalo, usuarios/contraseñas de streaming o perfiles VPN listos para copiar con 1 toque.',
+        tip: 'También puedes ver y descargar tu recibo oficial con código QR y detalles de la transacción.',
+        actionLabel: 'Siguiente: Garantía ➔'
+      },
+      {
+        id: 'step-orders-support',
+        targetSelector: '[data-tour="orders-support-btn"], [data-tour="orders-list"]',
+        title: '3. Garantía y Soporte Directo',
+        description: 'Si tienes cualquier duda o eventualidad con un producto, toca "Centro de Ayuda" o "Abrir Reclamo". Nuestro equipo revisará tu orden de inmediato con el ID cargado.',
+        tip: 'Francho Shop cuenta con garantía de devolución automática si un pedido no puede completarse.',
+        actionLabel: '¡Entendido, Todo Claro! 🎉'
+      }
+    ]
+  },
+  vpn: {
+    id: 'vpn',
+    title: 'Guía de VPN WireGuard',
+    badge: 'Comprar VPN',
+    steps: [
+      {
+        id: 'step-vpn-type',
+        targetSelector: '[data-tour="vpn-type-selector"]',
+        title: '1. Tipo de VPN (Normal vs Gaming)',
+        description: 'Elige VPN Normal para navegación libre y descargas sin censura, o VPN Gaming para servidores prioritarios de latencia ultra baja para tus partidas online.',
+        tip: 'Ambos planes incluyen ancho de banda ilimitado y la máxima velocidad de WireGuard.',
+        actionLabel: 'Siguiente: Planes ➔'
+      },
+      {
+        id: 'step-vpn-plans',
+        targetSelector: '[data-tour="vpn-plans-grid"]',
+        title: '2. Duración y Planes',
+        description: 'Elige entre 1 Mes, 3 Meses o 1 Año. Los planes trimestrales y anuales incluyen descuentos automáticos para que ahorres más.',
+        tip: 'Planes desde $1.00 USD/mes. Renovación flexible cuando tú decidas.',
+        actionLabel: 'Siguiente: Compra ➔'
+      },
+      {
+        id: 'step-vpn-buy',
+        targetSelector: '[data-tour="vpn-buy-button"]',
+        title: '3. Activación Instantánea',
+        description: 'Al pulsar "Comprar Configuración", tu archivo .conf y código QR se generan al instante para que te conectes en tu teléfono o PC en 1 minuto.',
+        tip: 'También puedes descargar o copiar tu configuración desde Mis Pedidos cuando quieras.',
+        actionLabel: '¡Entendido, Todo Claro! 🎉'
+      }
+    ]
+  }
+}
+
 function AiSupportWidget({ 
   me, 
   onLoginRequired, 
@@ -2694,13 +3579,216 @@ function AiSupportWidget({
   forcedRoomId = null, 
   onClearForcedRoom,
   isOpen: controlledOpen = undefined,
-  onToggleOpen = undefined
+  onToggleOpen = undefined,
+  screen = 'home',
+  onOpenTopUp = null,
+  onNavigateScreen = null,
+  onOpenNotifications = null
 }) {
   const [internalOpen, setInternalOpen] = useState(() => !!forcedRoomId)
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen
   const setOpen = (val) => {
     if (onToggleOpen) onToggleOpen(val)
     else setInternalOpen(val)
+  }
+
+  // Menú emergente de 3 opciones y Tour guiado por Franchito
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [activeTourId, setActiveTourId] = useState(null)
+  const [tourStep, setTourStep] = useState(0)
+  const [targetRect, setTargetRect] = useState(null)
+
+  const currentTour = activeTourId ? FRANCHITO_TOURS[activeTourId] : null
+  const currentStep = currentTour?.steps?.[tourStep] || null
+
+  const handleStartTour = (overrideId) => {
+    setMenuOpen(false)
+    const contextual = screen === 'profile' ? 'profile' : screen === 'orders' ? 'orders' : screen === 'vpn' ? 'vpn' : 'recharge'
+    const tourId = overrideId || contextual
+
+    if (tourId === 'profile') {
+      if (screen !== 'profile' && onNavigateScreen) {
+        onNavigateScreen('profile')
+      }
+    } else if (tourId === 'orders') {
+      if (screen !== 'orders' && onNavigateScreen) {
+        onNavigateScreen('orders')
+      }
+    } else if (tourId === 'notifications') {
+      if (onOpenNotifications) {
+        onOpenNotifications()
+      }
+    } else if (tourId === 'vpn') {
+      if (screen !== 'vpn' && onNavigateScreen) {
+        onNavigateScreen('vpn')
+      }
+    } else if (tourId === 'recharge') {
+      if (screen !== 'home' && onNavigateScreen) {
+        onNavigateScreen('home')
+      }
+    }
+
+    setActiveTourId(tourId)
+    setTourStep(0)
+  }
+
+  const handleNextTourStep = () => {
+    const tour = activeTourId ? FRANCHITO_TOURS[activeTourId] : null
+    if (!tour) return
+
+    if (activeTourId === 'recharge' && tourStep === 0) {
+      if (onOpenTopUp) onOpenTopUp()
+    } else if (activeTourId === 'notifications' && tourStep === 0) {
+      if (onOpenNotifications) onOpenNotifications()
+    }
+
+    if (tourStep < tour.steps.length - 1) {
+      setTourStep(s => s + 1)
+    } else {
+      setActiveTourId(null)
+      setTourStep(0)
+    }
+  }
+
+  const handlePrevTourStep = () => {
+    if (tourStep > 0) {
+      setTourStep(s => s - 1)
+    }
+  }
+
+  const handleCloseTour = () => {
+    setActiveTourId(null)
+    setTourStep(0)
+  }
+
+  // Rastreo y medición dinámica del elemento objetivo del tour
+  useEffect(() => {
+    if (!activeTourId) {
+      setTargetRect(null)
+      return
+    }
+
+    let cancelled = false
+    let attempts = 0
+
+    const tour = FRANCHITO_TOURS[activeTourId]
+    const step = tour?.steps?.[tourStep]
+    if (!step) return
+
+    const measure = () => {
+      if (cancelled) return
+      const selectors = step.targetSelector.split(',').map(s => s.trim())
+      let el = null
+      for (const sel of selectors) {
+        el = document.querySelector(sel)
+        if (el) break
+      }
+
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' })
+        const r = el.getBoundingClientRect()
+        setTargetRect({
+          top: Math.max(0, r.top),
+          left: Math.max(0, r.left),
+          width: r.width,
+          height: r.height,
+          bottom: r.bottom,
+          right: r.right
+        })
+      } else {
+        if (attempts < 15) {
+          attempts++
+          setTimeout(measure, 120)
+        } else {
+          setTargetRect(null)
+        }
+      }
+    }
+
+    measure()
+    const timers = [
+      setTimeout(measure, 60),
+      setTimeout(measure, 180),
+      setTimeout(measure, 350),
+      setTimeout(measure, 600)
+    ]
+
+    const handleUpdate = () => {
+      const selectors = step.targetSelector.split(',').map(s => s.trim())
+      let el = null
+      for (const sel of selectors) {
+        el = document.querySelector(sel)
+        if (el) break
+      }
+      if (el) {
+        const r = el.getBoundingClientRect()
+        setTargetRect({
+          top: Math.max(0, r.top),
+          left: Math.max(0, r.left),
+          width: r.width,
+          height: r.height,
+          bottom: r.bottom,
+          right: r.right
+        })
+      }
+    }
+
+    window.addEventListener('resize', handleUpdate)
+    window.addEventListener('scroll', handleUpdate, true)
+
+    return () => {
+      cancelled = true
+      timers.forEach(clearTimeout)
+      window.removeEventListener('resize', handleUpdate)
+      window.removeEventListener('scroll', handleUpdate, true)
+    }
+  }, [activeTourId, tourStep])
+
+  // Posicionamiento responsivo de la tarjeta de Franchito (nunca obstruye el elemento ni sale de pantalla)
+  const getDialogStyle = () => {
+    const isMobile = typeof window !== 'undefined' && window.innerWidth < 640
+
+    if (isMobile) {
+      const isTargetInTopHalf = targetRect ? (targetRect.top + targetRect.height / 2 < window.innerHeight / 2) : true
+      return {
+        position: 'fixed',
+        left: '12px',
+        right: '12px',
+        ...(isTargetInTopHalf ? { bottom: '24px' } : { top: '24px' }),
+        maxWidth: 'calc(100vw - 24px)',
+        zIndex: 1000002
+      }
+    }
+
+    if (!targetRect) {
+      return {
+        position: 'fixed',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        width: '380px',
+        zIndex: 1000002
+      }
+    }
+
+    const spaceBelow = window.innerHeight - targetRect.bottom
+    const spaceAbove = targetRect.top
+    const placeBelow = spaceBelow >= 260 || spaceBelow >= spaceAbove
+
+    const top = placeBelow 
+      ? Math.min(window.innerHeight - 300, targetRect.bottom + 16)
+      : Math.max(16, targetRect.top - 280)
+
+    const idealLeft = targetRect.left + (targetRect.width / 2) - 190
+    const left = Math.max(16, Math.min(window.innerWidth - 396, idealLeft))
+
+    return {
+      position: 'fixed',
+      top: `${top}px`,
+      left: `${left}px`,
+      width: '380px',
+      zIndex: 1000002
+    }
   }
 
   // Pestaña activa: 'ai' (por defecto) | 'human'
@@ -2842,8 +3930,8 @@ function AiSupportWidget({
     return () => clearInterval(interval)
   }, [open, supportRoomId, activeTab])
 
-  async function sendAiMessage() {
-    const text = input.trim()
+  async function sendAiMessage(customText = null) {
+    const text = (typeof customText === 'string' ? customText : input).trim()
     if (!text || loading) return
     if (isGuest) { onLoginRequired?.(); return }
     setInput(''); setErr(''); setLoading(true)
@@ -2863,6 +3951,30 @@ function AiSupportWidget({
     } finally {
       setLoading(false)
     }
+  }
+
+  const screenHelp = {
+    home: { title: 'Inicio y catálogo', focus: 'cómo encontrar productos, comparar opciones y comenzar una compra' },
+    profile: { title: 'Mi perfil', focus: 'saldo, datos de cuenta, seguridad y configuraciones disponibles' },
+    orders: { title: 'Mis pedidos', focus: 'estados, entregas, claves y cómo revisar una compra' },
+    support: { title: 'Soporte', focus: 'casos abiertos, mensajes y cuándo hablar con una persona' },
+    sms: { title: 'Números virtuales', focus: 'países, aplicaciones, operadores, SMS y condiciones de reembolso' },
+    smm: { title: 'Servicios SMM', focus: 'selección de servicio, enlace, cantidad y seguimiento del pedido' },
+    telegram: { title: 'Telegram', focus: 'Estrellas, Premium, datos requeridos y entrega' },
+    capcut: { title: 'CapCut', focus: 'planes disponibles, datos requeridos y entrega' },
+    vpn: { title: 'VPN WireGuard', focus: 'tipos de VPN, planes, activación y dónde encontrar la configuración' },
+    wallet: { title: 'Billetera', focus: 'saldo, movimientos, depósitos y uso del crédito' },
+    referrals: { title: 'Ganancias por compartir', focus: 'enlaces, comisiones, requisitos y saldo ganado' },
+  }
+
+  function explainCurrentScreen() {
+    if (isGuest) { onLoginRequired?.(); return }
+    const context = screenHelp[screen] || { title: 'esta pantalla', focus: 'las opciones visibles y el siguiente paso recomendado' }
+    const prompt = 'Estoy en la pantalla "' + context.title + '" de Francho Shop. Explícame de forma breve y clara qué puedo hacer aquí, para qué sirve cada sección importante y cuál es el siguiente paso recomendado. Enfócate en: ' + context.focus + '. No inventes botones ni datos que no estén disponibles.'
+    setMenuOpen(false)
+    setActiveTab('ai')
+    setOpen(true)
+    window.setTimeout(() => sendAiMessage(prompt), 120)
   }
 
   async function startHumanSupport(reasonNote = '') {
@@ -2913,56 +4025,200 @@ function AiSupportWidget({
 
   return (
     <>
-      {/* Botón flotante estilizado con efecto de baliza y brillo futurista */}
+      {/* Botón flotante y Menú de 3 Opciones de Franchito */}
       {!open && (
-        <div className="fixed bottom-[88px] right-4 z-40 flex items-center group">
-          <span className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[#0d141d]/90 border border-white/10 text-white/90 text-xs font-bold shadow-xl shadow-black/40 mr-2.5 opacity-90 group-hover:opacity-100 transition select-none">
-            <Sparkles className="w-3.5 h-3.5 text-accent animate-pulse" />
-            <span>Asistente IA</span>
-          </span>
+        <div className="fixed bottom-20 right-3.5 sm:bottom-24 sm:right-5 z-40 flex items-center">
+          {/* Si el menú emergente de 3 opciones está abierto */}
+          {menuOpen && (
+            <>
+              {/* Clic fuera para cerrar */}
+              <div 
+                className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[2px]" 
+                onClick={() => setMenuOpen(false)} 
+              />
+              
+              {/* Menú emergente de 3 opciones */}
+              <div className="absolute bottom-14 sm:bottom-16 right-0 z-50 w-64 sm:w-72 rounded-3xl bg-[#0a1017]/95 border border-emerald-500/40 p-3 shadow-2xl shadow-black/90 backdrop-blur-xl animate-in fade-in slide-in-from-bottom-3 duration-200">
+                {/* Cabecera de Franchito */}
+                <div className="flex items-center gap-2.5 pb-2.5 mb-2 border-b border-white/10">
+                  <div className="flex-shrink-0 flex items-center justify-center">
+                    <FranchitoAvatar size="sm" isSpeaking={true} />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-black text-white">Franchito</span>
+                      <span className="text-[8px] bg-emerald-500/20 text-emerald-300 px-1 py-0.5 rounded font-black border border-emerald-500/30">AI</span>
+                    </div>
+                    <p className="text-[10px] text-white/50 truncate">Asistente oficial · En línea</p>
+                  </div>
+                </div>
 
-          <button
-            onClick={() => isGuest ? onLoginRequired?.() : setOpen(true)}
-            className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-tr from-accent via-[#25e2b6] to-[#60ffd7] text-[#07110f] shadow-xl shadow-accent/25 hover:shadow-accent/40 active:scale-95 transition-all duration-300 border border-white/25 cursor-pointer"
-            title="Asistente de IA & Soporte 24/7"
-            aria-label="Abrir asistente de soporte"
-          >
-            <span className="absolute -inset-1 rounded-2xl bg-accent opacity-30 animate-pulse pointer-events-none" />
-            <span className="absolute -top-1 -right-1 flex h-4 w-4 z-10">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-              <span className="relative inline-flex rounded-full h-4 w-4 bg-emerald-500 border-2 border-[#0b1015]" />
+                {/* 3 Opciones principales solicitadas por el usuario */}
+                <div className="space-y-1.5">
+                  {/* Opción 1: Iniciar Chat */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false)
+                      if (isGuest) onLoginRequired?.()
+                      else setOpen(true)
+                    }}
+                    className="w-full text-left flex items-center gap-3 p-2.5 rounded-2xl bg-white/[0.04] hover:bg-emerald-500/10 border border-white/5 hover:border-emerald-500/30 transition-all active:scale-[0.98] group/opt cursor-pointer"
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/20 border border-emerald-500/30 flex items-center justify-center text-emerald-400 group-hover/opt:scale-110 transition-transform flex-shrink-0">
+                      <Bot className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-white group-hover/opt:text-emerald-300 transition-colors">Iniciar Chat</p>
+                      <p className="text-[10px] text-white/50 truncate">Chatea con Franchito o soporte</p>
+                    </div>
+                    <ChevronRight className="h-3.5 w-3.5 text-white/30 group-hover/opt:text-emerald-400 group-hover/opt:translate-x-0.5 transition-all" />
+                  </button>
+
+                  {/* Explicación conversacional de la vista actual */}
+                  <button
+                    type="button"
+                    data-action="explain-contextual"
+                    onClick={explainCurrentScreen}
+                    className="w-full text-left flex items-center gap-3 p-2.5 rounded-2xl bg-gradient-to-r from-emerald-500/15 to-cyan-500/25 border border-emerald-500/40 transition-all active:scale-[0.98] group/opt cursor-pointer shadow-sm shadow-emerald-500/10"
+                  >
+                    <div className="w-8 h-8 rounded-xl bg-emerald-400 text-[#07110f] flex items-center justify-center font-bold group-hover/opt:scale-110 transition-transform flex-shrink-0 shadow-md shadow-emerald-400/20">
+                      <MessageCircle className="h-4 w-4" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-white group-hover/opt:text-emerald-300 transition-colors">Explícame esta pantalla</p>
+                      <p className="text-[10px] text-emerald-300/80 truncate">Franchito te explica opciones y siguiente paso</p>
+                    </div>
+                    <ChevronRight className="h-3.5 w-3.5 text-emerald-300 group-hover/opt:translate-x-0.5 transition-all" />
+                  </button>
+
+                  {/* Selector rápido de guías interactivas (Perfil, Pedidos, Notificaciones, Recarga) */}
+                  <div className="pt-2 pb-0.5 border-t border-white/10 mt-1">
+                    <p className="text-[9px] uppercase tracking-wider font-extrabold text-white/40 mb-1.5 px-1 flex items-center justify-between">
+                      <span>Explicaciones Paso a Paso:</span>
+                    </p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      <button
+                        type="button"
+                        data-action="tour-profile"
+                        onClick={() => handleStartTour('profile')}
+                        className={`p-2 rounded-xl border text-[11px] font-bold flex items-center gap-2 transition active:scale-95 text-left cursor-pointer ${
+                          screen === 'profile'
+                            ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-200'
+                            : 'bg-white/[0.03] hover:bg-white/[0.08] border-white/5 text-white/80 hover:text-white'
+                        }`}
+                      >
+                        <User className="h-3.5 w-3.5 text-accent flex-shrink-0" />
+                        <span className="truncate">Mi Perfil</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        data-action="tour-orders"
+                        onClick={() => handleStartTour('orders')}
+                        className={`p-2 rounded-xl border text-[11px] font-bold flex items-center gap-2 transition active:scale-95 text-left cursor-pointer ${
+                          screen === 'orders'
+                            ? 'bg-emerald-500/20 border-emerald-500/50 text-emerald-200'
+                            : 'bg-white/[0.03] hover:bg-white/[0.08] border-white/5 text-white/80 hover:text-white'
+                        }`}
+                      >
+                        <ClipboardList className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0" />
+                        <span className="truncate">Mis Pedidos</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        data-action="tour-notifications"
+                        onClick={() => handleStartTour('notifications')}
+                        className="p-2 rounded-xl border border-white/5 bg-white/[0.03] hover:bg-white/[0.08] text-[11px] font-bold text-white/80 hover:text-white flex items-center gap-2 transition active:scale-95 text-left cursor-pointer"
+                      >
+                        <Bell className="h-3.5 w-3.5 text-amber-400 flex-shrink-0" />
+                        <span className="truncate">Notificaciones</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        data-action="tour-recharge"
+                        onClick={() => handleStartTour('recharge')}
+                        className={`p-2 rounded-xl border text-[11px] font-bold flex items-center gap-2 transition active:scale-95 text-left cursor-pointer ${
+                          screen === 'home'
+                            ? 'bg-emerald-500/15 border-emerald-500/40 text-emerald-200'
+                            : 'bg-white/[0.03] hover:bg-white/[0.08] border-white/5 text-white/80 hover:text-white'
+                        }`}
+                      >
+                        <Zap className="h-3.5 w-3.5 text-cyan-400 flex-shrink-0" />
+                        <span className="truncate">Recargas</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Opción 3: Ocultar */}
+                  <button
+                    type="button"
+                    onClick={() => setMenuOpen(false)}
+                    className="w-full text-left flex items-center gap-3 p-2 rounded-xl hover:bg-white/5 border border-transparent hover:border-white/5 transition-all active:scale-[0.98] group/opt cursor-pointer text-white/50 hover:text-white/80"
+                  >
+                    <div className="w-6 h-6 rounded-lg bg-white/5 flex items-center justify-center flex-shrink-0 text-white/40 group-hover/opt:text-white/70">
+                      <X className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold">Ocultar</p>
+                    </div>
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Etiqueta tooltip de escritorio */}
+          {!menuOpen && (
+            <span className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-[#090d14]/90 border border-white/10 text-white/90 text-[11px] font-bold shadow-lg shadow-black/60 mr-2 hover:border-emerald-500/40 transition select-none">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              <span>Franchito</span>
             </span>
-            <div className="relative flex items-center justify-center">
-              <Bot className="h-7 w-7 transition-transform group-hover:scale-110 drop-shadow" />
-            </div>
+          )}
+
+          {/* Botón flotante 100% libre de bordes / personaje flotando orgánicamente */}
+          <button
+            onClick={() => setMenuOpen(prev => !prev)}
+            className={`relative flex items-center justify-center p-0 bg-transparent border-0 outline-none cursor-pointer select-none transition-transform duration-300 ${
+              menuOpen ? 'scale-115 -translate-y-1' : 'hover:scale-110 active:scale-95'
+            }`}
+            title="Franchito Asistente e Interactivo"
+            aria-label="Abrir opciones de Franchito"
+          >
+            <FranchitoAvatar size="floating" isSpeaking={menuOpen} isThinking={loading} />
           </button>
         </div>
       )}
 
       {/* Ventana flotante del asistente responsiva y moderna */}
       {open && (
-        <div className="fixed inset-0 sm:inset-auto sm:right-4 sm:bottom-20 z-50 flex h-full w-full flex-col overflow-hidden bg-[#0c1219] sm:h-[620px] sm:max-h-[82vh] sm:w-[420px] sm:rounded-3xl border border-white/15 shadow-2xl shadow-black/80 animate-in fade-in duration-200">
+        <div className="fixed inset-0 sm:inset-auto sm:right-4 sm:bottom-20 z-50 flex h-full w-full flex-col overflow-hidden bg-[#0c1219] sm:h-[580px] sm:max-h-[82vh] sm:w-[390px] sm:rounded-3xl border border-white/15 shadow-2xl shadow-black/80 animate-in fade-in duration-200">
           
           {/* Cabecera futurista */}
           <div className="flex items-center justify-between border-b border-white/10 bg-gradient-to-r from-[#131b26] via-[#0f1722] to-[#131b26] px-4 py-3 relative flex-shrink-0">
-            <div className="flex min-w-0 items-center gap-3">
-              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-tr from-accent/30 via-accent/15 to-emerald-500/10 border border-accent/40 text-accent shadow-lg shadow-accent/10">
-                {activeTab === 'human' ? <Headphones className="h-5 w-5 text-accent drop-shadow" /> : <Bot className="h-5 w-5 text-accent drop-shadow" />}
-                <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 border border-[#0f1722]" />
-                </span>
+            <div className="flex min-w-0 items-center gap-2.5">
+              <div className="relative flex h-10 w-10 shrink-0 items-center justify-center">
+                {activeTab === 'human' ? (
+                  <div className="flex h-full w-full items-center justify-center rounded-full bg-accent/20 text-accent">
+                    <Headphones className="h-4 w-4" />
+                  </div>
+                ) : (
+                  <FranchitoAvatar size="md" isSpeaking={loading} />
+                )}
+                <span className="absolute bottom-0 right-0 h-2 w-2 rounded-full bg-emerald-400 border border-[#0f1722]" />
               </div>
               <div className="min-w-0">
                 <p className="truncate text-sm font-black text-white flex items-center gap-1.5">
-                  {activeTab === 'human' ? 'Soporte Humano' : 'Francho AI'}
-                  <span className="px-1.5 py-0.2 rounded text-[9px] bg-accent/20 text-accent font-black tracking-wider uppercase border border-accent/30">
-                    {activeTab === 'human' ? (supportTicketId ? `#${supportTicketId}` : 'En Vivo') : 'Copilot'}
+                  {activeTab === 'human' ? 'Soporte Humano' : 'Franchito'}
+                  <span className="px-1.5 py-0.5 rounded text-[9px] bg-emerald-500/20 text-emerald-300 font-black tracking-wider uppercase border border-emerald-500/40">
+                    {activeTab === 'human' ? (supportTicketId ? `#${supportTicketId}` : 'En Vivo') : 'IA 24/7'}
                   </span>
                 </p>
-                <p className="truncate text-[11px] text-white/50 flex items-center gap-1.5">
+                <p className="truncate text-[10px] text-white/50 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  {activeTab === 'human' ? 'Equipo Francho Shop activo' : 'Responde primero · 24/7'}
+                  {activeTab === 'human' ? 'Equipo Francho Shop activo' : 'Asistente oficial · En línea'}
                 </p>
               </div>
             </div>
@@ -3011,7 +4267,7 @@ function AiSupportWidget({
                 }`}
               >
                 <Bot className="h-3.5 w-3.5" />
-                <span>Asistente IA</span>
+                <span>Franchito</span>
               </button>
               <button
                 type="button"
@@ -3066,8 +4322,10 @@ function AiSupportWidget({
                           : 'bg-[#131c26] text-[#eef3f6] border border-white/8 rounded-tl-sm shadow-black/40'
                       }`}>
                         {!mine && (
-                          <div className="flex items-center gap-1.5 mb-1.5 text-[10px] text-accent font-black tracking-wider uppercase select-none">
-                            <Sparkles className="w-3 h-3 animate-pulse" /> Francho AI
+                          <div className="flex items-center gap-1.5 mb-1.5 text-[10px] text-emerald-400 font-bold select-none">
+                            <FranchitoAvatar size="xs" />
+                            <span>Franchito</span>
+                            <span className="text-[8px] bg-emerald-500/20 text-emerald-300 px-1 rounded border border-emerald-500/30 font-black">AI</span>
                           </div>
                         )}
                         <FormattedAiMessage text={text} isMine={mine} />
@@ -3075,6 +4333,32 @@ function AiSupportWidget({
                     </div>
                   )
                 })}
+
+                {/* Preguntas rápidas para Franchito si hay pocos mensajes */}
+                {messages.length <= 1 && !loading && (
+                  <div className="pt-2 pb-1 space-y-2 animate-in fade-in">
+                    <p className="text-[10px] uppercase tracking-wider font-bold text-white/40 px-1">
+                      💡 Preguntas rápidas para Franchito:
+                    </p>
+                    <div className="grid grid-cols-2 gap-1.5">
+                      {[
+                        { label: '👤 Mi Perfil', text: '¿Qué funciones y configuraciones puedo gestionar en mi perfil?' },
+                        { label: '🔔 Notificaciones', text: '¿Cómo funcionan las notificaciones y alertas en tiempo real?' },
+                        { label: '📦 Mis Pedidos', text: '¿Cómo rastreo mis pedidos y dónde veo mis claves de entrega?' },
+                        { label: '⚡ Recargar Saldo', text: '¿Cuáles son los métodos para recargar saldo por Transfermóvil, EnZona o cripto?' },
+                      ].map((chip, cIdx) => (
+                        <button
+                          key={cIdx}
+                          type="button"
+                          onClick={() => sendAiMessage(chip.text)}
+                          className="text-left p-2 rounded-xl border border-white/10 bg-white/[0.03] hover:bg-emerald-500/10 hover:border-emerald-500/30 text-[11px] text-white/80 hover:text-white transition active:scale-95 flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <span className="truncate">{chip.label}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Tarjeta de escalado si la IA sugiere pasar con soporte o el usuario tiene dudas complejas */}
                 {needsHandoffPrompt && (
@@ -3101,13 +4385,14 @@ function AiSupportWidget({
                 {/* Animación de pensando */}
                 {loading && (
                   <div className="flex justify-start animate-in fade-in">
-                    <div className="max-w-[88%] rounded-2xl px-4 py-2.5 bg-[#131c26] text-white/60 border border-white/8 flex items-center gap-2 rounded-tl-sm shadow-md">
+                    <div className="max-w-[88%] rounded-2xl px-3.5 py-2 bg-[#131c26] text-white/70 border border-white/8 flex items-center gap-2 rounded-tl-sm shadow-md">
+                      <FranchitoAvatar size="xs" isThinking={true} />
                       <div className="flex items-center gap-1">
-                        <span className="w-1.5 h-1.5 rounded-full bg-accent animate-bounce" style={{ animationDelay: '0ms' }} />
-                        <span className="w-1.5 h-1.5 rounded-full bg-accent animate-bounce" style={{ animationDelay: '150ms' }} />
-                        <span className="w-1.5 h-1.5 rounded-full bg-accent animate-bounce" style={{ animationDelay: '300ms' }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '0ms' }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '150ms' }} />
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '300ms' }} />
                       </div>
-                      <span className="text-[11px] text-white/50">Francho pensando...</span>
+                      <span className="text-[11px] text-white/50">Franchito está escribiendo...</span>
                     </div>
                   </div>
                 )}
@@ -3191,7 +4476,7 @@ function AiSupportWidget({
                 }}
                 rows={1}
                 maxLength={1200}
-                placeholder={activeTab === 'human' ? 'Escribe tu mensaje para soporte humano...' : 'Pregúntame por saldo, pedidos, catálogo...'}
+                placeholder={activeTab === 'human' ? 'Escribe tu mensaje para soporte humano...' : 'Pregúntale a Franchito sobre saldo, pedidos, VPN...'}
                 className="max-h-28 min-h-10 flex-1 resize-none bg-transparent px-3 py-2 text-sm text-white placeholder:text-white/35 outline-none"
               />
               <button 
@@ -3206,28 +4491,208 @@ function AiSupportWidget({
           </div>
         </div>
       )}
+
+      {/* Tour interactivo paso a paso guiado por Franchito */}
+      {activeTourId && currentStep && (
+        <div className="fixed inset-0 pointer-events-none" style={{ zIndex: 1000000 }}>
+          {/* Recorte SVG con spotlight oscuro en el resto de la pantalla */}
+          <svg className="fixed inset-0 w-full h-full pointer-events-none" style={{ zIndex: 1000000 }}>
+            <defs>
+              <mask id="tour-spotlight-mask">
+                <rect x="0" y="0" width="100%" height="100%" fill="white" />
+                {targetRect && (
+                  <rect
+                    x={targetRect.left - 6}
+                    y={targetRect.top - 6}
+                    width={targetRect.width + 12}
+                    height={targetRect.height + 12}
+                    rx="16"
+                    ry="16"
+                    fill="black"
+                  />
+                )}
+              </mask>
+            </defs>
+            <rect
+              x="0"
+              y="0"
+              width="100%"
+              height="100%"
+              fill="rgba(4, 8, 14, 0.78)"
+              mask="url(#tour-spotlight-mask)"
+            />
+          </svg>
+
+          {/* Borde brillante pulsante de neón esmeralda alrededor del elemento enfocado */}
+          {targetRect && (
+            <div
+              className="fixed pointer-events-none transition-all duration-300 ease-out"
+              style={{
+                zIndex: 1000001,
+                left: `${targetRect.left - 6}px`,
+                top: `${targetRect.top - 6}px`,
+                width: `${targetRect.width + 12}px`,
+                height: `${targetRect.height + 12}px`,
+              }}
+            >
+              <div className="w-full h-full rounded-2xl border-2 border-emerald-400 shadow-[0_0_25px_rgba(52,211,153,0.85),inset_0_0_15px_rgba(52,211,153,0.35)] animate-pulse" />
+            </div>
+          )}
+
+          {/* Tarjeta flotante interactiva de Franchito */}
+          <div 
+            className="pointer-events-auto transition-all duration-300 ease-out"
+            style={getDialogStyle()}
+          >
+            <div className="rounded-3xl bg-[#090f18]/95 border border-emerald-400/40 p-4 sm:p-5 shadow-[0_15px_50px_rgba(0,0,0,0.95),0_0_35px_rgba(16,185,129,0.25)] backdrop-blur-xl text-white">
+              {/* Encabezado de la tarjeta con Franchito y Paso */}
+              <div className="flex items-center justify-between pb-3 mb-3 border-b border-white/10">
+                <div className="flex items-center gap-2">
+                  <div className="flex-shrink-0 flex items-center justify-center">
+                    <FranchitoAvatar size="sm" isSpeaking={true} />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-black text-white">Franchito Guía</span>
+                      <span className="text-[8px] bg-emerald-500/25 text-emerald-300 px-1.5 py-0.5 rounded font-black border border-emerald-500/40 uppercase">
+                        {currentTour.badge || 'Paso a paso'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-black text-emerald-300 bg-emerald-500/15 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                    Paso {tourStep + 1} de {currentTour.steps.length}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={handleCloseTour}
+                    className="p-1 rounded-xl bg-white/5 hover:bg-white/10 text-white/50 hover:text-white transition active:scale-95 cursor-pointer"
+                    title="Cerrar guía"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Título y explicación del paso */}
+              <div className="space-y-1.5">
+                <h3 className="text-sm sm:text-base font-black text-white flex items-center gap-2">
+                  {currentStep.title}
+                </h3>
+                <p className="text-xs sm:text-[13px] text-white/80 leading-relaxed">
+                  {currentStep.description}
+                </p>
+
+                {currentStep.tip && (
+                  <div className="mt-2.5 p-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/25 text-[11px] text-emerald-300 flex items-start gap-2 leading-relaxed">
+                    <Sparkles className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0 mt-0.5" />
+                    <span>{currentStep.tip}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Barra inferior: Progreso + Botones de acción */}
+              <div className="mt-4 pt-3 border-t border-white/10 flex items-center justify-between gap-2">
+                {/* Indicador de bolitas */}
+                <div className="flex items-center gap-1.5">
+                  {currentTour.steps.map((_, idx) => (
+                    <span
+                      key={idx}
+                      className={`h-1.5 rounded-full transition-all duration-300 ${
+                        idx === tourStep
+                          ? 'w-5 bg-emerald-400 shadow-sm shadow-emerald-400/50'
+                          : 'w-1.5 bg-white/20'
+                      }`}
+                    />
+                  ))}
+                </div>
+
+                {/* Controles de avance / retroceso */}
+                <div className="flex items-center gap-2">
+                  {tourStep > 0 && (
+                    <button
+                      type="button"
+                      onClick={handlePrevTourStep}
+                      className="px-3 py-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-bold text-white/80 hover:text-white transition active:scale-95 cursor-pointer"
+                    >
+                      Atrás
+                    </button>
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={handleNextTourStep}
+                    className="px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-emerald-400 to-[#1fcfa4] hover:from-emerald-300 hover:to-emerald-400 text-[#07110f] text-xs font-black shadow-md shadow-emerald-500/20 active:scale-95 transition-all flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <span>{currentStep.actionLabel || (tourStep === currentTour.steps.length - 1 ? '¡Listo! 🎉' : 'Siguiente ➔')}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Enlace rápido para cambiar al chat */}
+              <div className="mt-2 text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleCloseTour()
+                    if (isGuest) onLoginRequired?.()
+                    else setOpen(true)
+                  }}
+                  className="text-[11px] font-semibold text-white/50 hover:text-emerald-300 transition-colors inline-flex items-center gap-1 cursor-pointer"
+                >
+                  <Bot className="h-3 w-3" />
+                  <span>¿Tienes dudas? Pregúntale a Franchito en el chat</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   )
 }
 
+const FS_LOADING_MESSAGES = [
+  { main: "Iniciando Francho Shop...", sub: "Tu plataforma de recargas directas en Cuba" },
+  { main: "Cargando catálogo y ofertas...", sub: "Diamantes Free Fire, Robux, Gift Cards y más" },
+  { main: "Sincronizando precios en vivo...", sub: "Pagos directos en CUP con Transfermóvil y EnZona" },
+  { main: "Conectando servidores seguros...", sub: "Entrega automática en segundos las 24 horas" },
+  { main: "Preparando tu experiencia...", sub: "Todo listo en un instante" },
+]
+
 function LoadingScreen() {
-  // Logo de Francho Shop — el icono de tu marca.
-  // Para usar tu logo real: súbelo al bot con /icons o pon la URL aquí
-  const LOGO_URL = "/api/icons/franchoshop.jpg"
+  const LOGO_URL = "/logo-splash.webp"
+  const [msgIdx, setMsgIdx] = useState(0)
+  const [fade, setFade] = useState(true)
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setFade(false)
+      setTimeout(() => {
+        setMsgIdx((prev) => (prev + 1) % FS_LOADING_MESSAGES.length)
+        setFade(true)
+      }, 250)
+    }, 2200)
+    return () => clearInterval(timer)
+  }, [])
+
+  const currentMsg = FS_LOADING_MESSAGES[msgIdx] || FS_LOADING_MESSAGES[0]
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-bg">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-bg px-4 select-none">
       <style>{`
         @keyframes pulse-green {
           0%, 100% {
             box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7),
-                        0 0 0 0 rgba(34, 197, 94, 0.5),
-                        0 0 30px 5px rgba(34, 197, 94, 0.4);
+                        0 0 0 0 rgba(34, 197, 94, 0.4),
+                        0 0 25px 5px rgba(34, 197, 94, 0.35);
           }
           50% {
-            box-shadow: 0 0 0 15px rgba(34, 197, 94, 0),
-                        0 0 0 30px rgba(34, 197, 94, 0),
-                        0 0 50px 15px rgba(34, 197, 94, 0.6);
+            box-shadow: 0 0 0 12px rgba(34, 197, 94, 0),
+                        0 0 0 24px rgba(34, 197, 94, 0),
+                        0 0 40px 12px rgba(34, 197, 94, 0.55);
           }
         }
         @keyframes spin-slow {
@@ -3235,46 +4700,67 @@ function LoadingScreen() {
           to { transform: rotate(360deg); }
         }
         .logo-pulse {
-          animation: pulse-green 1.5s ease-in-out infinite;
+          animation: pulse-green 1.8s ease-in-out infinite;
         }
         .ring-spin {
           animation: spin-slow 3s linear infinite;
         }
       `}</style>
 
-      <div className="relative">
-        {/* Anillo giratorio externo */}
-        <div className="absolute inset-0 -m-4 ring-spin pointer-events-none">
-          <div className="w-32 h-32 rounded-full border-2 border-transparent
-                          border-t-green-400 border-r-green-400/30"></div>
-        </div>
+      <div className="relative w-28 h-28 flex items-center justify-center">
+        {/* Halo difuso de luz */}
+        <div className="absolute inset-0 rounded-full bg-emerald-500/15 blur-lg animate-pulse pointer-events-none"></div>
+
+        {/* Pista sutil estática concéntrica */}
+        <div className="absolute inset-0 rounded-full border border-green-400/15 pointer-events-none"></div>
+
+        {/* Anillo orbital giratorio perfectamente centrado */}
+        <div className="absolute inset-0 rounded-full border-2 border-transparent border-t-green-400 border-r-green-400/35 ring-spin pointer-events-none"></div>
 
         {/* Logo circular con luz verde pulsante */}
-        <div className="logo-pulse w-24 h-24 rounded-full overflow-hidden
-                        bg-gradient-to-br from-accent to-accent2
+        <div className="logo-pulse relative w-24 h-24 rounded-full overflow-hidden
+                        bg-[#10141d]
                         flex items-center justify-center
-                        border-4 border-green-400/80">
+                        border-2 border-green-400/90 shadow-2xl">
           <img
             src={LOGO_URL}
             alt="Francho Shop"
+            width="96"
+            height="96"
+            loading="eager"
+            fetchpriority="high"
+            decoding="async"
             className="w-full h-full object-cover"
             onError={(e) => {
-              // Fallback: emoji shop si no hay logo subido
-              e.target.style.display = 'none'
-              e.target.parentElement.innerHTML += '<span class="text-5xl">FS</span>'
+              if (e.target.src !== window.location.origin + '/franchoshop.jpg') {
+                e.target.src = '/franchoshop.jpg'
+              }
             }}
           />
         </div>
       </div>
 
-      {/* Marca */}
-      <h1 className="mt-8 text-2xl font-bold bg-gradient-to-r from-accent to-accent2 bg-clip-text text-transparent">
+      {/* Marca con gradiente */}
+      <h1 className="mt-7 text-2xl font-black tracking-wide bg-gradient-to-r from-accent to-accent2 bg-clip-text text-transparent">
         Francho Shop
       </h1>
-      <p className="text-sm text-white/50 mt-2">Cargando recargas...</p>
+
+      {/* Mensajes Dinámicos con Transición Suave */}
+      <div className="text-center mt-2 min-h-[44px] flex flex-col items-center justify-center max-w-xs">
+        <p className={`text-sm font-bold text-white/90 transition-all duration-300 transform ${
+          fade ? 'opacity-100 translate-y-0' : 'opacity-0 -translate-y-1'
+        }`}>
+          {currentMsg.main}
+        </p>
+        <p className={`text-[11px] text-white/50 transition-all duration-300 transform mt-0.5 ${
+          fade ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1'
+        }`}>
+          {currentMsg.sub}
+        </p>
+      </div>
 
       {/* Indicador de carga sutil */}
-      <div className="flex gap-1 mt-4">
+      <div className="flex gap-1.5 mt-4">
         <div className="w-2 h-2 rounded-full bg-green-400 animate-bounce" style={{ animationDelay: '0ms' }}></div>
         <div className="w-2 h-2 rounded-full bg-green-400 animate-bounce" style={{ animationDelay: '150ms' }}></div>
         <div className="w-2 h-2 rounded-full bg-green-400 animate-bounce" style={{ animationDelay: '300ms' }}></div>
@@ -3663,7 +5149,7 @@ function Header({ me, onBack, onProfile, onTopUp, onOpenNotifications, unreadNot
         </div>
         <div className="flex items-center gap-2">
           <div className="text-right">
-            <button onClick={onTopUp} className="card px-3 py-2 text-right active:scale-95 transition">
+            <button onClick={onTopUp} data-tour="header-balance" className="card px-3 py-2 text-right active:scale-95 transition">
               <span className="block text-[10px] text-white/50 leading-none mb-1">Saldo</span>
               <span className="block text-lg font-bold leading-none">${me.balance.toFixed(2)}</span>
             </button>
@@ -3675,6 +5161,7 @@ function Header({ me, onBack, onProfile, onTopUp, onOpenNotifications, unreadNot
           </div>
           {onOpenNotifications && (
             <button onClick={onOpenNotifications}
+              data-tour="header-notifications"
               className="relative w-10 h-10 rounded-full bg-card hover:bg-white/10 flex items-center justify-center active:scale-90 transition flex-shrink-0">
               <Bell className="h-5 w-5 text-white" aria-hidden="true" />
               {unreadNotifsCount > 0 && (
@@ -3685,10 +5172,12 @@ function Header({ me, onBack, onProfile, onTopUp, onOpenNotifications, unreadNot
             </button>
           )}
           {onProfile && (
-            <button onClick={onProfile}
-              className="w-10 h-10 rounded-full bg-gradient-to-br from-accent to-accent2 flex items-center justify-center active:scale-90 transition flex-shrink-0">
-              <User className="h-5 w-5" aria-hidden="true" />
-            </button>
+            <AccountStatusRing profile={me}>
+              <button onClick={onProfile}
+                className="w-10 h-10 rounded-full bg-gradient-to-br from-accent to-accent2 flex items-center justify-center active:scale-90 transition flex-shrink-0">
+                <User className="h-5 w-5" aria-hidden="true" />
+              </button>
+            </AccountStatusRing>
           )}
         </div>
       </div>
@@ -4006,6 +5495,11 @@ function SellerStoreScreen({ slug, me, onLoginRequired, onBack }) {
 function HomeReviewsPanel({ onNav }) {
   const [reviews, setReviews] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [trackIndex, setTrackIndex] = useState(1)
+  const [transitionEnabled, setTransitionEnabled] = useState(true)
+  const [isInteracting, setIsInteracting] = useState(false)
+  const pointerStartX = useRef(null)
+  const pausedUntil = useRef(0)
 
   useEffect(() => {
     api.publicReviews({ limit: 10 })
@@ -4019,23 +5513,87 @@ function HomeReviewsPanel({ onNav }) {
       })
   }, [])
 
+  const items = reviews?.items || []
+  const hasMultipleReviews = items.length > 1
+  const trackItems = hasMultipleReviews ? [items[items.length - 1], ...items, items[0]] : items
+  const displayTrackIndex = hasMultipleReviews ? trackIndex : 0
+  const activeIndex = hasMultipleReviews
+    ? (trackIndex === 0 ? items.length - 1 : trackIndex === items.length + 1 ? 0 : trackIndex - 1)
+    : 0
+
+  const pauseAutoplay = (milliseconds = 5000) => {
+    pausedUntil.current = Date.now() + milliseconds
+  }
+
+  const moveSlide = (direction) => {
+    if (!hasMultipleReviews) return
+    setTransitionEnabled(true)
+    setTrackIndex((current) => current + direction)
+  }
+
+  const goToSlide = (index) => {
+    if (!hasMultipleReviews || index === activeIndex) return
+    pauseAutoplay()
+    setTransitionEnabled(true)
+    setTrackIndex(index + 1)
+  }
+
+  const handleTrackTransitionEnd = () => {
+    if (!hasMultipleReviews) return
+    if (trackIndex === 0 || trackIndex === items.length + 1) {
+      setTransitionEnabled(false)
+      setTrackIndex(trackIndex === 0 ? items.length : 1)
+      requestAnimationFrame(() => requestAnimationFrame(() => setTransitionEnabled(true)))
+    }
+  }
+
+  const handlePointerDown = (event) => {
+    pointerStartX.current = event.clientX
+    setIsInteracting(true)
+    pauseAutoplay()
+  }
+
+  const handlePointerUp = (event) => {
+    const startX = pointerStartX.current
+    pointerStartX.current = null
+    setIsInteracting(false)
+    pauseAutoplay(3500)
+    if (startX === null) return
+    const distance = event.clientX - startX
+    if (Math.abs(distance) < 36) return
+    moveSlide(distance < 0 ? 1 : -1)
+  }
+
+  useEffect(() => {
+    setTrackIndex(1)
+    setTransitionEnabled(true)
+  }, [items.length])
+
+  useEffect(() => {
+    if (!hasMultipleReviews) return undefined
+    const interval = window.setInterval(() => {
+      if (!isInteracting && Date.now() >= pausedUntil.current) moveSlide(1)
+    }, 5000)
+    return () => window.clearInterval(interval)
+  }, [hasMultipleReviews, isInteracting])
+
   if (loading) return <div className="p-4 text-center text-xs text-white/40">Cargando opiniones de clientes...</div>
-  if (!reviews || !reviews.items || reviews.items.length === 0) return null
+  if (items.length === 0) return null
 
   return (
     <div className="mt-8 border-t border-white/10 pt-6">
       <div className="mb-4">
         <h2 className="text-base font-bold text-white flex items-center gap-2">
           <BadgeCheck className="h-5 w-5 text-green-400" />
-          Qué piensan nuestros usuarios de nuestros servicios
+          Opiniones de clientes
         </h2>
         <div className="mt-1 flex items-center gap-2 text-xs">
           <span className="text-green-400 font-semibold">✓ Excelente reputación</span>
           <div className="flex items-center gap-0.5 text-green-400 font-bold">
             <span>{Number(reviews.avg_rating || 5.0).toFixed(1)}</span>
-            <span className="ml-1 text-green-400">
+            <span className="fs-review-stars ml-1" aria-label={`${Number(reviews.avg_rating || 5.0).toFixed(1)} de 5 estrellas`}>
               {[1, 2, 3, 4, 5].map((star) => (
-                <span key={star} className={star <= Math.round(reviews.avg_rating || 5.0) ? "text-green-400" : "text-white/20"}>
+                <span key={star} className={star <= Math.round(reviews.avg_rating || 5.0) ? "fs-review-star" : "fs-review-star fs-review-star-muted"}>
                   ★
                 </span>
               ))}
@@ -4045,29 +5603,76 @@ function HomeReviewsPanel({ onNav }) {
         </div>
       </div>
 
-      <div className="space-y-3 max-h-[360px] overflow-y-auto pr-1">
-        {reviews.items.map((r, idx) => (
-          <div key={idx} className="rounded-xl border border-white/5 bg-card p-3 shadow-sm">
-            <div className="mb-1 flex items-center justify-between gap-2">
-              <p className="truncate text-xs font-bold text-white/70">{r.customer_name || 'Usuario'}</p>
-              <div className="flex text-[10px] text-green-400">
-                {'★'.repeat(Number(r.rating || 5))}
-              </div>
-            </div>
-            {r.comment ? (
-              <p className="text-xs text-white/80 leading-normal">{r.comment}</p>
-            ) : (
-              <p className="text-xs italic text-white/40">Valoró con {r.rating} estrellas</p>
-            )}
-            <p className="mt-1.5 text-[9px] text-white/35 font-medium truncate">
-              Compra: {r.product_name || 'Producto'}
-            </p>
-          </div>
-        ))}
+      <div
+        className="overflow-hidden rounded-xl"
+        onMouseEnter={() => setIsInteracting(true)}
+        onMouseLeave={() => { setIsInteracting(false); pauseAutoplay(1800) }}
+        onFocusCapture={() => { setIsInteracting(true); pauseAutoplay() }}
+        onBlurCapture={() => { setIsInteracting(false); pauseAutoplay(1800) }}
+      >
+        <div
+          className={`flex ${transitionEnabled ? 'transition-transform duration-500 ease-out' : ''}`}
+          onTransitionEnd={handleTrackTransitionEnd}
+          onPointerDown={handlePointerDown}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={() => { pointerStartX.current = null; setIsInteracting(false); pauseAutoplay(1800) }}
+          style={{ transform: `translateX(-${displayTrackIndex * 100}%)`, touchAction: 'pan-y' }}
+        >
+          {trackItems.map((r, idx) => {
+            const imageUrl = r.image_url || r.product_image_url || r.avatar_url || r.customer_avatar_url
+            const productName = String(r.product_name || '').trim()
+            const hasProductName = productName && !/^producto( digital)?$/i.test(productName)
+            return (
+              <article key={`${r.id || r.created_at || r.customer_name || 'review'}-${idx}`} className="w-full shrink-0 px-px">
+                <div className="fs-review-card-3d min-h-[152px] rounded-xl border border-white/5 bg-card p-4 sm:min-h-[142px] sm:p-5">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      {imageUrl ? (
+                        <img src={imageUrl} alt="" className="h-9 w-9 shrink-0 rounded-full object-cover ring-1 ring-white/10" />
+                      ) : (
+                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-green-500/15 text-xs font-black text-green-300 ring-1 ring-green-400/20">
+                          {(r.customer_name || 'U').trim().charAt(0).toUpperCase()}
+                        </span>
+                      )}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-bold text-white/80">{r.customer_name || 'Usuario'}</p>
+                        <p className="truncate text-[10px] font-medium text-white/35">{r.verified_label || 'Compra verificada'}</p>
+                      </div>
+                    </div>
+                    <div className="fs-review-stars flex shrink-0 text-xs tracking-wide" aria-label={`${r.rating || 5} de 5 estrellas`}>
+                      {[1, 2, 3, 4, 5].map((star) => <span key={star} className={star <= Number(r.rating || 5) ? 'fs-review-star' : 'fs-review-star fs-review-star-muted'}>★</span>)}
+                    </div>
+                  </div>
+                  {r.comment ? (
+                    <p className="mt-3 line-clamp-3 text-sm leading-relaxed text-white/80">{r.comment}</p>
+                  ) : (
+                    <p className="mt-3 text-sm italic leading-relaxed text-white/40">Valoró con {r.rating} estrellas</p>
+                  )}
+                  <p className="mt-3 truncate text-[11px] font-medium text-white/40">{hasProductName ? `Compra: ${productName}` : 'Compra verificada'}</p>
+                </div>
+              </article>
+            )
+          })}
+        </div>
       </div>
 
+      {hasMultipleReviews && (
+        <div className="mt-3 flex items-center justify-center gap-1.5" aria-label="Navegación de valoraciones">
+          {items.map((review, index) => (
+            <button
+              key={`${review.id || review.created_at || review.customer_name || 'review-dot'}-${index}`}
+              type="button"
+              aria-label={`Ver valoración ${index + 1}`}
+              aria-current={activeIndex === index ? 'true' : undefined}
+              onClick={() => goToSlide(index)}
+              className={`h-1.5 rounded-full transition-all duration-300 ${activeIndex === index ? 'w-6 bg-green-400' : 'w-1.5 bg-white/25 hover:bg-white/45'}`}
+            />
+          ))}
+        </div>
+      )}
+
       <div className="mt-4 rounded-xl border border-dashed border-green-500/20 bg-green-500/5 p-3 text-center">
-        <p className="text-xs text-white/60 mb-2.5">¿Has comprado con nosotros y quieres valorar tu experiencia?</p>
+        <p className="text-xs text-white/60 mb-2.5">¿Compraste? Cuéntanos tu experiencia.</p>
         <button
           onClick={() => onNav?.('orders')}
           className="w-full rounded-lg bg-green-500/25 border border-green-400/30 px-3 py-2 text-xs font-bold text-green-400 active:scale-[0.98] transition-all"
@@ -4497,7 +6102,7 @@ function SmsNumbersScreen({ me, onBack, onLoginRequired, onBought }) {
           <div className="min-w-0"><p className="truncate text-xs font-bold text-white/80">{selectedService?.name || 'Selecciona app'}</p><p className="text-[10px] text-white/40">Stock {stock} · {operator === 'any' ? 'Operador automático' : operator}</p></div>
           <p className="text-xl font-black text-accent">${price.toFixed(2)}</p>
         </div>
-        <button onClick={buy} disabled={buying || !country || !service || price <= 0} className="w-full rounded-xl bg-accent py-3 text-sm font-black text-bg active:scale-95 disabled:opacity-50">{buying ? 'Comprando...' : 'Comprar número'}</button>
+        <button onClick={buy} disabled={buying || !country || !service || price <= 0} className="fs-btn-glossy w-full rounded-xl py-3 text-sm font-black text-bg disabled:opacity-50">{buying ? 'Comprando...' : 'Comprar número'}</button>
       </div>
 
       {operatorsOpen && (
@@ -4736,7 +6341,7 @@ function SmmServicesScreen({ me, onBack, onLoginRequired, onBought }) {
         </main>
         <div className="fixed inset-x-0 bottom-0 z-40 mx-auto max-w-lg border-t border-white/10 bg-bg/95 p-3 pb-[calc(env(safe-area-inset-bottom)+12px)] shadow-2xl shadow-black/50 backdrop-blur">
           <div className="mb-2 flex items-center justify-between gap-3"><span className="text-xs text-white/45">{isMinimumApplied ? 'Total a pagar · mínimo aplicado' : 'Total a pagar'}</span><span className="text-2xl font-black text-accent">${total.toFixed(2)}</span></div>
-          <button onClick={buy} disabled={buying || !link || qty < selected.min || qty > selected.max || dripInvalid} className="w-full rounded-xl bg-accent py-3 text-sm font-black text-bg active:scale-95 disabled:opacity-50">{buying ? 'Comprando...' : 'Confirmar compra'}</button>
+          <button onClick={buy} disabled={buying || !link || qty < selected.min || qty > selected.max || dripInvalid} className="fs-btn-glossy w-full rounded-xl py-3 text-sm font-black text-bg disabled:opacity-50">{buying ? 'Comprando...' : 'Confirmar compra'}</button>
         </div>
       </div>
     )
@@ -4760,7 +6365,7 @@ function SmmServicesScreen({ me, onBack, onLoginRequired, onBought }) {
             <div className="relative flex min-h-[112px] items-center p-4"><p className="text-xs leading-relaxed text-white/80">Elige la plataforma, revisa el servicio y compra con tu saldo interno.</p></div>
           </div>
         </section>
-        <div className="mb-3 grid grid-cols-3 gap-2 flex-shrink-0">
+        <div className="mb-3 grid grid-cols-3 gap-1.5 flex-shrink-0">
           {platforms.map(item => <button key={item.name} onClick={() => { setPlatform(item.name); setQuery('') }} className={`min-w-0 rounded-xl border px-2 py-2 text-center active:scale-[0.99] ${platform === item.name ? 'border-accent bg-accent/12' : 'border-white/10 bg-card'}`}><span className="block truncate text-[11px] font-black leading-tight">{item.name}</span><span className="mt-0.5 block truncate text-[9px] text-white/40">{item.count} servicios</span></button>)}
         </div>
         <div className="relative mb-3 flex-shrink-0"><Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/35" /><input value={query} onChange={e => setQuery(e.target.value)} placeholder="Buscar servicio o ID" className="w-full rounded-lg border border-white/10 bg-card py-2.5 pl-9 pr-3 text-sm outline-none focus:border-accent" /></div>
@@ -4987,6 +6592,8 @@ function FzrFullCatalogScreen({
   const [copiedField, setCopiedField] = useState(null)
   const [copiedCode, setCopiedCode] = useState(false)
   const [cupSettings, setCupSettings] = useState(null)
+  const [cupSettingsError, setCupSettingsError] = useState('')
+  const [pendingCupOrder, setPendingCupOrder] = useState(null)
   const [paymentMethod, setPaymentMethod] = useState('balance')
   const [cupReference, setCupReference] = useState('')
   const [proofFile, setProofFile] = useState(null)
@@ -5009,13 +6616,18 @@ function FzrFullCatalogScreen({
     }
   }, [step, onBack])
 
-  useEffect(() => {
-    api.cupPaymentSettings()
-      .then(res => {
-        if (res && res.enabled) setCupSettings(res)
-      })
-      .catch(() => {})
-  }, [])
+  const loadCupSettings = async () => {
+    setCupSettingsError('')
+    try {
+      const res = await api.cupPaymentSettings()
+      setCupSettings(res?.enabled ? res : null)
+    } catch (error) {
+      setCupSettings(null)
+      setCupSettingsError(error?.message || 'Error temporal al cargar la configuración de CUP.')
+    }
+  }
+
+  useEffect(() => { loadCupSettings() }, [])
 
   useEffect(() => {
     if (!proofFile) {
@@ -5191,8 +6803,8 @@ function FzrFullCatalogScreen({
     }, 0)
   }, [isSteamTopup, steamCost, isStars, primaryOffer, currentQuantity, selectedItemsList])
 
-  const cardRate = Number(cupSettings?.transfer_rate) || 1190.90909091
-  const mobileRate = Number(cupSettings?.mobile_rate) || 643.73464374
+  const cardRate = Number(cupSettings?.transfer_rate) || 0
+  const mobileRate = Number(cupSettings?.mobile_rate) || 0
   const cardCupAmount = Math.round((effectiveCost * cardRate) / 10) * 10
   const mobileCupAmount = Math.round((effectiveCost * mobileRate) / 10) * 10
   const cardEnabled = Boolean(cupSettings?.enabled && cupSettings?.methods?.cup_card_transfer?.enabled && cupSettings?.card_number)
@@ -5303,6 +6915,10 @@ function FzrFullCatalogScreen({
       setErr('Debes adjuntar la captura del comprobante de transferencia para verificar tu pago.')
       return
     }
+    if (!cupReference.trim()) {
+      setErr(paymentMethod === 'cup_mobile_balance' ? 'Escribe el número de teléfono desde el que enviaste el saldo.' : 'Escribe el número de transacción de tu comprobante.')
+      return
+    }
 
     setBuying(true)
     setErr(null)
@@ -5317,9 +6933,11 @@ function FzrFullCatalogScreen({
         items: itemsPayload,
         payment_method: paymentMethod,
       }
-      const cupOrder = await api.fzrCatalogCupOrder(orderPayload)
+      const cupOrder = pendingCupOrder || await api.fzrCatalogCupOrder(orderPayload)
       if (!cupOrder?.order_id) throw new Error('No se pudo generar el pedido CUP')
+      setPendingCupOrder(cupOrder)
       await api.uploadCupPaymentProof(cupOrder.order_id, cupReference, proofFile)
+      setPendingCupOrder(null)
       setSuccessOrder({
         ...cupOrder,
         order_id: cupOrder.order_id,
@@ -5330,7 +6948,7 @@ function FzrFullCatalogScreen({
         amount_cup: paymentMethod === 'cup_card_transfer' ? cardCupAmount : mobileCupAmount,
       })
     } catch (e) {
-      setErr(e.message || 'Error al procesar el pago CUP')
+      setErr(pendingCupOrder ? `El pedido #${pendingCupOrder.order_id} ya fue creado. Corrige el comprobante o la conexión y vuelve a enviarlo; no se generará otro pedido.` : (e.message || 'Error al procesar el pago CUP'))
     } finally {
       setBuying(false)
     }
@@ -5350,7 +6968,7 @@ function FzrFullCatalogScreen({
   if (err && offers.length === 0) return <ErrorView msg={err} />
 
   return (
-    <div className="fixed inset-0 z-[100] flex flex-col h-full w-full bg-[#0b0f17] text-white overflow-hidden">
+    <div className="fs-purchase-surface fixed inset-0 z-[100] flex flex-col h-full w-full bg-[#0b0f17] text-white overflow-hidden">
       {showShare && (
         <ShareProductModal
           shareLink={shareLink}
@@ -5497,8 +7115,8 @@ function FzrFullCatalogScreen({
           <div className="grid grid-cols-1 gap-2">
               {loading && offers.length === 0 ? (
                 Array.from({ length: 6 }).map((_, i) => (
-                  <div key={i} className="flex items-center justify-between w-full rounded-xl border border-white/5 bg-[#121824]/60 p-3.5 animate-pulse">
-                    <div className="flex items-center gap-3 min-w-0 pr-2">
+                  <div key={i} className="flex items-center justify-between w-full rounded-xl border border-white/5 bg-[#121824]/60 px-2.5 py-2 animate-pulse">
+                    <div className="flex items-center gap-2 min-w-0 pr-1.5">
                       <div className="h-5 w-5 flex-shrink-0 rounded-full bg-white/10" />
                       <div className="min-w-0 space-y-1.5">
                         <div className="h-4 w-36 rounded bg-white/10" />
@@ -5545,7 +7163,7 @@ function FzrFullCatalogScreen({
                         }
                       }
                     }}
-                    className={`group relative flex items-center justify-between w-full rounded-xl border p-3 text-left transition-all duration-150 cursor-pointer ${
+                    className={`group relative flex items-center justify-between w-full rounded-xl border px-2.5 py-2 text-left transition-all duration-150 cursor-pointer ${
                       isSelected
                         ? 'border-accent bg-accent/15 ring-2 ring-accent/70 shadow-[0_0_15px_rgba(34,197,94,0.2)]'
                         : 'border-white/10 bg-[#121824]/90 hover:border-white/20 hover:bg-[#161f2e]'
@@ -5562,7 +7180,7 @@ function FzrFullCatalogScreen({
                         ) : null}
                       </div>
                       <div className="min-w-0">
-                        <span className={`block text-sm font-black truncate transition-colors ${
+                        <span className={`block text-[13px] font-black truncate transition-colors ${
                           isSelected ? 'text-white' : 'text-white/90 group-hover:text-white'
                         }`}>
                           {cleanName}
@@ -5570,7 +7188,7 @@ function FzrFullCatalogScreen({
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2.5 flex-shrink-0">
+                    <div className="flex items-center gap-2 flex-shrink-0">
                       <div className="text-right">
                         <span className="text-sm font-black text-accent block">
                           ${itemPrice.toFixed(2)}
@@ -5874,10 +7492,14 @@ function FzrFullCatalogScreen({
         {step === 'checkout' && (primaryOffer || selectedItemsList.length > 0) && (
           <div className="rounded-2xl border border-white/10 bg-[#121824] p-4 shadow-lg">
             <PaymentMethodSection
+              isGuest={Boolean(me?.is_guest)}
+              onLoginRequired={onLoginRequired}
               paymentMethod={paymentMethod}
               setPaymentMethod={setPaymentMethod}
               priceUsdt={totalPrice}
               cupSettings={cupSettings}
+              cupSettingsError={cupSettingsError}
+              onRetryCupSettings={loadCupSettings}
               userBalance={userBalance}
               cardCupAmount={cardCupAmount}
               mobileCupAmount={mobileCupAmount}
@@ -5924,6 +7546,10 @@ function FzrFullCatalogScreen({
             <button
               type="button"
               onClick={() => {
+                if (me?.is_guest) {
+                  onLoginRequired?.()
+                  return
+                }
                 if (totalPrice <= 0 || totalItemCount <= 0) {
                   setErr('Por favor selecciona al menos un paquete para continuar')
                   return
@@ -5932,15 +7558,24 @@ function FzrFullCatalogScreen({
                 setStep('checkout')
                 mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
               }}
-              disabled={totalPrice <= 0 || totalItemCount <= 0}
+              disabled={!me?.is_guest && (totalPrice <= 0 || totalItemCount <= 0)}
               className={`w-full rounded-xl py-3.5 px-4 text-sm font-black flex items-center justify-center gap-2 transition shadow-lg active:scale-95 ${
-                totalPrice <= 0 || totalItemCount <= 0
+                !me?.is_guest && (totalPrice <= 0 || totalItemCount <= 0)
                   ? 'bg-white/10 text-white/40 cursor-not-allowed'
                   : 'bg-accent text-bg hover:bg-accent/90 shadow-accent/20 cursor-pointer'
               }`}
             >
-              <span>Continuar a pagar</span>
-              <ArrowRight className="h-4 w-4 stroke-[3]" />
+              {me?.is_guest ? (
+                <>
+                  <Lock className="h-4 w-4" />
+                  <span>Iniciar sesión para continuar</span>
+                </>
+              ) : (
+                <>
+                  <span>Continuar a pagar</span>
+                  <ArrowRight className="h-4 w-4 stroke-[3]" />
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -5987,12 +7622,12 @@ function FzrFullCatalogScreen({
 
             <button
               type="button"
-              onClick={handleBuy}
+              onClick={me?.is_guest ? onLoginRequired : handleBuy}
               disabled={
                 buying ||
                 (!primaryOffer && selectedItemsList.length === 0) ||
-                (me && !me.is_guest && paymentMethod === 'balance' && !hasEnoughBalance) ||
-                (paymentMethod !== 'balance' && !proofFile)
+                (!me?.is_guest && paymentMethod === 'balance' && !hasEnoughBalance) ||
+                (!me?.is_guest && paymentMethod !== 'balance' && (!proofFile || !cupReference.trim()))
               }
               className={`w-full rounded-xl py-3.5 px-4 text-sm font-black flex items-center justify-center gap-2 transition shadow-lg active:scale-95 ${
                 !primaryOffer && selectedItemsList.length === 0
@@ -6001,7 +7636,7 @@ function FzrFullCatalogScreen({
                   ? 'bg-accent text-bg hover:bg-accent/90'
                   : paymentMethod === 'balance' && !hasEnoughBalance
                   ? 'bg-red-500/20 text-red-300 border border-red-500/30'
-                  : paymentMethod !== 'balance' && !proofFile
+                  : paymentMethod !== 'balance' && (!proofFile || !cupReference.trim())
                   ? 'bg-emerald-600/30 text-emerald-200 border border-emerald-500/40 opacity-70'
                   : buying
                   ? 'bg-accent/70 text-bg cursor-wait'
@@ -6016,7 +7651,10 @@ function FzrFullCatalogScreen({
               ) : !primaryOffer && selectedItemsList.length === 0 ? (
                 'Cargando opciones...'
               ) : me?.is_guest ? (
-                'Inicia sesión para comprar'
+                <span className="inline-flex items-center justify-center gap-2">
+                  <Lock className="h-4 w-4" />
+                  <span>Iniciar sesión para comprar</span>
+                </span>
               ) : paymentMethod === 'balance' ? (
                 !hasEnoughBalance ? (
                   `Saldo USDT insuficiente ($${userBalance.toFixed(2)} / $${totalPrice.toFixed(2)})`
@@ -6025,8 +7663,8 @@ function FzrFullCatalogScreen({
                 ) : (
                   `Pagar $${totalPrice.toFixed(2)} USDT`
                 )
-              ) : !proofFile ? (
-                `Adjunta el comprobante (${Number(paymentMethod === 'cup_card_transfer' ? cardCupAmount : mobileCupAmount).toLocaleString('es-ES')} CUP)`
+              ) : !proofFile || !cupReference.trim() ? (
+                `${!cupReference.trim() ? 'Completa el número de transacción' : 'Adjunta el comprobante'} (${Number(paymentMethod === 'cup_card_transfer' ? cardCupAmount : mobileCupAmount).toLocaleString('es-ES')} CUP)`
               ) : (
                 `Enviar Comprobante (${Number(paymentMethod === 'cup_card_transfer' ? cardCupAmount : mobileCupAmount).toLocaleString('es-ES')} CUP)`
               )}
@@ -6201,7 +7839,7 @@ let _cachedHomeScreenStreaming = readStorageList(STORAGE_STREAMING_KEY)
 function CatalogSkeleton() {
   return (
     <div className="flex flex-col flex-1 h-full overflow-hidden bg-bg">
-      <div className="flex-shrink-0 border-b border-white/5 bg-bg/95 px-4 py-2.5 backdrop-blur">
+      <div className="relative z-[80] flex-shrink-0 border-b border-white/5 bg-bg/95 px-4 py-2.5 backdrop-blur">
         <div className="flex items-center justify-between gap-3 max-w-lg mx-auto">
           <div className="flex items-center gap-2">
             <CatalogLogo compact />
@@ -6246,7 +7884,7 @@ function StreamingCatalogCard({ product, onSelect }) {
   return (
     <button
       onClick={onSelect}
-      className={`group relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-xl border bg-[#16181f]/90 text-left transition-all duration-300 active:scale-95 ${
+      className={`fs-catalog-card-3d group relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-xl border bg-[#16181f]/90 text-left transition-all duration-300 active:scale-95 ${
         isOutOfStock
           ? 'border-white/5 opacity-85 hover:border-rose-500/50'
           : 'border-white/10 hover:border-[#ffff00]/80 hover:shadow-[0_4px_20px_rgba(255,255,0,0.15)] hover:-translate-y-0.5'
@@ -6258,7 +7896,7 @@ function StreamingCatalogCard({ product, onSelect }) {
             src={product.image_url}
             className={`relative z-10 h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105 ${
               isOutOfStock ? 'grayscale contrast-125 opacity-70' : ''
-            } ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
+            } opacity-100`}
             alt={product.name}
             onLoad={() => setImgLoaded(true)}
           />
@@ -6711,7 +8349,7 @@ function StreamingBuyModal({ product, onClose, onBought, buyResult, me, onLoginR
                   ) : (
                     <>
                       <Zap className="h-4 w-4 fill-black" />
-                      <span>Comprar y Recibir Credenciales (${totalPrice.toFixed(2)} USD)</span>
+                      <span>Comprar</span>
                     </>
                   )}
                 </button>
@@ -6736,6 +8374,7 @@ function HomeScreen({
   activeFilter: propsActiveFilter,
   onFilterChange,
   onOpenStore,
+  onOpenStreamingProduct = null,
   activeWebStore = null,
   onOpenSidebar = null,
 }) {
@@ -6758,6 +8397,7 @@ function HomeScreen({
   const [buyingStreaming, setBuyingStreaming] = useState(null)
   const [streamingBuyResult, setStreamingBuyResult] = useState(null)
   const [showLeaderboard, setShowLeaderboard] = useState(false)
+  const [balanceMenuOpen, setBalanceMenuOpen] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -6821,9 +8461,9 @@ function HomeScreen({
   }, [me?.is_guest])
 
   const enrichedGames = useMemo(() => games.map(g => ({ ...g, catalogType: classifyCatalogItem(g, 'game') })), [games])
-  const officialManual = useMemo(() => manualProducts.filter(p => !p.seller_store?.store_slug || p.seller_store.store_slug === 'oficial'), [manualProducts])
+  const officialManual = useMemo(() => manualProducts.filter(p => (!p.seller_store?.store_slug || p.seller_store.store_slug === 'oficial') && Number(p.id) !== 33 && Number(p.id) !== 34), [manualProducts])
   const enrichedManual = useMemo(() => officialManual.map(p => ({ ...p, catalogType: classifyCatalogItem(p, 'manual') })), [officialManual])
-  const q = search.trim().toLowerCase()
+  const q = normalizeCatalogText(search.trim())
 
   const filteredStreaming = useMemo(() => {
     const matchesSearch = (value) => !q || normalizeCatalogText(value).includes(q)
@@ -6886,17 +8526,19 @@ function HomeScreen({
   const showSmmCatalog = !search.trim() && (activeFilter === 'all' || activeFilter === 'digital-service')
   const showTelegramCatalog = !search.trim() && (activeFilter === 'all' || activeFilter === 'digital-service')
   const showCapCutCatalog = !search.trim() && (activeFilter === 'all' || activeFilter === 'digital-service')
+  const matchesVpnSearch = !q || q.includes('vpn') || q.includes('wire') || q.includes('guard') || 'vpn wireguard normal gaming bbr'.includes(q)
+  const showVpnCatalog = ((!search.trim() && (activeFilter === 'all' || activeFilter === 'digital-service' || activeFilter === 'subscription')) || (search.trim() && matchesVpnSearch))
 
   return (
     <div className="flex flex-col flex-1 h-full overflow-hidden bg-bg">
       {/* Fixed Top Header Section */}
-      <div className="flex-shrink-0 border-b border-white/5 bg-bg/95 px-4 py-2.5 backdrop-blur">
-        <div className="flex items-center justify-between gap-3 max-w-lg md:max-w-4xl lg:max-w-5xl mx-auto">
+      <div className="relative z-[80] flex-shrink-0 border-b border-white/5 bg-bg/95 px-4 py-2.5 backdrop-blur">
+        <div className="relative flex items-center justify-between gap-3 max-w-lg md:max-w-4xl lg:max-w-5xl mx-auto">
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => onOpenSidebar ? onOpenSidebar() : setMenuOpen(true)}
-              className="flex md:hidden h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-white/10 bg-card text-white hover:bg-white/10 active:scale-95 transition shadow-sm"
+              className="fs-balance-depth flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-white/10 text-white transition hover:brightness-110 active:translate-y-[2px] md:hidden"
               aria-label="Abrir categorías y menú"
             >
               <Menu className="h-4 w-4" />
@@ -6905,7 +8547,8 @@ function HomeScreen({
               <button
                 type="button"
                 onClick={onOpenNotifications}
-                className="relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-white/10 bg-card text-white hover:bg-white/10 active:scale-95 transition shadow-sm"
+                data-tour="header-notifications"
+                className="fs-balance-depth relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-white/10 text-white transition hover:brightness-110 active:translate-y-[2px]"
                 aria-label="Notificaciones"
               >
                 <Bell className="h-4 w-4" />
@@ -6917,16 +8560,46 @@ function HomeScreen({
               </button>
             )}
           </div>
-          <div className="flex items-center gap-2">
+          <div className="absolute left-1/2 top-1/2 z-30 -translate-x-1/2 -translate-y-1/2">
             <button
               type="button"
-              onClick={() => me?.is_guest ? (typeof onLoginRequired === 'function' ? onLoginRequired() : null) : (onTopUp ? onTopUp() : openTelegramTopUp())}
-              className="rounded-full border border-white/10 bg-card px-3.5 py-1.5 text-right active:scale-95 hover:border-accent/40 transition shadow-sm"
-              aria-label="Recargar saldo"
+              data-tour="header-balance"
+              onClick={() => {
+                if (me?.is_guest) return typeof onLoginRequired === 'function' ? onLoginRequired() : null
+                setBalanceMenuOpen(open => !open)
+              }}
+              className="fs-balance-depth rounded-full border border-accent/25 px-4 py-1.5 text-center transition active:translate-y-[2px] active:shadow-none"
+              aria-label="Abrir acciones de saldo"
+              aria-expanded={balanceMenuOpen}
             >
               <span className="block text-[10px] leading-none text-white/45">Saldo</span>
-              <span className="block mt-1 text-xs font-black leading-none text-white">{me?.is_guest ? "Entrar" : "$" + Number(me.balance || 0).toFixed(2)}</span>
+              <span className="mt-1 flex items-center justify-center gap-1 text-xs font-black leading-none text-white">
+                {!me?.is_guest && <FranchoFMark className="h-3.5 w-3.5 shrink-0 text-accent" title="Francho Shop" />}
+                {me?.is_guest ? 'Entrar' : `${Number(me.balance || 0).toFixed(2)} FC`}
+              </span>
             </button>
+            {balanceMenuOpen && !me?.is_guest && (
+              <>
+                <button type="button" aria-label="Cerrar acciones de saldo" onClick={() => setBalanceMenuOpen(false)} className="fixed inset-0 z-10 cursor-default" />
+                <div className="absolute left-1/2 top-[calc(100%+10px)] z-20 flex w-[304px] -translate-x-1/2 gap-1.5 rounded-2xl border border-white/10 bg-[#11161a] p-2.5 shadow-[0_16px_34px_rgba(0,0,0,.5)]">
+                  <button type="button" onClick={() => { setBalanceMenuOpen(false); onNav?.('wallet') }} className="flex min-w-0 flex-1 flex-col items-center gap-2 py-1 text-[10px] font-black text-white/85 transition active:scale-95">
+                    <span className="grid h-12 w-12 place-items-center rounded-full border border-white/10 bg-[#2a3339] text-white shadow-[inset_0_2px_1px_rgba(255,255,255,.16),0_5px_0_#07090b,0_12px_18px_rgba(0,0,0,.46)] transition active:translate-y-[4px] active:shadow-[inset_0_2px_1px_rgba(255,255,255,.12),0_1px_0_#07090b]"><ArrowUp className="h-6 w-6" strokeWidth={3.2} /></span>
+                    Enviar
+                  </button>
+                  <button type="button" onClick={() => { setBalanceMenuOpen(false); onNav?.('wallet') }} className="flex min-w-0 flex-1 flex-col items-center gap-2 py-1 text-[10px] font-black text-amber-200 transition active:scale-95">
+                    <span className="grid h-12 w-12 place-items-center rounded-full border border-amber-300/50 bg-[#17120c] text-amber-200 shadow-[inset_0_2px_1px_rgba(255,235,160,.2),0_5px_0_#050403,0_12px_18px_rgba(0,0,0,.52),0_0_14px_rgba(250,204,21,.12)] transition active:translate-y-[4px] active:shadow-[inset_0_2px_1px_rgba(255,235,160,.14),0_1px_0_#050403]"><ArrowDown className="h-6 w-6" strokeWidth={3.2} /></span>
+                    Recibir
+                  </button>
+                  <button type="button" onClick={() => { setBalanceMenuOpen(false); onTopUp ? onTopUp() : openTelegramTopUp() }} className="flex min-w-0 flex-1 flex-col items-center gap-2 py-1 text-[10px] font-black text-accent transition active:scale-95">
+                    <span className="relative grid h-12 w-12 place-items-center overflow-hidden rounded-full border border-emerald-100/30 bg-accent text-[#062316] shadow-[inset_0_2px_1px_rgba(255,255,255,.4),0_5px_0_#057544,0_12px_18px_rgba(0,194,111,.3)] transition active:translate-y-[4px] active:shadow-[inset_0_2px_1px_rgba(255,255,255,.18),0_1px_0_#057544]"><span aria-hidden="true" className="absolute inset-x-1 top-1 h-4 rounded-full bg-white/35 blur-[1px]" /><Plus className="relative h-6 w-6" strokeWidth={3.2} /></span>
+                    Depositar
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
+            <AccountStatusRing profile={me}>
             <button
               type="button"
               onClick={() => {
@@ -6954,6 +8627,7 @@ function HomeScreen({
                 <User className="h-4 w-4 text-white/70" />
               )}
             </button>
+            </AccountStatusRing>
           </div>
         </div>
       </div>
@@ -7153,14 +8827,14 @@ function HomeScreen({
             </div>
           )}
 
-          {filteredGames.length === 0 && filteredManual.length === 0 && filteredStreaming.length === 0 && !showSmsCatalog && !showSmmCatalog && !showTelegramCatalog && !showCapCutCatalog ? (
+          {filteredGames.length === 0 && filteredManual.length === 0 && filteredStreaming.length === 0 && !showSmsCatalog && !showSmmCatalog && !showTelegramCatalog && !showCapCutCatalog && !showVpnCatalog ? (
             <p className="py-8 text-center text-white/50">Sin resultados para "{search || activeFilterData.label}"</p>
           ) : activeFilter !== 'all' ? (
             <CatalogGridView
               title={activeFilterData.title}
               icon={activeFilterData.icon}
               categoryType={activeFilter}
-              count={filteredGames.length + filteredManual.length + (activeFilter === 'streaming' ? filteredStreaming.length : 0) + (showSmsCatalog ? 1 : 0) + (showSmmCatalog ? 1 : 0) + (showTelegramCatalog ? 1 : 0) + (showCapCutCatalog ? 1 : 0)}
+              count={filteredGames.length + filteredManual.length + (activeFilter === 'streaming' ? filteredStreaming.length : 0) + (showSmsCatalog ? 1 : 0) + (showSmmCatalog ? 1 : 0) + (showTelegramCatalog ? 1 : 0) + (showCapCutCatalog ? 1 : 0) + (showVpnCatalog ? 1 : 0)}
               onBack={() => { setActiveFilter('all'); setSearch('') }}
             >
               {activeFilter === 'streaming' && filteredStreaming.map((p) => (
@@ -7168,8 +8842,7 @@ function HomeScreen({
                   key={p.id}
                   product={p}
                   onSelect={() => {
-                    setBuyingStreaming(p)
-                    setStreamingBuyResult(null)
+                    if (onOpenStreamingProduct) { onOpenStreamingProduct(p) } else { setBuyingStreaming(p); setStreamingBuyResult(null) }
                   }}
                 />
               ))}
@@ -7178,6 +8851,7 @@ function HomeScreen({
               {showSmmCatalog && <SmmCatalogCard onSelect={() => onNav?.('smm')} />}
               {showTelegramCatalog && <FzrCatalogCard type="telegram" onSelect={() => onNav?.('telegram')} />}
               {showCapCutCatalog && <FzrCatalogCard type="capcut" onSelect={() => onNav?.('capcut')} />}
+              {showVpnCatalog && <VpnCatalogCard onSelect={() => onNav?.('vpn')} />}
               {filteredManual.map((p) => <ManualCatalogCard key={p.id} product={p} onSelect={() => setBuyingManual(p)} />)}
             </CatalogGridView>
           ) : (
@@ -7191,7 +8865,8 @@ function HomeScreen({
                 const smmSecCount = (section.id === 'digital-service' && showSmmCatalog) ? 1 : 0
                 const telegramSecCount = (section.id === 'digital-service' && showTelegramCatalog) ? 1 : 0
                 const capcutSecCount = (section.id === 'digital-service' && showCapCutCatalog) ? 1 : 0
-                const totalCount = gamesSec.length + manualSec.length + streamingSec.length + smsSecCount + smmSecCount + telegramSecCount + capcutSecCount
+                const vpnSecCount = (section.id === 'digital-service' && showVpnCatalog) ? 1 : 0
+                const totalCount = gamesSec.length + manualSec.length + streamingSec.length + smsSecCount + smmSecCount + telegramSecCount + capcutSecCount + vpnSecCount
                 if (totalCount === 0) return null
                 return (
                   <CatalogSection key={section.id} title={section.title} icon={Icon} count={totalCount} onViewAll={() => { setActiveFilter(section.id); setSearch('') }}>
@@ -7200,8 +8875,7 @@ function HomeScreen({
                         key={p.id}
                         product={p}
                         onSelect={() => {
-                          setBuyingStreaming(p)
-                          setStreamingBuyResult(null)
+                          if (onOpenStreamingProduct) { onOpenStreamingProduct(p) } else { setBuyingStreaming(p); setStreamingBuyResult(null) }
                         }}
                       />
                     ))}
@@ -7210,6 +8884,7 @@ function HomeScreen({
                     {section.id === 'digital-service' && showSmmCatalog && <SmmCatalogCard onSelect={() => onNav?.('smm')} />}
                     {section.id === 'digital-service' && showTelegramCatalog && <FzrCatalogCard type="telegram" onSelect={() => onNav?.('telegram')} />}
                     {section.id === 'digital-service' && showCapCutCatalog && <FzrCatalogCard type="capcut" onSelect={() => onNav?.('capcut')} />}
+                    {section.id === 'digital-service' && showVpnCatalog && <VpnCatalogCard onSelect={() => onNav?.('vpn')} />}
                     {manualSec.map((p) => <ManualCatalogCard key={p.id} product={p} onSelect={() => setBuyingManual(p)} />)}
                   </CatalogSection>
                 )
@@ -7506,8 +9181,8 @@ function GameAccountsIntro({ count, children, onViewAll }) {
         {['Cuentas revisadas antes de publicar','Información clara antes de comprar','Entrega manual y organizada','Pedido registrado en tu historial','Soporte disponible en caso de dudas','Compra usando saldo de tu cuenta'].map(item => <div key={item} className="rounded-lg bg-bg/70 p-2"><Check className="mb-1 h-3.5 w-3.5 text-green-400" />{item}</div>)}
       </div>
       <div className="flex gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
-        {flattenCatalogChildren(children).slice(0, 5).map((child, index) => <div key={child?.key || index} className="w-[28%] min-w-[100px] max-w-[125px] flex-shrink-0">{child}</div>)}
-        {count > 5 && <div className="w-[28%] min-w-[100px] max-w-[125px] flex-shrink-0"><CatalogViewMoreCard title="Cuentas" onClick={onViewAll} /></div>}
+        {flattenCatalogChildren(children).slice(0, 5).map((child, index) => <div key={child?.key || index} className="w-[28%] min-w-[100px] max-w-[125px] flex-shrink-0 snap-start">{child}</div>)}
+        {count > 5 && <div className="w-[28%] min-w-[100px] max-w-[125px] flex-shrink-0 snap-start"><CatalogViewMoreCard title="Cuentas" onClick={onViewAll} /></div>}
       </div>
       <p className="mt-3 text-center text-[10px] text-white/35">Compra cuentas digitales con información clara, entrega organizada y soporte de Francho Shop.</p>
     </section>
@@ -7522,7 +9197,7 @@ function CatalogViewMoreCard({ title, onClick }) {
   return (
     <button
       onClick={onClick}
-      className="group relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#16181f]/90 text-left transition-all duration-300 active:scale-95 hover:border-[#ffff00]/80 hover:shadow-[0_4px_20px_rgba(255,255,0,0.15)] hover:-translate-y-0.5"
+      className="fs-catalog-card-3d group relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#16181f]/90 text-left transition-all duration-300 active:scale-95 hover:border-[#ffff00]/80 hover:-translate-y-0.5"
       aria-label={`Ver más ${title}`}
     >
       <span className="block flex aspect-[1/1.1] w-full items-center justify-center bg-white/5 text-[#ffff00] transition group-hover:scale-105">
@@ -7810,14 +9485,14 @@ function CatalogSection({ title, icon: Icon, count, children, onViewAll }) {
           </button>
         )}
       </div>
-      <div className="flex gap-2 overflow-x-auto pb-1.5 [scrollbar-width:none]">
+      <div className="fs-game-rail flex gap-2 overflow-x-auto pb-1.5 [scrollbar-width:none]">
         {visibleItems.map((child, index) => (
-          <div key={child?.key || index} className="w-[28%] min-w-[100px] max-w-[125px] flex-shrink-0">
+          <div key={child?.key || index} className="w-[28%] min-w-[100px] max-w-[125px] flex-shrink-0 snap-start">
             {child}
           </div>
         ))}
         {count > 5 && (
-          <div className="w-[28%] min-w-[100px] max-w-[125px] flex-shrink-0">
+          <div className="w-[28%] min-w-[100px] max-w-[125px] flex-shrink-0 snap-start">
             <CatalogViewMoreCard title={title} onClick={onViewAll} />
           </div>
         )}
@@ -7844,13 +9519,13 @@ function ManualCatalogCard({ product, onSelect }) {
   return (
     <button
       onClick={onSelect}
-      className="group relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#16181f]/90 text-left transition-all duration-300 active:scale-95 hover:border-[#ffff00]/80 hover:shadow-[0_4px_20px_rgba(255,255,0,0.15)] hover:-translate-y-0.5"
+      className="fs-catalog-card-3d group relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#16181f]/90 text-left transition-all duration-300 active:scale-95 hover:border-[#ffff00]/80 hover:-translate-y-0.5"
     >
       <span className="block relative aspect-[1/1.1] w-full flex-shrink-0 overflow-hidden bg-[#101318]">
         {iconSrc ? (
           <OptimizedImage
             src={iconSrc}
-            className={`relative z-10 h-full w-full ${isWide ? 'object-contain p-1.5' : 'object-cover'} transition-transform duration-500 ease-out group-hover:scale-105 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
+            className={`relative z-10 h-full w-full ${isWide ? 'object-contain p-1.5' : 'object-cover'} transition-transform duration-500 ease-out group-hover:scale-105 opacity-100`}
             alt={product.name}
             onLoad={handleImgLoad}
           />
@@ -7935,19 +9610,19 @@ function GameCard({ game, onSelect }) {
     <button
       onClick={onSelect}
       onMouseEnter={handlePointerPrefetch}
-      className="group relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#16181f]/90 text-left transition-all duration-300 active:scale-95 hover:border-[#ffff00]/80 hover:shadow-[0_4px_20px_rgba(255,255,0,0.15)] hover:-translate-y-0.5"
+      className="fs-catalog-card-3d group relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#16181f]/90 text-left transition-all duration-300 active:scale-95 hover:border-[#ffff00]/80 hover:-translate-y-0.5"
     >
       <span className="block relative aspect-[1/1.1] w-full flex-shrink-0 overflow-hidden bg-[#101318]">
         {showImage && (
           <OptimizedImage
             src={currentSrc}
             alt={game.title || game.name}
-            className={`relative z-10 h-full w-full ${isWide ? 'object-contain p-1.5' : 'object-cover'} transition-transform duration-500 ease-out group-hover:scale-105 ${imgLoaded ? 'opacity-100' : 'opacity-0'}`}
+            className={`relative z-10 h-full w-full ${isWide ? 'object-contain p-1.5' : 'object-cover'} transition-transform duration-500 ease-out group-hover:scale-105 opacity-100`}
             onError={handleImgError}
             onLoad={handleImgLoad}
           />
         )}
-        {(!showImage || !imgLoaded) && (
+        {!showImage && (
           <span className="block absolute inset-0 flex items-center justify-center bg-white/5">
             <TypeIcon className="h-8 w-8 text-white/40" aria-hidden="true" />
           </span>
@@ -8185,10 +9860,14 @@ function getProductDisplayGroups(products = [], gameTitle = '') {
 }
 
 function PaymentMethodSection({
+  isGuest = false,
+  onLoginRequired,
   paymentMethod,
   setPaymentMethod,
   priceUsdt,
   cupSettings,
+  cupSettingsError,
+  onRetryCupSettings,
   userBalance,
   cardCupAmount,
   mobileCupAmount,
@@ -8203,7 +9882,44 @@ function PaymentMethodSection({
   handleCopy,
   copiedField,
 }) {
+  const [showTutorialModal, setShowTutorialModal] = useState(false)
+  if (cupSettingsError) {
+    return (
+      <div className="mb-4 rounded-2xl border border-amber-400/25 bg-amber-500/10 p-3.5 text-center shadow-lg">
+        <AlertTriangle className="mx-auto h-5 w-5 text-amber-300" />
+        <p className="mt-2 text-xs font-black text-amber-100">No pudimos cargar los pagos en CUP</p>
+        <p className="mt-1 text-[11px] leading-relaxed text-white/60">Tu saldo FC sigue disponible. Reintenta para mostrar transferencia y saldo móvil con la tasa actual.</p>
+        <button type="button" onClick={onRetryCupSettings} className="mt-3 rounded-xl border border-amber-300/25 bg-amber-300/10 px-3 py-2 text-xs font-black text-amber-100 transition hover:bg-amber-300/20 active:scale-95">
+          Reintentar métodos CUP
+        </button>
+      </div>
+    )
+  }
   if (!hasCupMethods) return null
+
+  if (isGuest) {
+    return (
+      <div className="mb-4 rounded-2xl border border-amber-500/30 bg-gradient-to-br from-amber-500/10 via-[#0d121d] to-[#0d121d] p-4 text-center space-y-3 shadow-lg">
+        <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-amber-500/20 text-amber-400 border border-amber-500/30">
+          <Lock className="h-5 w-5" />
+        </div>
+        <div className="space-y-1">
+          <h4 className="text-sm font-black text-white">Inicia sesión para pagar</h4>
+          <p className="text-xs text-white/65 max-w-sm mx-auto leading-relaxed">
+            Para ver los datos de transferencia en CUP, Saldo Móvil o Saldo Francho y registrar tu pedido con entrega automática, inicia sesión o crea tu cuenta.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={onLoginRequired}
+          className="w-full rounded-xl bg-accent py-2.5 px-4 text-xs font-black text-bg hover:opacity-95 active:scale-95 transition flex items-center justify-center gap-2 cursor-pointer shadow-lg shadow-accent/20"
+        >
+          <LogIn className="h-4 w-4" />
+          <span>Iniciar sesión o Crear cuenta</span>
+        </button>
+      </div>
+    )
+  }
 
   return (
     <div className="mb-4 space-y-3">
@@ -8343,17 +10059,57 @@ function PaymentMethodSection({
             <span>Transfiere exactamente <b>{Number(cardCupAmount || 0).toLocaleString('es-ES')} CUP</b> e incluye el número a confirmar si usas Transfermóvil.</span>
           </div>
 
+          {/* Botón Acceso Rápido al Tutorial */}
+          <button
+            type="button"
+            onClick={() => setShowTutorialModal(true)}
+            className="w-full p-2.5 rounded-xl bg-gradient-to-r from-emerald-500/20 via-teal-500/15 to-emerald-500/10 border border-emerald-500/40 hover:border-emerald-400 text-left transition cursor-pointer group flex items-center justify-between shadow-sm active:scale-[0.99]"
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/30 flex items-center justify-center text-base flex-shrink-0 border border-emerald-400/30">
+                💡
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className="text-xs font-black text-white group-hover:text-emerald-300 transition">
+                    ¿Cuál es tu Nro. de Transacción?
+                  </span>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded-md bg-emerald-400 text-slate-950 font-black uppercase tracking-wide">
+                    Ver Tutorial
+                  </span>
+                </div>
+                <p className="text-[10px] text-white/70 truncate">
+                  Toca aquí para ver la foto de dónde encontrarlo en tu SMS
+                </p>
+              </div>
+            </div>
+            <ChevronRight className="h-4 w-4 text-emerald-400 group-hover:translate-x-0.5 transition flex-shrink-0" />
+          </button>
+
           <div className="space-y-1">
-            <label className="text-[11px] text-white/70 font-medium">
-              Teléfono de confirmación o referencia (Opcional):
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="text-[11px] text-emerald-300 font-bold flex items-center gap-1">
+                <span>Nro. de Transacción (Transfermóvil):</span>
+                <span className="text-emerald-400">*</span>
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowTutorialModal(true)}
+                className="text-[10px] text-emerald-400 hover:text-emerald-300 underline font-semibold cursor-pointer"
+              >
+                ¿Dónde está?
+              </button>
+            </div>
             <input
               type="text"
               value={cupReference}
               onChange={(e) => setCupReference(e.target.value)}
-              placeholder="Ej: 5351234567 o # transacción"
-              className="w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-xs text-white placeholder-white/30 outline-none focus:border-emerald-500"
+              placeholder="Ej: BR601BIS6A997 (del SMS del banco)"
+              className="w-full rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-xs font-mono font-bold tracking-wider text-white placeholder-white/30 outline-none focus:border-emerald-500 uppercase"
             />
+            <p className="text-[10px] text-emerald-400/90 leading-tight">
+              ⚡ Al ingresar este número del SMS bancario, tu pedido se verifica y entrega automáticamente en segundos las 24 horas.
+            </p>
           </div>
 
           <div className="space-y-1.5">
@@ -8489,11 +10245,87 @@ function PaymentMethodSection({
           </div>
         </div>
       )}
+
+      {/* Modal Tutorial Transfermóvil */}
+      {showTutorialModal && (
+        <div className="fixed inset-0 z-[999] flex items-center justify-center bg-black/85 p-3 sm:p-4 backdrop-blur-md animate-in fade-in duration-150">
+          <div className="relative w-full max-w-lg rounded-2xl border border-emerald-500/40 bg-[#0c1220] p-4 sm:p-5 shadow-2xl space-y-4 max-h-[92vh] overflow-y-auto">
+            {/* Cabecera */}
+            <div className="flex items-start justify-between border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-emerald-500/20 border border-emerald-500/40 flex items-center justify-center text-lg">
+                  📱
+                </div>
+                <div>
+                  <h3 className="text-sm sm:text-base font-black text-white">
+                    ¿Dónde encontrar el Nro. de Transacción?
+                  </h3>
+                  <p className="text-[11px] text-emerald-400 font-medium">
+                    Guía para entrega 100% automática en segundos
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowTutorialModal(false)}
+                className="rounded-lg p-1.5 text-white/60 hover:bg-white/10 hover:text-white transition cursor-pointer"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Pasos */}
+            <div className="space-y-2 text-xs">
+              <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-black flex items-center justify-center text-[10px]">1</span>
+                <p className="text-white/80"><b className="text-white">Haz la transferencia:</b> Envía el monto exacto por Transfermóvil a la tarjeta CUP de la tienda.</p>
+              </div>
+              <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-black flex items-center justify-center text-[10px]">2</span>
+                <p className="text-white/80"><b className="text-white">Revisa el SMS del banco:</b> Recibirás un SMS de BPA, BANDEC o Metropolitano confirmando el envío.</p>
+              </div>
+              <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-500 text-slate-950 font-black flex items-center justify-center text-[10px]">3</span>
+                <p className="text-emerald-200"><b className="text-white">Copia el "Nro. Transaccion":</b> Mira el recuadro rojo en la foto inferior. Suele incluir números y letras (ej: <b className="font-mono text-white underline">BR601BIS6A997</b>).</p>
+              </div>
+              <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-black flex items-center justify-center text-[10px]">4</span>
+                <p className="text-white/80"><b className="text-white">Pégalo en la tienda:</b> Escribe ese código y tu pedido será <span className="text-emerald-400 font-bold">despachado de inmediato</span>.</p>
+              </div>
+            </div>
+
+            {/* Foto de ejemplo */}
+            <div className="space-y-1.5">
+              <label className="text-[11px] font-bold text-white/70 flex items-center justify-between">
+                <span>Foto de ejemplo del SMS bancario:</span>
+                <span className="text-[10px] text-emerald-400 font-mono font-bold">Resaltado en rojo</span>
+              </label>
+              <div className="rounded-xl overflow-hidden border-2 border-emerald-500/40 bg-black/60 shadow-lg">
+                <img
+                  src="/tutorial-transfermovil.jpg"
+                  alt="Ejemplo SMS con Nro. de Transacción"
+                  className="w-full object-contain max-h-72"
+                />
+              </div>
+            </div>
+
+            {/* Botón cerrar */}
+            <button
+              type="button"
+              onClick={() => setShowTutorialModal(false)}
+              className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs transition cursor-pointer active:scale-98 shadow-md shadow-emerald-500/25 flex items-center justify-center gap-1.5"
+            >
+              <Check className="h-4 w-4 stroke-[3]" />
+              <span>¡Entendido, volver a mi pedido!</span>
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
-function CupOrderSuccessView({ order, onClose }) {
+function CupOrderSuccessView({ order, onClose, onOrders }) {
   return (
     <div className="flex h-full flex-col justify-center p-6 text-center animate-fadeIn">
       <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500/20 text-emerald-400">
@@ -8529,12 +10361,20 @@ function CupOrderSuccessView({ order, onClose }) {
         <p>• Puedes revisar el progreso en cualquier momento desde tu panel de pedidos.</p>
       </div>
 
-      <button
-        onClick={onClose}
-        className="w-full py-3 rounded-xl bg-gradient-to-r from-accent to-accent2 font-bold active:scale-95"
-      >
-        Entendido
-      </button>
+      {onOrders ? (
+        <div className="space-y-2">
+          <button onClick={onOrders} className="w-full rounded-xl bg-gradient-to-r from-accent to-accent2 py-3 font-bold active:scale-95">
+            Ver mis pedidos
+          </button>
+          <button onClick={onClose} className="w-full py-2.5 text-xs font-bold text-white/60 transition hover:text-white">
+            Volver al inicio
+          </button>
+        </div>
+      ) : (
+        <button onClick={onClose} className="w-full py-3 rounded-xl bg-gradient-to-r from-accent to-accent2 font-bold active:scale-95">
+          Entendido
+        </button>
+      )}
     </div>
   )
 }
@@ -8554,6 +10394,8 @@ function ProductsScreen({ game, gameData, region, me, onSelectProduct, onLoginRe
   const [showDripHelp, setShowDripHelp] = useState(false)
   const [shareTarget, setShareTarget] = useState(null) // { link, name }
   const [cupSettings, setCupSettings] = useState(null)
+  const [cupSettingsError, setCupSettingsError] = useState('')
+  const [pendingCupOrder, setPendingCupOrder] = useState(null)
   const [paymentMethod, setPaymentMethod] = useState('balance')
   const [cupReference, setCupReference] = useState('')
   const [proofFile, setProofFile] = useState(null)
@@ -8564,13 +10406,18 @@ function ProductsScreen({ game, gameData, region, me, onSelectProduct, onLoginRe
   // Local cacheBust removed
   const [detail, setDetail] = useState(null)
 
-  useEffect(() => {
-    api.cupPaymentSettings()
-      .then(res => {
-        if (res && res.enabled) setCupSettings(res)
-      })
-      .catch(() => {})
-  }, [])
+  const loadCupSettings = async () => {
+    setCupSettingsError('')
+    try {
+      const res = await api.cupPaymentSettings()
+      setCupSettings(res?.enabled ? res : null)
+    } catch (error) {
+      setCupSettings(null)
+      setCupSettingsError(error?.message || 'Error temporal al cargar la configuración de CUP.')
+    }
+  }
+
+  useEffect(() => { loadCupSettings() }, [])
 
   useEffect(() => {
     if (!proofFile) {
@@ -8644,14 +10491,15 @@ function ProductsScreen({ game, gameData, region, me, onSelectProduct, onLoginRe
 
   const allFilled = detail
     ? detailFields.every(f => {
+        if (f.is_required === false || f.required === false) return true
         const k = f.field_name || f.name
         return fields[k] && String(fields[k]).trim() !== ''
       })
     : false
 
   const selectedPriceUsdt = Number(selectedProduct?.price || detail?.price || 0)
-  const cardRate = Number(cupSettings?.transfer_rate) || 1190.90909091
-  const mobileRate = Number(cupSettings?.mobile_rate) || 643.73464374
+  const cardRate = Number(cupSettings?.transfer_rate) || 0
+  const mobileRate = Number(cupSettings?.mobile_rate) || 0
   const cardCupAmount = Math.round((selectedPriceUsdt * cardRate) / 10) * 10
   const mobileCupAmount = Math.round((selectedPriceUsdt * mobileRate) / 10) * 10
   const cardEnabled = Boolean(cupSettings?.enabled && cupSettings?.methods?.cup_card_transfer?.enabled && cupSettings?.card_number)
@@ -8690,13 +10538,18 @@ function ProductsScreen({ game, gameData, region, me, onSelectProduct, onLoginRe
     setSubmitting(true)
     setOrderError(null)
     try {
-      const cupOrder = await api.createCupOrder({
+      if (!cupReference.trim()) {
+        throw new Error(paymentMethod === 'cup_mobile_balance' ? 'Escribe el número de teléfono desde el que enviaste el saldo.' : 'Escribe el número de transacción de tu comprobante.')
+      }
+      const cupOrder = pendingCupOrder || await api.createCupOrder({
         product_id: detail.id,
         fields: { ...fields, __region__: region },
         payment_method: paymentMethod,
       })
       if (!cupOrder?.order_id) throw new Error('No se pudo generar el pedido CUP')
+      setPendingCupOrder(cupOrder)
       await api.uploadCupPaymentProof(cupOrder.order_id, cupReference, proofFile)
+      setPendingCupOrder(null)
       onSelectProduct({
         ...selectedProduct,
         _orderResult: {
@@ -8708,7 +10561,7 @@ function ProductsScreen({ game, gameData, region, me, onSelectProduct, onLoginRe
         }
       })
     } catch (e) {
-      setOrderError(e.message)
+      setOrderError(pendingCupOrder ? `El pedido #${pendingCupOrder.order_id} ya fue creado. Corrige el comprobante o la conexión y vuelve a enviarlo; no se generará otro pedido.` : e.message)
       setSubmitting(false)
     }
   }
@@ -8723,6 +10576,7 @@ function ProductsScreen({ game, gameData, region, me, onSelectProduct, onLoginRe
     setCupReference('')
     setProofFile(null)
     setProofPreview(null)
+    setPendingCupOrder(null)
   }
 
   const renderRechargeFields = () => {
@@ -8774,11 +10628,13 @@ function ProductsScreen({ game, gameData, region, me, onSelectProduct, onLoginRe
         />
       )}
       {submitting && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/75 p-5 backdrop-blur-sm">
-          <div className="w-full max-w-xs rounded-2xl border border-white/10 bg-bg p-5 text-center shadow-2xl">
-            <Loader2 className="mx-auto mb-4 h-12 w-12 animate-spin text-accent" />
-            <p className="text-lg font-black">Procesando compra</p>
-            <p className="mt-2 text-sm text-white/55">Enviando el pedido al proveedor. No cierres esta pantalla.</p>
+        <div className="pointer-events-none fixed inset-x-3 top-[max(16px,env(safe-area-inset-top))] z-[80] mx-auto max-w-sm">
+          <div className="flex items-center gap-3 rounded-2xl border border-accent/25 bg-[#111a18]/95 p-3.5 shadow-2xl backdrop-blur">
+            <Loader2 className="h-5 w-5 shrink-0 animate-spin text-accent" />
+            <div className="min-w-0">
+              <p className="text-xs font-black text-white">Procesando compra</p>
+              <p className="mt-0.5 text-[11px] leading-snug text-white/60">Estamos registrando tu pedido de forma segura.</p>
+            </div>
           </div>
         </div>
       )}
@@ -8873,7 +10729,7 @@ function ProductsScreen({ game, gameData, region, me, onSelectProduct, onLoginRe
                   return (
                     <button
                       key={p.id}
-                      onClick={() => { setSelectedId(p.id); setFields({}); setOrderError(null); setSubmitting(false) }}
+                      onClick={() => { setSelectedId(p.id); setFields({}); setOrderError(null); setSubmitting(false); setPendingCupOrder(null) }}
                       className={`w-full rounded-lg border px-2.5 py-2 text-left transition active:scale-[0.99] ${
                         isSelected ? 'border-accent bg-accent/15' : 'border-white/10 bg-card hover:border-accent/50'
                       }`}>
@@ -8951,10 +10807,14 @@ function ProductsScreen({ game, gameData, region, me, onSelectProduct, onLoginRe
               {renderRechargeFields()}
               {detail && (
                 <PaymentMethodSection
+                  isGuest={Boolean(me?.is_guest)}
+                  onLoginRequired={onLoginRequired}
                   paymentMethod={paymentMethod}
                   setPaymentMethod={setPaymentMethod}
                   priceUsdt={selectedPriceUsdt}
                   cupSettings={cupSettings}
+                  cupSettingsError={cupSettingsError}
+                  onRetryCupSettings={loadCupSettings}
                   userBalance={Number(me?.balance || 0)}
                   cardCupAmount={cardCupAmount}
                   mobileCupAmount={mobileCupAmount}
@@ -8977,10 +10837,15 @@ function ProductsScreen({ game, gameData, region, me, onSelectProduct, onLoginRe
                 X
               </button>
               <button
-                disabled={!allFilled || submitting || (paymentMethod !== 'balance' && !proofFile)}
-                onClick={handleBuy}
-                className="min-w-0 flex-1 rounded-xl bg-gradient-to-r from-accent to-accent2 px-3 py-3 font-bold active:scale-95 disabled:opacity-50">
-                {submitting ? (
+                disabled={!me?.is_guest && (!allFilled || submitting || (paymentMethod !== 'balance' && (!proofFile || !cupReference.trim())))}
+                onClick={me?.is_guest ? onLoginRequired : handleBuy}
+                className="min-w-0 flex-1 rounded-xl bg-gradient-to-r from-accent to-accent2 px-3 py-3 font-bold active:scale-95 disabled:opacity-50 text-bg">
+                {me?.is_guest ? (
+                  <span key="login_req" className="inline-flex items-center justify-center gap-2">
+                    <Lock className="h-5 w-5" />
+                    <span>Iniciar sesión para comprar</span>
+                  </span>
+                ) : submitting ? (
                   <span key="submitting" className="inline-flex items-center justify-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" />
                     <span>Procesando...</span>
@@ -8998,7 +10863,7 @@ function ProductsScreen({ game, gameData, region, me, onSelectProduct, onLoginRe
                 ) : (
                   <span key="buy" className="inline-flex items-center justify-center gap-2">
                     <ShoppingCart className="h-5 w-5" />
-                    <span>Comprar por ${Number(selectedProduct.price).toFixed(2)} USDT</span>
+                    <span>Comprar</span>
                   </span>
                 )}
               </button>
@@ -9009,9 +10874,9 @@ function ProductsScreen({ game, gameData, region, me, onSelectProduct, onLoginRe
                 <span className="inline-flex items-center justify-center gap-1"><AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />Completa los datos de compra</span>
               </p>
             )}
-            {allFilled && selectedId && paymentMethod !== 'balance' && !proofFile && (
+            {!me?.is_guest && allFilled && selectedId && paymentMethod !== 'balance' && (!proofFile || !cupReference.trim()) && (
               <p className="text-xs text-yellow-400/70 text-center mt-2">
-                <span className="inline-flex items-center justify-center gap-1"><AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />Adjunta el comprobante de pago para continuar</span>
+                <span className="inline-flex items-center justify-center gap-1"><AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />{!cupReference.trim() ? 'Completa el número de transacción o teléfono emisor' : 'Adjunta el comprobante de pago para continuar'}</span>
               </p>
             )}
           </div>
@@ -9156,12 +11021,15 @@ function ProductDetailScreen({ productId, region, me, onCancel, onBought, onLogi
   const [detail, setDetail] = useState(null)
   const [loading, setLoading] = useState(true)
   const [err, setErr] = useState(null)
+  const [detailRetryKey, setDetailRetryKey] = useState(0)
   const [fields, setFields] = useState({})
   const [submitting, setSubmitting] = useState(false)
   const [orderError, setOrderError] = useState(null)
   const [showShare, setShowShare] = useState(false)
   const [showDripHelp, setShowDripHelp] = useState(false)
   const [cupSettings, setCupSettings] = useState(null)
+  const [cupSettingsError, setCupSettingsError] = useState('')
+  const [pendingCupOrder, setPendingCupOrder] = useState(null)
   const [paymentMethod, setPaymentMethod] = useState('balance')
   const [cupReference, setCupReference] = useState('')
   const [proofFile, setProofFile] = useState(null)
@@ -9171,13 +11039,18 @@ function ProductDetailScreen({ productId, region, me, onCancel, onBought, onLogi
   const instructionsRef = useRef(null)
   // Local cacheBust removed
 
-  useEffect(() => {
-    api.cupPaymentSettings()
-      .then(res => {
-        if (res && res.enabled) setCupSettings(res)
-      })
-      .catch(() => {})
-  }, [])
+  const loadCupSettings = async () => {
+    setCupSettingsError('')
+    try {
+      const res = await api.cupPaymentSettings()
+      setCupSettings(res?.enabled ? res : null)
+    } catch (error) {
+      setCupSettings(null)
+      setCupSettingsError(error?.message || 'Error temporal al cargar la configuración de CUP.')
+    }
+  }
+
+  useEffect(() => { loadCupSettings() }, [])
 
   useEffect(() => {
     if (!proofFile) {
@@ -9198,10 +11071,13 @@ function ProductDetailScreen({ productId, region, me, onCancel, onBought, onLogi
 
   useEffect(() => {
     // IMPORTANTE: pasamos region para preseleccionar server
+    setLoading(true)
+    setErr(null)
+    setDetail(null)
     (me?.is_guest ? api.publicProductDetail(productId, region) : api.productDetail(productId, region))
       .then((d) => { setDetail(d); setLoading(false) })
       .catch((e) => { setErr(e.message); setLoading(false) })
-  }, [productId, region, me?.is_guest])
+  }, [productId, region, me?.is_guest, detailRetryKey])
 
   // Actualizar URL automáticamente cuando cargue el detalle
   useEffect(() => {
@@ -9214,17 +11090,19 @@ function ProductDetailScreen({ productId, region, me, onCancel, onBought, onLogi
     try { window.history.replaceState(window.history.state || {}, '', newUrl) } catch {}
   }, [detail, region, me?.is_guest, me?.user_id])
 
-  if (loading || !detail) return <CoolLoading label="Cargando detalles del producto..." />
-  if (err) return <ErrorView msg={err} />
+  if (loading) return <CoolLoading label="Cargando detalles del producto..." />
+  if (err) return <ErrorView msg={err} onRetry={() => setDetailRetryKey((key) => key + 1)} />
+  if (!detail) return <ErrorView msg="No encontramos este producto. Puede haber sido retirado o estar temporalmente no disponible." onRetry={() => setDetailRetryKey((key) => key + 1)} />
 
   const detailFields = detail.fields || []
   const allFilled = detailFields.every((f) => {
+    if (f.is_required === false || f.required === false) return true
     const key = f.field_name || f.name
     return fields[key] && String(fields[key]).trim() !== ''
   })
 
-  const cardRate = Number(cupSettings?.transfer_rate) || 1190.90909091
-  const mobileRate = Number(cupSettings?.mobile_rate) || 643.73464374
+  const cardRate = Number(cupSettings?.transfer_rate) || 0
+  const mobileRate = Number(cupSettings?.mobile_rate) || 0
   const numericDetailPrice = Number(detail?.price || 0)
   const cardCupAmount = Math.round((numericDetailPrice * cardRate) / 10) * 10
   const mobileCupAmount = Math.round((numericDetailPrice * mobileRate) / 10) * 10
@@ -9273,13 +11151,18 @@ function ProductDetailScreen({ productId, region, me, onCancel, onBought, onLogi
     setSubmitting(true)
     setOrderError(null)
     try {
-      const cupOrder = await api.createCupOrder({
+      if (!cupReference.trim()) {
+        throw new Error(paymentMethod === 'cup_mobile_balance' ? 'Escribe el número de teléfono desde el que enviaste el saldo.' : 'Escribe el número de transacción de tu comprobante.')
+      }
+      const cupOrder = pendingCupOrder || await api.createCupOrder({
         product_id: detail.id,
         fields: { ...fields, __region__: region },
         payment_method: paymentMethod,
       })
       if (!cupOrder?.order_id) throw new Error('No se pudo generar el pedido CUP')
+      setPendingCupOrder(cupOrder)
       await api.uploadCupPaymentProof(cupOrder.order_id, cupReference, proofFile)
+      setPendingCupOrder(null)
       onBought({
         ...cupOrder,
         order_id: cupOrder.order_id,
@@ -9288,7 +11171,7 @@ function ProductDetailScreen({ productId, region, me, onCancel, onBought, onLogi
         message: 'Comprobante recibido. Un administrador verificará la transferencia y activará tu recarga enseguida.'
       })
     } catch (e) {
-      setOrderError(e.message)
+      setOrderError(pendingCupOrder ? `El pedido #${pendingCupOrder.order_id} ya fue creado. Corrige el comprobante o la conexión y vuelve a enviarlo; no se generará otro pedido.` : e.message)
       setSubmitting(false)
     }
   }
@@ -9440,10 +11323,14 @@ function ProductDetailScreen({ productId, region, me, onCancel, onBought, onLogi
       )}
 
       <PaymentMethodSection
+        isGuest={Boolean(me?.is_guest)}
+        onLoginRequired={onLoginRequired}
         paymentMethod={paymentMethod}
         setPaymentMethod={setPaymentMethod}
         priceUsdt={numericDetailPrice}
         cupSettings={cupSettings}
+        cupSettingsError={cupSettingsError}
+        onRetryCupSettings={loadCupSettings}
         userBalance={Number(me?.balance || 0)}
         cardCupAmount={cardCupAmount}
         mobileCupAmount={mobileCupAmount}
@@ -9480,9 +11367,17 @@ function ProductDetailScreen({ productId, region, me, onCancel, onBought, onLogi
           >
             <Share2 className="h-5 w-5 mx-auto text-violet-400" />
           </button>
-          <button disabled={me?.is_guest ? false : !canBuy} onClick={handleDirectBuy}
-            className="min-w-0 flex-1 rounded-xl bg-gradient-to-r from-accent to-accent2 px-3 py-3 font-bold active:scale-95 disabled:opacity-50">
-            {submitting ? (
+          <button
+            disabled={!me?.is_guest && (!canBuy || submitting || (paymentMethod !== 'balance' && !cupReference.trim()))}
+            onClick={me?.is_guest ? onLoginRequired : handleDirectBuy}
+            className="min-w-0 flex-1 rounded-xl bg-gradient-to-r from-accent to-accent2 px-3 py-3 font-bold active:scale-95 disabled:opacity-50 text-bg"
+          >
+            {me?.is_guest ? (
+              <span key="login_req" className="inline-flex items-center justify-center gap-2">
+                <Lock className="h-5 w-5" />
+                <span>Iniciar sesión para comprar</span>
+              </span>
+            ) : submitting ? (
               <span key="submitting" className="inline-flex items-center justify-center gap-2">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 <span>Procesando...</span>
@@ -9500,7 +11395,7 @@ function ProductDetailScreen({ productId, region, me, onCancel, onBought, onLogi
             ) : (
               <span key="buy" className="inline-flex items-center justify-center gap-2">
                 <ShoppingCart className="h-5 w-5" />
-                <span>Comprar por ${Number(detail.price).toFixed(2)} USDT</span>
+                <span>Comprar</span>
               </span>
             )}
           </button>
@@ -9512,12 +11407,12 @@ function ProductDetailScreen({ productId, region, me, onCancel, onBought, onLogi
 
 function TermsSummaryModal({ onClose }) {
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="w-full max-w-lg rounded-2xl sm:rounded-3xl border border-white/10 bg-[#12141c] shadow-2xl overflow-hidden p-5 space-y-4 text-white max-h-[85vh] flex flex-col">
+    <div className="fs-terms-modal fixed inset-0 z-[100] flex items-center justify-center p-3 sm:p-4 bg-black/85 backdrop-blur-md animate-in fade-in duration-200">
+      <div className="w-full min-w-0 max-w-lg rounded-2xl sm:rounded-3xl border border-white/10 bg-[#12141c] shadow-2xl overflow-hidden p-5 space-y-4 text-white max-h-[85vh] flex flex-col">
         <div className="flex items-center justify-between border-b border-white/10 pb-3">
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-emerald-400" />
-            <h3 className="text-sm sm:text-base font-black">Términos y Condiciones del Servicio</h3>
+            <h3 className="min-w-0 break-words text-sm sm:text-base font-black">Términos y Condiciones del Servicio</h3>
           </div>
           <button
             onClick={onClose}
@@ -9527,7 +11422,7 @@ function TermsSummaryModal({ onClose }) {
           </button>
         </div>
 
-        <div className="overflow-y-auto space-y-3.5 pr-1 text-xs text-white/80 leading-relaxed flex-1">
+        <div className="min-w-0 overflow-x-hidden overflow-y-auto break-words space-y-3.5 pr-1 text-xs text-white/80 leading-relaxed flex-1">
           <div className="rounded-xl border border-white/10 bg-white/5 p-3">
             <h4 className="font-bold text-white mb-1">1. Entrega y Activación Digital</h4>
             <p className="text-white/70">
@@ -9647,11 +11542,15 @@ function ConfirmScreen({ product, region, me, onSuccess }) {
   )
 }
 
-function ResultScreen({ result, onHome }) {
+function ResultScreen({ result, onHome, onOrders }) {
   const [current, setCurrent] = useState(result || {})
   const [polling, setPolling] = useState(true)
 
   useEffect(() => {
+    if (result?.payment_status === 'pending_verification') {
+      setPolling(false)
+      return undefined
+    }
     const orderId = result?.order_id || result?.id
     if (!orderId) {
       setPolling(false)
@@ -9688,6 +11587,10 @@ function ResultScreen({ result, onHome }) {
   }, [result?.order_id, result?.id])
 
   const statusText = current.status_text || current.status || 'processing'
+  const isCupPending = current.payment_status === 'pending_verification' || result?.payment_status === 'pending_verification'
+  if (isCupPending) {
+    return <CupOrderSuccessView order={{ ...result, ...current, product: current.product || result?.product_name }} onClose={onHome} onOrders={onOrders} />
+  }
   const isOk = current.status === 2 || statusText === 'completed'
   const isFailed = current.status === 3 || current.status === 4 || ['failed', 'partial'].includes(statusText)
   const details = formatRechargeDetails(current.recharge_details)
@@ -9749,9 +11652,21 @@ function ResultScreen({ result, onHome }) {
 //  PANTALLAS DE AUTENTICACIÓN WEB
 // ════════════════════════════════════════════════════════
 
-function AuthWrapper({ children, title, subtitle, privatePortal = false, activeTab, onTabChange }) {
+function AuthWrapper({ children, title, subtitle, privatePortal = false, activeTab, onTabChange, lockViewport = false }) {
+  useEffect(() => {
+    if (!lockViewport) return undefined
+    const previousHtmlOverflow = document.documentElement.style.overflow
+    const previousBodyOverflow = document.body.style.overflow
+    document.documentElement.style.overflow = 'hidden'
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.documentElement.style.overflow = previousHtmlOverflow
+      document.body.style.overflow = previousBodyOverflow
+    }
+  }, [lockViewport])
+
   return (
-    <div className="min-h-screen bg-bg relative flex flex-col justify-center items-center px-4 py-8 overflow-x-hidden">
+    <div className={`fs-auth-screen ${lockViewport ? 'h-[100dvh] min-h-0 overflow-hidden py-3 sm:py-5' : 'min-h-screen py-8'} bg-[#070a0f] relative flex flex-col justify-center items-center px-4 overflow-x-hidden`}>
       {/* Luces de ambiente gamer de fondo */}
       <div className="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[340px] sm:w-[500px] h-[340px] sm:h-[500px] bg-accent/12 rounded-full blur-[130px] pointer-events-none" />
       <div className="absolute bottom-1/4 right-1/4 w-[260px] h-[260px] bg-accent2/10 rounded-full blur-[110px] pointer-events-none" />
@@ -9781,10 +11696,10 @@ function AuthWrapper({ children, title, subtitle, privatePortal = false, activeT
         </div>
 
         {/* Tarjeta principal unificada */}
-        <div className="relative rounded-3xl border border-white/10 bg-[#0e1422]/95 backdrop-blur-xl p-5 sm:p-7 shadow-2xl shadow-black/70">
+        <div className="fs-auth-card relative rounded-3xl border border-white/10 bg-[#0e1422]/95 backdrop-blur-xl p-5 sm:p-7">
           {/* Pestañas modernas Iniciar sesión / Crear cuenta */}
           {activeTab && onTabChange && !privatePortal && (
-            <div className="grid grid-cols-2 p-1 bg-black/40 border border-white/10 rounded-2xl mb-5">
+            <div className="fs-auth-tabs grid grid-cols-2 p-1 bg-black/40 border border-white/10 rounded-2xl mb-5">
               <button
                 type="button"
                 onClick={() => onTabChange('login')}
@@ -9830,9 +11745,21 @@ function AuthWrapper({ children, title, subtitle, privatePortal = false, activeT
             <span>Conexión cifrada de alta seguridad · Francho Shop</span>
           </div>
           <div className="flex items-center gap-3 text-white/40 text-[11px]">
-            <a href="/terminos-condiciones" className="hover:text-white/70 transition">Términos</a>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('franchoshop:open-policy', { detail: { screen: 'terms' } }))}
+              className="hover:text-white/70 transition"
+            >
+              Términos
+            </button>
             <span>•</span>
-            <a href="/politica-privacidad" className="hover:text-white/70 transition">Privacidad</a>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('franchoshop:open-policy', { detail: { screen: 'privacy' } }))}
+              className="hover:text-white/70 transition"
+            >
+              Privacidad
+            </button>
             <span>•</span>
             <button type="button" onClick={() => openExternalUrl(WHATSAPP_SUPPORT_URL)} className="hover:text-white/70 transition">
               Soporte WhatsApp
@@ -9844,7 +11771,7 @@ function AuthWrapper({ children, title, subtitle, privatePortal = false, activeT
   )
 }
 
-function PasswordInput({ placeholder, value, onChange, onKeyDown }) {
+function PasswordInput({ placeholder, value, onChange, onKeyDown, autoComplete = 'current-password' }) {
   const [show, setShow] = useState(false)
   return (
     <div className="relative mb-3 group">
@@ -9857,12 +11784,15 @@ function PasswordInput({ placeholder, value, onChange, onKeyDown }) {
         value={value}
         onChange={onChange}
         onKeyDown={onKeyDown}
+        autoComplete={autoComplete}
+        aria-label={placeholder}
         className="w-full bg-[#141b2d]/90 border border-white/10 rounded-xl pl-10 pr-11 py-3 text-sm text-white placeholder-white/30 outline-none transition-all focus:border-accent focus:ring-1 focus:ring-accent/40 focus:bg-[#182136]"
       />
       <button
         type="button"
         onClick={() => setShow(!show)}
         className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/80 active:text-white p-1 transition-colors"
+        aria-label={show ? 'Ocultar contraseña' : 'Mostrar contraseña'}
       >
         {show ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
       </button>
@@ -9870,93 +11800,140 @@ function PasswordInput({ placeholder, value, onChange, onKeyDown }) {
   )
 }
 
-function GoogleSignInButton({ onSuccess, onError, text = "continue_with" }) {
+function GoogleSignInButton({ onSuccess, onError, text = "continue_with", iconOnly = false }) {
   const containerRef = useRef(null)
   const [loading, setLoading] = useState(false)
   const onSuccessRef = useRef(onSuccess)
   onSuccessRef.current = onSuccess
   const onErrorRef = useRef(onError)
   onErrorRef.current = onError
+  const isNativeApp = typeof window !== 'undefined' && Boolean(window.Capacitor?.isNativePlatform?.())
+
+  const openNativeGoogleLogin = async () => {
+    setLoading(true)
+    try {
+      // Android Credential Manager: mantiene al usuario dentro de la APK y
+      // devuelve un ID token que el mismo backend de Francho Shop valida.
+      const { SocialLogin } = await import('@capgo/capacitor-social-login')
+      if (!window.__franchoshopNativeGoogleInitialized) {
+        await SocialLogin.initialize({
+          google: {
+            webClientId: GOOGLE_CLIENT_ID,
+            mode: 'online',
+          },
+        })
+        window.__franchoshopNativeGoogleInitialized = true
+      }
+      const login = await SocialLogin.login({
+        provider: 'google',
+        options: {
+          scopes: ['email', 'profile'],
+          style: 'bottom',
+          filterByAuthorizedAccounts: false,
+          autoSelectEnabled: false,
+        },
+      })
+      const credential = login?.result?.idToken
+      if (!credential) throw new Error('Google no devolvió un token de identidad válido.')
+      const handler = window.__franchoshop_googleCredentialHandler
+      if (typeof handler !== 'function') throw new Error('La pantalla de acceso aún no está lista. Intenta de nuevo.')
+      handler({ credential })
+    } catch (err) {
+      // Cerrar el selector no debe mostrarse como un error de autenticación.
+      if (err?.code !== 'USER_CANCELLED' && onErrorRef.current) {
+        onErrorRef.current(err?.message || 'No se pudo iniciar sesión con Google.')
+      }
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
     let checkInterval = null
     let attempts = 0
 
-    const initGsi = () => {
-      attempts++
-      if (!window.google?.accounts?.id || !containerRef.current) return false
-
+    const executeLogin = async (credential) => {
+      if (!credential) return
+      setLoading(true)
       try {
-        const handleCredential = async (response) => {
-          if (!response?.credential) {
-            console.warn('[Google Auth] No se recibió credencial en la respuesta:', response)
-            return
-          }
-          console.log('[Google Auth] Credencial de Google recibida, autenticando con servidor...')
-          setLoading(true)
-          try {
-            const data = await api.loginWithGoogle(response.credential)
-            console.log('[Google Auth] Sesión creada exitosamente:', data)
-            let me = null
-            try {
-              me = await api.me()
-              console.log('[Google Auth] Usuario obtenido de /me:', me)
-            } catch (meErr) {
-              console.warn('[Google Auth] Error al llamar api.me(), usando datos de respuesta:', meErr)
-              if (data?.user) {
-                me = {
-                  user_id: data.user.id,
-                  name: data.user.name,
-                  display_name: data.user.name,
-                  photo_url: data.user.photo_url || '',
-                  balance: 0.0,
-                  role: 'user',
-                  is_guest: false,
-                  pricing_role: 'user',
-                }
-              }
+        const result = await api.loginWithGoogle(credential)
+        let userData = null
+        try {
+          userData = await api.me()
+        } catch {
+          if (result?.user) {
+            userData = {
+              user_id: result.user.id,
+              name: result.user.name,
+              display_name: result.user.name,
+              photo_url: result.user.photo_url || '',
+              balance: 0.0,
+              role: 'user',
+              is_guest: false,
+              pricing_role: 'user',
+              has_password: result.user.has_password,
+              email: result.user.email,
             }
-            if (me) {
-              if (data?.user?.is_new_user || !data?.user?.has_password || !me?.has_password) {
-                me._show_google_welcome = data?.user?.email || me.email || true
-              }
-              if (onSuccessRef.current) {
-                onSuccessRef.current(me)
-              }
-            }
-          } catch (err) {
-            console.error('[Google Auth] Error en autenticación:', err)
-            if (onErrorRef.current) onErrorRef.current(err.message || 'Error al autenticar con Google')
-          } finally {
-            setLoading(false)
           }
         }
+        if (!userData) {
+          throw new Error('Google confirmó tu cuenta, pero no se pudo cargar tu sesión. Intenta nuevamente.')
+        }
+        if (onSuccessRef.current) {
+          if (typeof window !== 'undefined' && (window.location.pathname === '/login' || window.location.pathname === '/registro')) {
+            window.history.replaceState({}, '', '/')
+          }
+          onSuccessRef.current(userData)
+        }
+      } catch (err) {
+        console.error('[Google Auth Error]:', err)
+        if (onErrorRef.current) onErrorRef.current(err.message || 'Error al autenticar con Google')
+      } finally {
+        setLoading(false)
+      }
+    }
 
-        window.__franchoshop_handleGoogleCredential = handleCredential
+    window.__franchoshop_activeGoogleCallback = (userData) => {
+      setLoading(false)
+      if (onSuccessRef.current) onSuccessRef.current(userData)
+    }
+    window.__franchoshop_googleCredentialHandler = (response) => {
+      if (response?.credential) executeLogin(response.credential)
+    }
 
-        window.google.accounts.id.initialize({
-          client_id: GOOGLE_CLIENT_ID,
-          callback: (res) => window.__franchoshop_handleGoogleCredential?.(res),
-          auto_select: false,
-          cancel_on_tap_outside: true,
-        })
+    if (isNativeApp) {
+      const onVisibilityChange = () => {
+        if (document.visibilityState === 'visible') setLoading(false)
+      }
+      document.addEventListener('visibilitychange', onVisibilityChange)
+      return () => {
+        window.__franchoshop_activeGoogleCallback = null
+        window.__franchoshop_googleCredentialHandler = null
+        document.removeEventListener('visibilitychange', onVisibilityChange)
+      }
+    }
 
+    const initGsi = () => {
+      attempts++
+      if (!containerRef.current || !ensureGoogleIdentity()) return false
+
+      try {
         if (containerRef.current) {
           containerRef.current.innerHTML = ''
           window.google.accounts.id.renderButton(containerRef.current, {
             theme: 'filled_black',
             size: 'large',
-            type: 'standard',
-            shape: 'pill',
+            type: iconOnly ? 'icon' : 'standard',
+            shape: iconOnly ? 'circle' : 'pill',
             text: text,
             logo_alignment: 'left',
-            width: 320,
+            ...(iconOnly ? {} : { width: 290 }),
             locale: 'es',
           })
         }
+
         return true
       } catch (e) {
-        console.error('Error inicializando Google Identity:', e)
+        console.error('Error inicializando Google Button:', e)
         return false
       }
     }
@@ -9968,19 +11945,269 @@ function GoogleSignInButton({ onSuccess, onError, text = "continue_with" }) {
     }
 
     return () => {
+      window.__franchoshop_activeGoogleCallback = null
+      if (window.__franchoshop_googleCredentialHandler) {
+        window.__franchoshop_googleCredentialHandler = null
+      }
       if (checkInterval) clearInterval(checkInterval)
     }
   }, [text])
 
   return (
-    <div className="w-full flex flex-col items-center justify-center my-2">
-      {loading ? (
-        <div className="w-full max-w-[320px] py-2.5 px-4 rounded-full border border-white/20 bg-card flex items-center justify-center gap-2 text-sm text-white/80 animate-pulse">
+    <div className={`${iconOnly ? 'w-11 h-11' : 'w-full my-2 space-y-1.5'} flex flex-col items-center justify-center`}>
+      {loading && !iconOnly && (
+        <div className="w-full max-w-[290px] py-3 px-4 rounded-full border border-white/20 bg-card flex items-center justify-center gap-2 text-sm text-white/80 animate-pulse">
           <Loader2 className="h-4 w-4 animate-spin text-accent" />
-          <span>Conectando con Google...</span>
+          <span>Iniciando sesión con Google...</span>
+        </div>
+      )}
+      {isNativeApp ? (
+        <button
+          type="button"
+          onClick={openNativeGoogleLogin}
+          disabled={loading}
+          className={`${iconOnly ? 'w-11 h-11 rounded-full' : 'w-full max-w-[290px] h-[44px] rounded-full'} bg-white text-[#1f1f1f] hover:bg-white/90 active:scale-[0.98] transition font-semibold text-sm flex items-center justify-center gap-2 disabled:opacity-60`}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true">
+            <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+            <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+            <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+            <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+          </svg>
+          {!iconOnly && <span>Continuar con Google</span>}
+        </button>
+      ) : (
+        <div
+          ref={containerRef}
+          className={`${iconOnly ? 'w-11 h-11' : 'w-[310px] max-w-full h-[44px]'} flex items-center justify-center ${loading ? 'opacity-50 pointer-events-none' : ''}`}
+        />
+      )}
+      {!iconOnly && (
+        <p className="text-[11px] text-white/45 text-center max-w-[290px] leading-tight">
+          Acceso rápido y seguro con tu cuenta de Google
+        </p>
+      )}
+    </div>
+  )
+}
+
+function TelegramLoginButton({ onSuccess, onError, text = "Continuar con Telegram", iconOnly = false }) {
+  const [loading, setLoading] = useState(false)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [botUrl, setBotUrl] = useState('')
+  const [authToken, setAuthToken] = useState('')
+  const [pollingStatus, setPollingStatus] = useState('idle')
+  const pollerRef = useRef(null)
+  const onSuccessRef = useRef(onSuccess)
+  onSuccessRef.current = onSuccess
+  const onErrorRef = useRef(onError)
+  onErrorRef.current = onError
+
+  const isInsideTelegram = typeof window !== 'undefined' && Boolean(window.Telegram?.WebApp?.initData)
+
+  const handleTelegramAuth = async (tgData) => {
+    setLoading(true)
+    try {
+      const res = await api.loginWithTelegram(tgData)
+      let userData = null
+      try {
+        userData = await api.me()
+      } catch {
+        if (res?.user) {
+          userData = {
+            user_id: res.user.id,
+            name: res.user.name,
+            display_name: res.user.name,
+            photo_url: res.user.photo_url || '',
+            balance: res.user.balance || 0.0,
+            role: res.user.role || 'user',
+            is_guest: false,
+            pricing_role: 'user',
+            email: res.user.email || null,
+          }
+        }
+      }
+      if (userData && onSuccessRef.current) {
+        if (typeof window !== 'undefined' && (window.location.pathname === '/login' || window.location.pathname === '/registro')) {
+          window.history.replaceState({}, '', '/')
+        }
+        onSuccessRef.current(userData)
+      }
+    } catch (err) {
+      console.error('[Telegram Auth Error]:', err)
+      if (onErrorRef.current) onErrorRef.current(err.message || 'Error al autenticar con Telegram')
+    } finally {
+      setLoading(false)
+      setModalOpen(false)
+    }
+  }
+
+  const startBotTokenFlow = async () => {
+    setLoading(true)
+    try {
+      const res = await api.requestTelegramToken()
+      if (res && res.token && res.url) {
+        setAuthToken(res.token)
+        setBotUrl(res.url)
+        setPollingStatus('polling')
+        setModalOpen(true)
+      } else {
+        throw new Error('No se pudo generar enlace de autenticación')
+      }
+    } catch (err) {
+      console.error('[Telegram Request Token Error]:', err)
+      if (onErrorRef.current) onErrorRef.current(err.message || 'Error al iniciar con Telegram')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Polling para detectar cuando el usuario toca /start auth_XYZ en Telegram
+  useEffect(() => {
+    if (!modalOpen || !authToken || pollingStatus !== 'polling') {
+      if (pollerRef.current) clearInterval(pollerRef.current)
+      return
+    }
+
+    let checks = 0
+    pollerRef.current = setInterval(async () => {
+      checks++
+      if (checks > 120) {
+        clearInterval(pollerRef.current)
+        setPollingStatus('expired')
+        return
+      }
+
+      try {
+        const res = await api.checkTelegramToken(authToken)
+        if (res && res.status === 'approved' && res.token) {
+          clearInterval(pollerRef.current)
+          setPollingStatus('approved')
+          let userData = null
+          try {
+            userData = await api.me()
+          } catch {
+            if (res.user) {
+              userData = {
+                user_id: res.user.id,
+                name: res.user.name,
+                display_name: res.user.name,
+                photo_url: res.user.photo_url || '',
+                balance: res.user.balance || 0.0,
+                role: res.user.role || 'user',
+                is_guest: false,
+                pricing_role: 'user',
+              }
+            }
+          }
+          if (userData && onSuccessRef.current) {
+            if (typeof window !== 'undefined' && (window.location.pathname === '/login' || window.location.pathname === '/registro')) {
+              window.history.replaceState({}, '', '/')
+            }
+            setTimeout(() => {
+              setModalOpen(false)
+              onSuccessRef.current(userData)
+            }, 600)
+          }
+        }
+      } catch (err) {
+        console.warn('[Telegram Poll]:', err)
+      }
+    }, 1500)
+
+    return () => {
+      if (pollerRef.current) clearInterval(pollerRef.current)
+    }
+  }, [modalOpen, authToken, pollingStatus])
+
+  const handleTelegramClick = () => {
+    if (isInsideTelegram) {
+      handleTelegramAuth({ init_data: window.Telegram.WebApp.initData })
+      return
+    }
+    startBotTokenFlow()
+  }
+
+  return (
+    <div className={`${iconOnly ? 'w-11 h-11' : 'w-full my-1 space-y-1'} flex flex-col items-center justify-center`}>
+      {loading && !iconOnly ? (
+        <div className="w-full max-w-[290px] py-2.5 px-4 rounded-full border border-[#229ED9]/30 bg-[#229ED9]/15 flex items-center justify-center gap-2 text-xs text-white/90 animate-pulse">
+          <Loader2 className="h-4 w-4 animate-spin text-[#229ED9]" />
+          <span>Iniciando con Telegram...</span>
         </div>
       ) : (
-        <div ref={containerRef} className="w-full flex justify-center min-h-[44px]" />
+        <button
+          type="button"
+          onClick={handleTelegramClick}
+          aria-label="Continuar con Telegram"
+          className={`${iconOnly ? 'fs-telegram-auth-icon w-11 h-11 rounded-full' : 'w-full max-w-[290px] h-[44px] rounded-full'} bg-[#229ED9] hover:bg-[#1E8BC0] active:scale-[0.98] transition-all font-bold text-xs text-white flex items-center justify-center gap-2.5 shadow-md shadow-[#229ED9]/20 cursor-pointer`}
+        >
+          <svg className="w-[22px] h-[22px]" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M21.6 3.05 2.86 10.28c-1.28.51-1.27 1.22-.23 1.54l4.81 1.5 1.86 5.67c.23.64.12.89.79.89.52 0 .75-.24 1.04-.52l2.33-2.27 4.85 3.58c.89.49 1.53.24 1.75-.83l3.19-15.03c.33-1.31-.5-1.9-1.65-1.37Zm-13.34 9.8 10.84-6.84c.54-.33 1.03-.15.62.22l-8.78 7.93-.34 3.63-2.34-4.94Z" fill="#fff"/>
+          </svg>
+          {!iconOnly && <span>{text}</span>}
+        </button>
+      )}
+
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
+          <div className="w-full max-w-sm rounded-3xl bg-[#0b101b] border border-[#229ED9]/30 p-6 space-y-4 text-center shadow-2xl relative overflow-hidden">
+            <div className="absolute -top-12 -right-12 w-32 h-32 bg-[#229ED9]/20 rounded-full blur-2xl pointer-events-none" />
+            
+            <div className="w-14 h-14 rounded-2xl bg-[#229ED9]/20 text-[#229ED9] flex items-center justify-center mx-auto shadow-inner">
+              {pollingStatus === 'approved' ? (
+                <CircleCheck className="w-8 h-8 text-emerald-400 animate-in zoom-in" />
+              ) : (
+                <Send className="w-7 h-7 fill-[#229ED9] ml-0.5" />
+              )}
+            </div>
+
+            <div className="space-y-1">
+              <h3 className="text-lg font-black text-white">
+                {pollingStatus === 'approved' ? '¡Identidad Confirmada!' : 'Acceso con Telegram'}
+              </h3>
+              <p className="text-xs text-white/65 leading-relaxed">
+                {pollingStatus === 'approved'
+                  ? 'Entrando a tu cuenta...'
+                  : 'Toca el botón para abrir nuestro bot y confirmar tu inicio de sesión en 1 toque, sin contraseñas.'}
+              </p>
+            </div>
+
+            {pollingStatus === 'polling' && (
+              <div className="py-2.5 px-3 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center gap-2.5 text-xs text-white/80">
+                <Loader2 className="w-4 h-4 animate-spin text-[#229ED9]" />
+                <span>Esperando confirmación en Telegram...</span>
+              </div>
+            )}
+
+            {pollingStatus === 'expired' && (
+              <div className="py-2 px-3 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200">
+                El enlace expiró. Intenta de nuevo.
+              </div>
+            )}
+
+            <div className="space-y-2 pt-1">
+              {botUrl && pollingStatus !== 'approved' && (
+                <a
+                  href={botUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full py-3.5 rounded-2xl bg-[#229ED9] hover:bg-[#1E8BC0] font-black text-xs text-white flex items-center justify-center gap-2 shadow-lg shadow-[#229ED9]/30 active:scale-95 transition"
+                >
+                  <Send className="w-4 h-4 fill-white" />
+                  <span>Abrir @Franshopdiamondbot</span>
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={() => setModalOpen(false)}
+                className="w-full py-2 text-xs text-white/50 hover:text-white/80 transition cursor-pointer"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
@@ -9991,6 +12218,8 @@ function LoginScreen({ onSuccess, onRegister, onForgot, onClose, privatePortal =
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState(null)
+  const [showEmailForm, setShowEmailForm] = useState(Boolean(privatePortal))
+  const [showTermsModal, setShowTermsModal] = useState(false)
 
   async function handleLogin(e) {
     e?.preventDefault()
@@ -10009,7 +12238,9 @@ function LoginScreen({ onSuccess, onRegister, onForgot, onClose, privatePortal =
       title={privatePortal ? 'Iniciar sesión en el panel' : 'Iniciar sesión'}
       subtitle={privatePortal ? 'Acceso privado de administración y vendedores' : null}
       privatePortal={privatePortal}
+      lockViewport={!privatePortal}
     >
+      {showTermsModal && <TermsSummaryModal onClose={() => setShowTermsModal(false)} />}
       {err && (
         <div className="mb-4 rounded-xl border border-red-500/25 bg-red-500/10 p-3 text-center text-xs text-red-200 flex items-center justify-center gap-2">
           <AlertTriangle className="h-4 w-4 flex-shrink-0 text-red-400" />
@@ -10018,76 +12249,151 @@ function LoginScreen({ onSuccess, onRegister, onForgot, onClose, privatePortal =
       )}
 
       {!privatePortal && (
-        <>
-          <GoogleSignInButton
-            text="signin_with"
-            onSuccess={onSuccess}
-            onError={setErr}
-          />
-          <div className="relative flex py-2 items-center my-3">
+        <div className="space-y-2 mb-2">
+          <div className="flex items-center justify-center gap-3" aria-label="Acceso rápido">
+            <GoogleSignInButton iconOnly onSuccess={onSuccess} onError={setErr} />
+            <TelegramLoginButton iconOnly onSuccess={onSuccess} onError={setErr} />
+          </div>
+          <p className="text-center text-[11px] text-white/45">Accede con Google o Telegram</p>
+
+          {/* Separador */}
+          <div className="relative flex py-2 items-center my-1.5 max-w-[290px] mx-auto">
             <div className="flex-grow border-t border-white/10" />
-            <span className="flex-shrink mx-3 text-[11px] text-white/40 uppercase tracking-widest font-semibold">o con email</span>
+            <span className="flex-shrink mx-3 text-[10px] text-white/35 uppercase tracking-widest font-semibold">o con email</span>
             <div className="flex-grow border-t border-white/10" />
           </div>
-        </>
+
+          {/* Opción 3: Continuar con correo electrónico (desplegable) */}
+          {!showEmailForm && (
+            <div className="w-full flex justify-center">
+              <button
+                type="button"
+                onClick={() => setShowEmailForm(true)}
+                className="fs-auth-secondary w-full max-w-[290px] h-[42px] rounded-full border border-white/15 bg-white/5 hover:bg-white/10 text-xs font-semibold text-white/80 flex items-center justify-center gap-2 transition active:scale-[0.98] cursor-pointer"
+              >
+                <Mail className="h-4 w-4 text-white/60" />
+                <span>Continuar con correo electrónico</span>
+              </button>
+            </div>
+          )}
+        </div>
       )}
 
-      <form onSubmit={handleLogin} className="space-y-3">
-        <div className="relative group">
-          <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30 group-focus-within:text-accent transition-colors pointer-events-none">
-            <Mail className="h-4 w-4" />
+      {(showEmailForm || privatePortal) && (
+        <form onSubmit={handleLogin} className="space-y-3 pt-1 animate-in fade-in slide-in-from-top-1">
+          <div className="relative group">
+            <div className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/30 group-focus-within:text-accent transition-colors pointer-events-none">
+              <Mail className="h-4 w-4" />
+            </div>
+            <input
+              type="email"
+              placeholder="Correo electrónico"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              autoComplete="username"
+              className="w-full bg-[#141b2d]/90 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-white/30 outline-none transition-all focus:border-accent focus:ring-1 focus:ring-accent/40 focus:bg-[#182136]"
+              required
+            />
           </div>
-          <input
-            type="email"
-            placeholder="Correo electrónico"
-            value={email}
-            onChange={e => setEmail(e.target.value)}
-            className="w-full bg-[#141b2d]/90 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-white/30 outline-none transition-all focus:border-accent focus:ring-1 focus:ring-accent/40 focus:bg-[#182136]"
-            required
-          />
-        </div>
 
-        <div>
-          <PasswordInput
-            placeholder="Contraseña"
-            value={password}
-            onChange={e => setPassword(e.target.value)}
-          />
-          <div className="flex justify-end -mt-1 mb-2">
+          <div>
+            <PasswordInput
+              placeholder="Contraseña"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              autoComplete="current-password"
+            />
+            <div className="flex justify-end -mt-1 mb-2">
+              <button
+                type="button"
+                onClick={onForgot}
+                className="text-xs text-accent hover:underline transition"
+              >
+                ¿Olvidaste la contraseña?
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="submit"
+            disabled={loading || !email || !password}
+            className="fs-auth-primary w-full py-3.5 rounded-xl font-bold text-sm bg-gradient-to-r from-accent to-accent2 text-white active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+          >
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                <span>Entrando...</span>
+              </>
+            ) : (
+              <>
+                <LockKeyhole className="h-4 w-4" />
+                <span>Iniciar sesión</span>
+              </>
+            )}
+          </button>
+        </form>
+      )}
+
+      {/* Información breve para mantener el acceso visible sin desplazamiento */}
+      {!privatePortal && (
+        <div className="pt-2.5 mt-2.5 border-t border-white/5 space-y-1.5 text-center">
+          <div className="hidden grid grid-cols-2 gap-2 text-[11px] text-white/55 text-left px-2 pt-1">
+            <div className="flex items-center gap-1.5">
+              <Check className="w-3.5 h-3.5 text-accent shrink-0" />
+              <span>Tus IDs guardados</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Check className="w-3.5 h-3.5 text-accent shrink-0" />
+              <span>Pedidos en vivo</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Check className="w-3.5 h-3.5 text-accent shrink-0" />
+              <span>Saldo protegido</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Check className="w-3.5 h-3.5 text-accent shrink-0" />
+              <span>Devolución automática</span>
+            </div>
+          </div>
+
+          <div className="text-[10px] text-white/40 flex items-center justify-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Nunca pedimos la contraseña de tus juegos ni redes.</span>
+          </div>
+
+          <div className="flex items-center justify-center gap-3 text-white/40 text-[11px] pt-1">
             <button
               type="button"
-              onClick={onForgot}
-              className="text-xs text-accent hover:underline transition"
+              onClick={() => setShowTermsModal(true)}
+              className="hover:text-white/70 transition underline cursor-pointer"
             >
-              ¿Olvidaste la contraseña?
+              Términos
+            </button>
+            <span>•</span>
+            <button
+              type="button"
+              onClick={() => setShowTermsModal(true)}
+              className="hover:text-white/70 transition underline cursor-pointer"
+            >
+              Privacidad
+            </button>
+            <span>•</span>
+            <button
+              type="button"
+              onClick={() => openExternalUrl(WHATSAPP_SUPPORT_URL)}
+              className="hover:text-white/70 transition cursor-pointer"
+            >
+              Soporte WhatsApp
             </button>
           </div>
         </div>
-
-        <button
-          type="submit"
-          disabled={loading || !email || !password}
-          className="w-full py-3.5 rounded-xl font-bold text-sm bg-gradient-to-r from-accent to-accent2 text-white shadow-lg shadow-accent/25 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-        >
-          {loading ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" />
-              <span>Entrando...</span>
-            </>
-          ) : (
-            <>
-              <LockKeyhole className="h-4 w-4" />
-              <span>Iniciar sesión</span>
-            </>
-          )}
-        </button>
-      </form>
+      )}
 
       {!privatePortal && onClose && (
         <button
           type="button"
           onClick={onClose}
-          className="mt-4 block mx-auto text-xs text-white/45 hover:text-white/80 transition"
+          className="mt-3 block mx-auto text-xs text-white/45 hover:text-white/80 transition"
         >
           Continuar como invitado
         </button>
@@ -10180,31 +12486,30 @@ function RegisterScreen({ onSuccess, onLoginSuccess, onLogin, onClose }) {
         </div>
       )}
 
-      <GoogleSignInButton
-        text="signup_with"
-        onSuccess={(me) => {
-          if (onLoginSuccess) onLoginSuccess(me)
-          else if (onSuccess) onSuccess(me)
-        }}
-        onError={setErr}
-      />
+      <div className="space-y-1.5 mb-2">
+        <GoogleSignInButton
+          text="signup_with"
+          onSuccess={(me) => {
+            if (onLoginSuccess) onLoginSuccess(me)
+            else if (onSuccess) onSuccess(me)
+          }}
+          onError={setErr}
+        />
 
-      <p className="mt-1.5 mb-2 text-center text-[11px] text-white/50 leading-relaxed">
-        Al continuar con Google aceptas nuestros{' '}
-        <button
-          type="button"
-          onClick={() => setShowTermsModal(true)}
-          className="text-accent underline font-semibold hover:text-accent/80"
-        >
-          Términos y Condiciones
-        </button>
-        .
-      </p>
+        <TelegramLoginButton
+          text="Registrarse con Telegram"
+          onSuccess={(me) => {
+            if (onLoginSuccess) onLoginSuccess(me)
+            else if (onSuccess) onSuccess(me)
+          }}
+          onError={setErr}
+        />
 
-      <div className="relative flex py-2 items-center my-3">
-        <div className="flex-grow border-t border-white/10" />
-        <span className="flex-shrink mx-3 text-[11px] text-white/40 uppercase tracking-widest font-semibold">o con email</span>
-        <div className="flex-grow border-t border-white/10" />
+        <div className="relative flex py-2 items-center my-1.5 max-w-[290px] mx-auto">
+          <div className="flex-grow border-t border-white/10" />
+          <span className="flex-shrink mx-3 text-[10px] text-white/35 uppercase tracking-widest font-semibold">o con email</span>
+          <div className="flex-grow border-t border-white/10" />
+        </div>
       </div>
 
       <form onSubmit={(e) => { e.preventDefault(); handleRegister(); }} className="space-y-3">
@@ -10217,6 +12522,7 @@ function RegisterScreen({ onSuccess, onLoginSuccess, onLogin, onClose }) {
             placeholder="Tu nombre completo o apodo"
             value={name}
             onChange={e => setName(e.target.value)}
+            autoComplete="name"
             className="w-full bg-[#141b2d]/90 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-white/30 outline-none transition-all focus:border-accent focus:ring-1 focus:ring-accent/40 focus:bg-[#182136]"
             required
           />
@@ -10231,6 +12537,7 @@ function RegisterScreen({ onSuccess, onLoginSuccess, onLogin, onClose }) {
             placeholder="Correo electrónico"
             value={email}
             onChange={e => setEmail(e.target.value)}
+            autoComplete="email"
             className="w-full bg-[#141b2d]/90 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-white/30 outline-none transition-all focus:border-accent focus:ring-1 focus:ring-accent/40 focus:bg-[#182136]"
             required
           />
@@ -10240,12 +12547,14 @@ function RegisterScreen({ onSuccess, onLoginSuccess, onLogin, onClose }) {
           placeholder="Contraseña (mínimo 8 caracteres)"
           value={password}
           onChange={e => setPassword(e.target.value)}
+          autoComplete="new-password"
         />
 
         <PasswordInput
           placeholder="Repetir contraseña"
           value={password2}
           onChange={e => setPassword2(e.target.value)}
+          autoComplete="new-password"
         />
 
         {/* Código de referido / invitación */}
@@ -10375,6 +12684,7 @@ function ForgotScreen({ onCodeSent, onLogin, onClose }) {
             placeholder="Correo electrónico"
             value={email}
             onChange={e => setEmail(e.target.value)}
+            autoComplete="email"
             className="w-full bg-[#141b2d]/90 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-white/30 outline-none transition-all focus:border-accent focus:ring-1 focus:ring-accent/40 focus:bg-[#182136]"
             required
           />
@@ -10409,11 +12719,20 @@ function ForgotScreen({ onCodeSent, onLogin, onClose }) {
   )
 }
 
-function VerifyScreen({ onSuccess }) {
-  const [email, setEmail] = useState('')
+function VerifyScreen({ onSuccess, defaultEmail = '' }) {
+  const [email, setEmail] = useState(defaultEmail)
   const [code, setCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [err, setErr] = useState(null)
+  const [resending, setResending] = useState(false)
+  const [resendCooldown, setResendCooldown] = useState(0)
+  const [resendMessage, setResendMessage] = useState('')
+
+  useEffect(() => {
+    if (resendCooldown <= 0) return undefined
+    const timer = window.setTimeout(() => setResendCooldown((seconds) => seconds - 1), 1000)
+    return () => window.clearTimeout(timer)
+  }, [resendCooldown])
 
   async function handleVerify(e) {
     e?.preventDefault()
@@ -10422,6 +12741,22 @@ function VerifyScreen({ onSuccess }) {
       await api.verifyEmail(email, code)
       onSuccess()
     } catch (e) { setErr(e.message); setLoading(false) }
+  }
+
+  async function handleResend() {
+    if (!email || resending || resendCooldown > 0) return
+    setResending(true)
+    setResendMessage('')
+    setErr(null)
+    try {
+      const response = await api.resendEmailVerification(email)
+      setResendMessage(response?.message || 'Te enviamos un código nuevo.')
+      setResendCooldown(60)
+    } catch (error) {
+      setErr(error.message || 'No se pudo reenviar el código.')
+    } finally {
+      setResending(false)
+    }
   }
 
   return (
@@ -10442,6 +12777,7 @@ function VerifyScreen({ onSuccess }) {
             placeholder="Tu correo electrónico"
             value={email}
             onChange={e => setEmail(e.target.value)}
+            autoComplete="email"
             className="w-full bg-[#141b2d]/90 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-white/30 outline-none transition-all focus:border-accent focus:ring-1 focus:ring-accent/40 focus:bg-[#182136]"
             required
           />
@@ -10452,6 +12788,8 @@ function VerifyScreen({ onSuccess }) {
             placeholder="000000"
             value={code}
             maxLength={6}
+            inputMode="numeric"
+            autoComplete="one-time-code"
             onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
             className="w-full bg-[#141b2d]/90 border border-white/10 rounded-xl px-4 py-3.5 outline-none transition-all focus:border-accent focus:ring-1 focus:ring-accent/40 focus:bg-[#182136] text-center text-2xl tracking-[0.4em] font-mono text-white placeholder-white/20"
             required
@@ -10474,6 +12812,18 @@ function VerifyScreen({ onSuccess }) {
             </>
           )}
         </button>
+        <div className="pt-1 text-center">
+          <p className="mb-2 text-[11px] text-white/45">¿No recibiste el código?</p>
+          <button
+            type="button"
+            onClick={handleResend}
+            disabled={!email || resending || resendCooldown > 0}
+            className="text-xs font-bold text-accent transition hover:underline disabled:cursor-not-allowed disabled:opacity-45"
+          >
+            {resending ? 'Reenviando...' : resendCooldown > 0 ? `Reenviar en ${resendCooldown}s` : 'Reenviar código'}
+          </button>
+          {resendMessage && <p className="mt-2 text-[11px] leading-relaxed text-emerald-300">{resendMessage}</p>}
+        </div>
       </form>
     </AuthWrapper>
   )
@@ -10611,6 +12961,7 @@ function ResetScreen({ onSuccess, onLoginSuccess, onClose, defaultEmail = '' }) 
             placeholder="Correo electrónico"
             value={email}
             onChange={e => setEmail(e.target.value)}
+            autoComplete="email"
             className="w-full bg-[#141b2d]/90 border border-white/10 rounded-xl pl-10 pr-4 py-3 text-sm text-white placeholder-white/30 outline-none transition-all focus:border-accent focus:ring-1 focus:ring-accent/40 focus:bg-[#182136]"
             required
           />
@@ -10624,6 +12975,8 @@ function ResetScreen({ onSuccess, onLoginSuccess, onClose, defaultEmail = '' }) 
             placeholder="Código de 6 dígitos"
             value={code}
             maxLength={6}
+            inputMode="numeric"
+            autoComplete="one-time-code"
             onChange={e => setCode(e.target.value.replace(/\D/g, ''))}
             className="w-full bg-[#141b2d]/90 border border-white/10 rounded-xl px-4 py-3 outline-none transition-all focus:border-accent focus:ring-1 focus:ring-accent/40 focus:bg-[#182136] text-center text-lg tracking-widest font-mono text-white placeholder-white/30"
             required
@@ -10633,6 +12986,7 @@ function ResetScreen({ onSuccess, onLoginSuccess, onClose, defaultEmail = '' }) 
           placeholder="Nueva contraseña (mínimo 8 caracteres)"
           value={password}
           onChange={e => setPassword(e.target.value)}
+          autoComplete="new-password"
         />
         <button
           type="submit"
@@ -11244,10 +13598,10 @@ function PolicyHeaderLayout({ activeTab, onNav, onHome, title, description }) {
   }
 
   return (
-    <div className="mb-6 space-y-4">
+    <div className="fs-policy-header mb-6 min-w-0 space-y-4">
       {/* Breadcrumb + Botón Volver */}
       <div className="flex items-center justify-between gap-3">
-        <nav className="flex items-center gap-1.5 text-xs text-white/40">
+        <nav className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-white/40">
           <button onClick={onHome} className="hover:text-[#ffff00] transition">Inicio</button>
           <span>&gt;</span>
           <span className="text-white/60">Políticas</span>
@@ -11265,16 +13619,16 @@ function PolicyHeaderLayout({ activeTab, onNav, onHome, title, description }) {
 
       {/* Título de la página */}
       <div className="rounded-2xl border border-white/10 bg-gradient-to-r from-[#16181f] via-[#101318] to-[#16181f] p-4 sm:p-5">
-        <h1 className="text-xl md:text-2xl font-black text-white flex items-center gap-2.5">
-          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#ffff00]/10 border border-[#ffff00]/30 text-[#ffff00]">
+        <h1 className="flex min-w-0 items-center gap-2.5 text-xl font-black text-white md:text-2xl">
+          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#ffff00]/10 border border-[#ffff00]/30 text-[#ffff00]">
             {activeTab === 'terms' ? <FileText className="h-4 w-4" /> :
              activeTab === 'privacy' ? <LockKeyhole className="h-4 w-4" /> :
              activeTab === 'faq' ? <CircleHelp className="h-4 w-4" /> :
              <ShieldCheck className="h-4 w-4" />}
           </span>
-          {title}
+          <span className="min-w-0 break-words">{title}</span>
         </h1>
-        {description && <p className="mt-1.5 text-xs text-white/50 leading-relaxed">{description}</p>}
+        {description && <p className="mt-1.5 break-words text-xs text-white/50 leading-relaxed">{description}</p>}
       </div>
 
       {/* Pestañas de Navegación Bonoxs Style */}
@@ -11314,7 +13668,7 @@ function FaqScreen({ onNav, onHome }) {
   const FAQ_CATEGORIES = [
     { id: 'all', label: 'Todas' },
     { id: 'entregas', label: 'Pedidos y Entregas' },
-    { id: 'pagos', label: 'Pagos y Saldo USDT' },
+    { id: 'pagos', label: 'Pagos' },
     { id: 'giftcards', label: 'Gift Cards y Canje' },
     { id: 'seguridad', label: 'Seguridad y Cuentas' },
     { id: 'b2b', label: 'Revendedores B2B' },
@@ -11334,17 +13688,17 @@ function FaqScreen({ onNav, onHome }) {
     {
       category: 'pagos',
       q: '¿Qué métodos de pago están disponibles en Francho Shop?',
-      a: 'Aceptamos saldo interno precargado en tu billetera de Francho Shop y depósitos automáticos en criptomonedas (USDT Tether) a través de la pasarela segura OxaPay, con soporte para las redes TRC20, BEP20 (BNB Chain), Polygon y Solana. Próximamente se integrarán pasarelas locales para Cuba y métodos adicionales.'
+      a: 'Los métodos disponibles aparecen antes de confirmar cada compra. Según el producto podrás pagar con USDT, transferencia CUP o saldo móvil. Los pagos en CUP y saldo móvil requieren comprobante y validación antes de iniciar la entrega.'
     },
     {
       category: 'pagos',
-      q: '¿Cuánto demora en acreditarse una recarga de saldo con USDT?',
-      a: 'La acreditación depende exclusivamente de las confirmaciones requeridas por la red blockchain seleccionada. En redes como BEP20 o Polygon el depósito suele confirmarse entre 1 y 3 minutos; en TRC20 toma entre 2 y 5 minutos. Tan pronto la red valide la transacción, tu saldo se actualiza automáticamente en la tienda.'
+      q: '¿Cuánto demora en procesarse mi pago?',
+      a: 'Los pagos automáticos se procesan al confirmarse. Las transferencias CUP y saldo móvil se revisan con su comprobante; la entrega puede demorar hasta 24 horas ante incidencias operativas. Si supera ese plazo, puedes abrir un caso de soporte.'
     },
     {
       category: 'seguridad',
-      q: '¿Qué es la garantía de fondos FranchoShield?',
-      a: 'FranchoShield es nuestro sistema de protección al comprador. Si por alguna razón técnica o interrupción de conexión con el proveedor oficial una orden no se puede completar satisfactoriamente, el 100% de tu dinero se reembolsa de manera inmediata e íntegra a tu billetera Francho Shop, sin trámites engorrosos ni esperas.'
+      q: '¿Qué ocurre si una recarga no puede completarse?',
+      a: 'Revisamos el pedido y, si existe un fallo comprobable antes de la entrega, aplicamos reembolso, reversión o reemplazo según el producto y el método de pago utilizado.'
     },
     {
       category: 'seguridad',
@@ -11368,8 +13722,8 @@ function FaqScreen({ onNav, onHome }) {
     },
     {
       category: 'pagos',
-      q: '¿Puedo transferir saldo a otro usuario de Francho Shop?',
-      a: 'Sí. Nuestra plataforma incluye una función de transferencia P2P interna que te permite enviar saldo disponible a otro usuario mediante su Telegram ID o código de usuario registrado, de forma instantánea y sin comisiones ocultas.'
+      q: '¿Cómo reviso el estado de mi pedido?',
+      a: 'Entra a Pedidos para consultar el estado, los datos enviados y la entrega disponible. Si necesitas ayuda adicional, abre un caso desde el pedido.'
     },
     {
       category: 'b2b',
@@ -11379,7 +13733,7 @@ function FaqScreen({ onNav, onHome }) {
     {
       category: 'seguridad',
       q: '¿Cómo puedo contactar al soporte si tengo una duda con mi orden?',
-      a: 'Disponemos de atención directa mediante nuestro canal oficial y bot de Telegram, así como seguimiento en tiempo real mediante el identificador de orden de compra desde el portal de pedidos.'
+      a: 'Disponemos de atención desde el chat de soporte y seguimiento mediante el identificador de orden dentro del portal de pedidos.'
     },
   ]
 
@@ -11392,7 +13746,7 @@ function FaqScreen({ onNav, onHome }) {
   })
 
   return (
-    <div className="max-w-4xl mx-auto px-3.5 py-6 md:px-6 pb-28 overflow-x-hidden">
+    <div className="fs-policy-page mx-auto w-full min-w-0 max-w-4xl overflow-x-hidden px-3.5 py-6 pb-28 md:px-6">
       <PolicyHeaderLayout
         activeTab="faq"
         onNav={onNav}
@@ -11472,11 +13826,11 @@ function FaqScreen({ onNav, onHome }) {
                   onClick={() => toggleItem(idx)}
                   className="flex w-full items-center justify-between gap-3 p-4 text-left transition"
                 >
-                  <span className="font-bold text-sm text-white/90 group-hover:text-white flex items-center gap-2">
+                  <span className="flex min-w-0 flex-1 items-center gap-2 font-bold text-sm text-white/90 group-hover:text-white">
                     <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-[#ffff00]/10 text-[10px] font-black text-[#ffff00]">
                       ?
                     </span>
-                    <span>{faq.q}</span>
+                    <span className="min-w-0 break-words">{faq.q}</span>
                   </span>
                   <ChevronDown
                     className={`h-4 w-4 flex-shrink-0 text-white/40 transition-transform duration-300 ${
@@ -11485,7 +13839,7 @@ function FaqScreen({ onNav, onHome }) {
                   />
                 </button>
                 {isOpen && (
-                  <div className="border-t border-white/10 bg-[#101318]/60 p-4 text-xs sm:text-sm leading-relaxed text-white/75 animate-in fade-in duration-200">
+                  <div className="break-words border-t border-white/10 bg-[#101318]/60 p-4 text-xs sm:text-sm leading-relaxed text-white/75 animate-in fade-in duration-200">
                     {faq.a}
                   </div>
                 )}
@@ -11503,7 +13857,7 @@ function FaqScreen({ onNav, onHome }) {
             ¿Aún tienes dudas sobre tu pedido?
           </h4>
           <p className="text-xs text-white/50 mt-1">
-            Nuestro equipo de soporte oficial en Telegram está disponible para ayudarte en cualquier consulta.
+            Nuestro equipo de soporte está disponible para ayudarte con cualquier consulta.
           </p>
         </div>
         <button
@@ -11521,7 +13875,7 @@ function FaqScreen({ onNav, onHome }) {
 
 function TermsScreen({ onNav, onHome }) {
   return (
-    <div className="max-w-4xl mx-auto px-3.5 py-6 md:px-6 pb-28 overflow-x-hidden">
+    <div className="fs-policy-page mx-auto w-full min-w-0 max-w-4xl overflow-x-hidden px-3.5 py-6 pb-28 md:px-6">
       <PolicyHeaderLayout
         activeTab="terms"
         onNav={onNav}
@@ -11540,7 +13894,7 @@ function TermsScreen({ onNav, onHome }) {
             Bienvenido a <b>Francho Shop</b>. La plataforma es un servicio digital especializado en la distribución, intermediación y comercialización de recargas electrónicas oficiales de videojuegos, tarjetas de regalo digitales (Gift Cards), claves de activación (CD-Keys), suscripciones a servicios en línea y productos digitales pensados especialmente para la comunidad de Cuba y usuarios a nivel global.
           </p>
           <p className="mt-2">
-            Al acceder, navegar o realizar cualquier compra dentro de nuestra plataforma web o a través de la aplicación de Telegram, el usuario declara haber leído, comprendido y aceptado en su totalidad los presentes Términos y Condiciones.
+            Al acceder, navegar o realizar cualquier compra dentro de nuestra plataforma, el usuario declara haber leído, comprendido y aceptado en su totalidad los presentes Términos y Condiciones.
           </p>
         </div>
 
@@ -11550,7 +13904,7 @@ function TermsScreen({ onNav, onHome }) {
             2. Cuentas de Usuario y Seguridad
           </h3>
           <p>
-            El acceso a la tienda se efectúa mediante la autenticación segura de Telegram WebApp o mediante registro con credenciales personales. Cada usuario es único responsable de custodiar la privacidad y acceso a su cuenta.
+            El acceso a la tienda se realiza mediante autenticación segura y credenciales personales. Cada usuario es responsable de custodiar la privacidad y el acceso a su cuenta.
           </p>
           <div className="mt-3 rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-emerald-200 text-xs">
             <b>Regla de Oro de Seguridad:</b> Francho Shop <b>NUNCA</b> te solicitará contraseñas de cuentas de videojuegos, correos de recuperación, accesos remotos ni códigos de verificación OTP. Cualquier solicitud de este tipo es fraudulenta y no proviene de nuestro equipo.
@@ -11560,15 +13914,15 @@ function TermsScreen({ onNav, onHome }) {
         <div className="rounded-2xl border border-white/10 bg-[#16181f]/80 p-4 sm:p-5">
           <h3 className="text-base font-black text-white flex items-center gap-2 mb-2 text-[#ffff00]">
             <DollarSign className="h-4 w-4 text-[#ffff00]" />
-            3. Precios, Pagos y Billetera de Saldo
+            3. Precios y Métodos de Pago
           </h3>
           <p>
-            Todos los precios mostrados en el catálogo se expresan de forma transparente en dólares estadounidenses (USD) o su equivalente en saldo interno y criptomonedas (USDT).
+            Cada producto muestra su precio, región y requisitos antes de confirmar. El importe final se valida al crear el pedido.
           </p>
           <ul className="list-disc pl-5 mt-2 space-y-1">
-            <li><b>Saldo Interno:</b> Puedes recargar fondos en tu cuenta para comprar de forma inmediata con un solo clic.</li>
-            <li><b>Pagos con USDT (Tether):</b> Aceptamos depósitos en redes TRC20, BEP20, Polygon y Solana a través de pasarela automatizada OxaPay.</li>
-            <li><b>Transferencias P2P:</b> Los usuarios pueden enviarse saldo de forma interna sin comisiones adicionales.</li>
+            <li><b>Pago en USDT:</b> Se confirma con el método disponible al momento de la compra.</li>
+            <li><b>Pago en CUP o saldo móvil:</b> Requiere comprobante y verificación antes de procesar el pedido.</li>
+            <li><b>Disponibilidad:</b> Los métodos habilitados pueden variar según el producto y se muestran antes de pagar.</li>
           </ul>
         </div>
 
@@ -11589,42 +13943,26 @@ function TermsScreen({ onNav, onHome }) {
         <div className="rounded-2xl border border-white/10 bg-[#16181f]/80 p-4 sm:p-5">
           <h3 className="text-base font-black text-white flex items-center gap-2 mb-2 text-emerald-400">
             <ShieldCheck className="h-4 w-4 text-emerald-400" />
-            5. Garantía FranchoShield y Política de Reembolso Técnico
+            5. Reembolsos y Fallos de Entrega
           </h3>
           <p>
-            Tu dinero y tus pedidos están 100% protegidos bajo nuestro protocolo <b>FranchoShield</b>:
+            Si un pedido no puede completarse por una incidencia comprobable del proveedor o de la plataforma, se revisará el caso y se aplicará la solución correspondiente.
           </p>
           <ul className="list-disc pl-5 mt-2 space-y-1.5 text-white/70">
-            <li>Si una recarga o compra no puede ser procesada por fallas técnicas del servidor, mantenimiento del proveedor o indisponibilidad temporal, el saldo pagado se <b>reembolsa íntegra y automáticamente</b> a tu billetera Francho Shop.</li>
-            <li>Si un código de Gift Card o CD-Key presenta algún error de fábrica verificable por nuestro departamento de soporte y el emisor, se gestionará su reemplazo inmediato o el reintegro de fondos.</li>
+            <li>Los pedidos fallidos antes de la entrega se revisan para reembolso, reversión o reemplazo según el método de pago y el producto.</li>
+            <li>Los códigos, recargas y productos ya entregados no admiten devolución salvo un fallo verificable de origen.</li>
           </ul>
         </div>
 
         <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-4 sm:p-5">
           <h3 className="text-base font-black text-white flex items-center gap-2 mb-2 text-amber-400">
             <Bot className="h-4 w-4 text-amber-400" />
-            6. Servicios de Terceros, Inteligencia Artificial (Google Gemini, OpenAI, etc.) y Exclusión de Responsabilidad
+            6. Servicios de Terceros
           </h3>
           <p>
-            Francho Shop facilita el acceso, intermediación y activación de suscripciones, licencias y credenciales de plataformas operadas por entidades externas (tales como Google LLC para Google Gemini / Gemini Advanced, OpenAI para ChatGPT, Anthropic, plataformas de streaming y entretenimiento).
+            Algunos productos dependen de plataformas externas. Francho Shop entrega el producto conforme a su descripción, pero no controla cambios, restricciones regionales o políticas que esas plataformas apliquen después de la entrega.
           </p>
-          <div className="mt-3 space-y-2 text-white/80">
-            <p>
-              <b>Alcance del Servicio Francho Shop:</b> Nuestro compromiso y garantía se limita estrictamente a entregar las credenciales, cuenta o suscripción debidamente pagada y funcional conforme a las especificaciones pactadas. Francho Shop <b>NO desarrolla, no aloja, ni tiene control operativo</b> sobre los servidores, modelos de lenguaje, algoritmos ni centros de cómputo de Google, OpenAI u otros terceros.
-            </p>
-            <p>
-              <b>Situaciones Ajenas y Fuera de Alcance (NO Reembolsables):</b>
-            </p>
-            <ul className="list-disc pl-5 space-y-1.5 text-white/70">
-              <li><b>Fallas, respuestas, saturación o cuotas del modelo de IA:</b> Si un modelo en específico (ej. Google Gemini 1.5 Pro, Ultra o Flash) tarda en responder, no genera respuesta, arroja mensajes de error como "Internal error", "Model overloaded", cuotas temporales de peticiones ("Rate limit"), o sufre degradación temporal en los servidores de Google, esto es un comportamiento propio de la infraestructura de Google LLC. <b>NO constituye defecto en el producto entregado ni otorga derecho a reembolso o cancelación</b>.</li>
-              <li><b>Caídas generales de servidores externos:</b> Interrupciones globales o regionales, caídas de DNS o mantenimientos no programados en los centros de datos de Google, OpenAI u otros proveedores escapan absolutamente al control de Francho Shop.</li>
-              <li><b>Modificaciones en algoritmos o políticas de la plataforma:</b> Cambios que Google o terceros decidan implementar en sus modelos, filtros éticos de respuesta, herramientas disponibles o interfaces de usuario.</li>
-              <li><b>Requisitos de red, IP y VPN:</b> Para usuarios ubicados en zonas con bloqueos geográficos impuestos por el proveedor externo (como Cuba frente a los servicios de Google o OpenAI), es responsabilidad exclusiva del usuario contar con una conexión a internet estable y un servicio de red virtual (VPN) adecuado y compatible. Problemas de conexión local, cortes de energía o bloqueos de IP no son atribuibles a Francho Shop.</li>
-            </ul>
-            <div className="mt-2 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-red-200 text-xs">
-              <b>Cláusula Estricta de No Reembolso por Fallas de Terceros:</b> Una vez entregada la suscripción o credencial válida y activa, <b>NO se emitirán reembolsos, devoluciones de saldo ni anulaciones de compra</b> por caídas de servicio de Google, fallos en las respuestas del modelo de IA o incompatibilidades ajenas a la activación. Al comprar, el cliente acepta y asume expresamente estas condiciones.
-            </div>
-          </div>
+          <p className="mt-2 text-white/70">El usuario debe comprobar que su cuenta, región y dispositivo son compatibles antes de comprar. Las incidencias ajenas a la entrega se atienden según las políticas de la plataforma externa.</p>
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-[#16181f]/80 p-4 sm:p-5">
@@ -11653,7 +13991,7 @@ function TermsScreen({ onNav, onHome }) {
             9. Contacto y Atención al Cliente
           </h3>
           <p>
-            Para consultas, reportes de órdenes o asesoramiento, puedes contactar a nuestro equipo de atención mediante el botón de soporte de la tienda o desde el canal oficial de Telegram.
+            Para consultas, reportes de órdenes o asesoramiento, puedes contactar a nuestro equipo mediante el botón de soporte de la tienda o desde el chat asociado a tu pedido.
           </p>
         </div>
       </div>
@@ -11663,7 +14001,7 @@ function TermsScreen({ onNav, onHome }) {
 
 function PrivacyPolicyScreen({ onNav, onHome }) {
   return (
-    <div className="max-w-4xl mx-auto px-3.5 py-6 md:px-6 pb-28 overflow-x-hidden">
+    <div className="fs-policy-page mx-auto w-full min-w-0 max-w-4xl overflow-x-hidden px-3.5 py-6 pb-28 md:px-6">
       <PolicyHeaderLayout
         activeTab="privacy"
         onNav={onNav}
@@ -11679,7 +14017,7 @@ function PrivacyPolicyScreen({ onNav, onHome }) {
             1. Compromiso de Privacidad y Responsable del Tratamiento
           </h3>
           <p>
-            En <b>Francho Shop</b> nos tomamos muy en serio la confidencialidad y protección de los datos de nuestros usuarios. Esta Política de Privacidad describe qué información recopilamos al utilizar nuestra aplicación web y servicios de Telegram, cómo la usamos y las medidas implementadas para resguardarla.
+            En <b>Francho Shop</b> nos tomamos muy en serio la confidencialidad y protección de los datos de nuestros usuarios. Esta Política explica qué información recopilamos, cómo la usamos y las medidas aplicadas para protegerla.
           </p>
         </div>
 
@@ -11690,9 +14028,9 @@ function PrivacyPolicyScreen({ onNav, onHome }) {
           </h3>
           <p>Recopilamos únicamente los datos mínimos indispensables para prestarte el servicio de compra y entrega digital:</p>
           <ul className="list-disc pl-5 mt-2 space-y-1.5 text-white/70">
-            <li><b>Datos de Cuenta y Telegram:</b> Identificador numérico de Telegram (User ID), nombre público y username, utilizados para autenticarte y enviarte confirmaciones de compra.</li>
+            <li><b>Datos de cuenta:</b> Nombre, correo, usuario o identificador vinculado a tu cuenta para autenticarte y gestionar tus pedidos.</li>
             <li><b>Datos Operativos de Entrega:</b> Player ID, servidor o nombre de usuario de juego que ingresas para procesar la recarga del producto digital.</li>
-            <li><b>Datos Transaccionales:</b> Historial de pedidos realizados, fecha, monto en saldo o USDT, y direcciones públicas de blockchain usadas exclusivamente para validar depósitos de recarga. Nunca recopilamos claves privadas.</li>
+            <li><b>Datos transaccionales:</b> Historial de pedidos, fecha, importe, método de pago y comprobantes cuando sean necesarios para verificar una compra.</li>
             <li><b>Datos de Registro Opcional:</b> Correo electrónico si decides vincularlo voluntariamente para soporte o alertas de seguridad.</li>
           </ul>
         </div>
@@ -11705,7 +14043,7 @@ function PrivacyPolicyScreen({ onNav, onHome }) {
           <p>Tus datos se utilizan con los siguientes propósitos exclusivos:</p>
           <ul className="list-disc pl-5 mt-2 space-y-1.5 text-white/70">
             <li>Procesar, despachar y validar la entrega de recargas, gift cards y cuentas.</li>
-            <li>Administrar tu saldo de cuenta y permitir compras rápidas con protección de fondos.</li>
+            <li>Gestionar pagos, comprobantes y el estado de cada pedido.</li>
             <li>Notificarte sobre el estado de tus órdenes, comprobantes y reembolsos automáticos.</li>
             <li>Prevenir fraudes, accesos no autorizados y garantizar la seguridad de la infraestructura.</li>
           </ul>
@@ -11752,7 +14090,7 @@ function PrivacyPolicyScreen({ onNav, onHome }) {
 
 function CookiesPolicyScreen({ onNav, onHome }) {
   return (
-    <div className="max-w-4xl mx-auto px-3.5 py-6 md:px-6 pb-28 overflow-x-hidden">
+    <div className="fs-policy-page mx-auto w-full min-w-0 max-w-4xl overflow-x-hidden px-3.5 py-6 pb-28 md:px-6">
       <PolicyHeaderLayout
         activeTab="cookies"
         onNav={onNav}
@@ -11782,7 +14120,7 @@ function CookiesPolicyScreen({ onNav, onHome }) {
           </p>
           <ul className="list-disc pl-5 mt-2 space-y-1.5 text-white/70">
             <li>Almacenar en caché carátulas e iconos de juegos para no re-descargarlos continuamente, ahorrando tus megas de navegación.</li>
-            <li>Mantener tu sesión iniciada de manera fluida entre reaperturas de la aplicación de Telegram o el navegador.</li>
+            <li>Mantener tu sesión iniciada de manera fluida entre reaperturas de la aplicación o el navegador.</li>
             <li>Recordar tus filtros de búsqueda y selección de monedas preferida.</li>
           </ul>
         </div>
@@ -11799,7 +14137,7 @@ function CookiesPolicyScreen({ onNav, onHome }) {
                 A. Estrictamente Necesarias y Técnicas
               </h4>
               <p className="text-xs text-white/60 mt-1">
-                Son indispensables para que la plataforma funcione. Incluyen tokens de sesión criptográficos seguros (<code>session_token</code>), autenticación de Telegram Mini App y el estado temporal de órdenes en curso. No pueden desactivarse ya que la tienda no podría operar sin ellas.
+                Son indispensables para que la plataforma funcione. Incluyen tokens de sesión seguros y el estado temporal de pedidos en curso. No pueden desactivarse ya que la tienda no podría operar sin ellas.
               </p>
             </div>
 
@@ -11831,7 +14169,7 @@ function CookiesPolicyScreen({ onNav, onHome }) {
             4. Cookies de Terceros y Ausencia de Rastreo Comercial
           </h3>
           <p>
-            <b>Francho Shop no emplea cookies de redes publicitarias invasivas ni rastreadores de terceros para crear perfiles comerciales.</b> Únicamente se integran componentes técnicos estrictamente necesarios como el SDK oficial de Telegram y la pasarela de pagos cripto OxaPay.
+            <b>Francho Shop no emplea cookies de redes publicitarias invasivas ni rastreadores de terceros para crear perfiles comerciales.</b> Solo se utilizan componentes técnicos necesarios para el acceso, el catálogo y los pagos disponibles.
           </p>
         </div>
 
@@ -11841,7 +14179,7 @@ function CookiesPolicyScreen({ onNav, onHome }) {
             5. ¿Cómo puedes Controlar o Eliminar estos Datos?
           </h3>
           <p>
-            Puedes eliminar o bloquear cookies y datos locales en cualquier momento desde la configuración de tu navegador (Chrome, Safari, Firefox) seleccionando "Borrar datos de navegación" o "Borrar cookies". Si accedes desde Telegram, puedes reiniciar la caché de la aplicación en los Ajustes de Datos y Almacenamiento de Telegram.
+            Puedes eliminar o bloquear cookies y datos locales en cualquier momento desde la configuración de tu navegador, seleccionando "Borrar datos de navegación" o "Borrar cookies".
           </p>
         </div>
       </div>
@@ -12018,6 +14356,71 @@ const ALL_RESELLER_TIERS_SCALE = [
   }
 ]
 
+const PAYMENT_COIN_ICONS = {
+  USDT: 'https://cryptologos.cc/logos/tether-usdt-logo.png?v=040',
+  USDC: 'https://cryptologos.cc/logos/usd-coin-usdc-logo.png?v=040',
+  BTC: 'https://cryptologos.cc/logos/bitcoin-btc-logo.png?v=040',
+  ETH: 'https://cryptologos.cc/logos/ethereum-eth-logo.png?v=040',
+  TRX: 'https://cryptologos.cc/logos/tron-trx-logo.png?v=040',
+  BNB: 'https://cryptologos.cc/logos/bnb-bnb-logo.png?v=040',
+  TON: 'https://cryptologos.cc/logos/toncoin-ton-logo.png?v=040',
+  SOL: 'https://cryptologos.cc/logos/solana-sol-logo.png?v=040',
+  DOGE: 'https://cryptologos.cc/logos/dogecoin-doge-logo.png?v=040',
+  LTC: 'https://cryptologos.cc/logos/litecoin-ltc-logo.png?v=040',
+  POL: 'https://cryptologos.cc/logos/polygon-matic-logo.png?v=040',
+  MATIC: 'https://cryptologos.cc/logos/polygon-matic-logo.png?v=040',
+  BCH: 'https://cryptologos.cc/logos/bitcoin-cash-bch-logo.png?v=040',
+  XMR: 'https://cryptologos.cc/logos/monero-xmr-logo.png?v=040',
+  DAI: 'https://cryptologos.cc/logos/multi-collateral-dai-dai-logo.png?v=040',
+  SHIB: 'https://cryptologos.cc/logos/shiba-inu-shib-logo.png?v=040',
+  XRP: 'https://coin-images.coingecko.com/coins/images/44/large/xrp-symbol-white-128.png',
+  NOT: 'https://coin-images.coingecko.com/coins/images/33453/large/rFmThDiD_400x400.jpg',
+  DOGS: 'https://coin-images.coingecko.com/coins/images/39699/large/dogs_logo_200x200.png',
+  GRAM: 'https://coin-images.coingecko.com/coins/images/17980/large/Gram_Circular_Badge.png',
+}
+
+const PAYMENT_NETWORK_ICONS = {
+  tron: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/tron/info/logo.png',
+  bsc: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png',
+  'binance smart chain': 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/binance/info/logo.png',
+  ethereum: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ethereum/info/logo.png',
+  polygon: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/polygon/info/logo.png',
+  solana: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/solana/info/logo.png',
+  'the open network': 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/ton/info/logo.png',
+  bitcoin: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/bitcoin/info/logo.png',
+  base: 'https://raw.githubusercontent.com/trustwallet/assets/master/blockchains/base/info/logo.png',
+}
+
+function PaymentAssetIcon({ symbol = '', network = '', className = 'h-6 w-6' }) {
+  const source = symbol ? PAYMENT_COIN_ICONS[String(symbol).toUpperCase()] : PAYMENT_NETWORK_ICONS[String(network).toLowerCase()]
+  const fallback = symbol || String(network).slice(0, 2).toUpperCase() || '$'
+  const [loaded, setLoaded] = useState(false)
+  const [failed, setFailed] = useState(false)
+
+  useEffect(() => {
+    setLoaded(false)
+    setFailed(false)
+  }, [source])
+
+  return (
+    <span className={`${className} relative grid shrink-0 place-items-center overflow-hidden rounded-full bg-white/10 text-[9px] font-black text-white/75`}>
+      <span aria-hidden="true" className={loaded ? 'opacity-0' : ''}>{fallback.slice(0, 3)}</span>
+      {source && !failed && (
+        <img
+          src={source}
+          alt=""
+          className="absolute inset-0 h-full w-full object-contain"
+          onLoad={() => setLoaded(true)}
+          onError={() => {
+            setLoaded(false)
+            setFailed(true)
+          }}
+        />
+      )}
+    </span>
+  )
+}
+
 function TopUpModal({ onClose, onPaid, me, initialAmount = '25' }) {
   const [amount, setAmount] = useState(String(initialAmount || '25'))
   const [showTierModal, setShowTierModal] = useState(false)
@@ -12026,36 +14429,109 @@ function TopUpModal({ onClose, onPaid, me, initialAmount = '25' }) {
   const [checking, setChecking] = useState(false)
   const [err, setErr] = useState(null)
   const [status, setStatus] = useState(null)
+  const [paymentOptions, setPaymentOptions] = useState([])
+  const [optionsLoading, setOptionsLoading] = useState(true)
+  const [optionsError, setOptionsError] = useState(null)
+  const [payCurrency, setPayCurrency] = useState('')
+  const [payNetwork, setPayNetwork] = useState('')
+  const [paymentSelector, setPaymentSelector] = useState(null)
+  const [copied, setCopied] = useState(false)
+  const [secondsLeft, setSecondsLeft] = useState(null)
   const selectedAmount = Number(String(amount).replace(',', '.')) || 0
   const payLabel = selectedAmount > 0 ? `Recargar ${selectedAmount.toFixed(2)} USDT` : 'Recargar'
 
   const currentTier = useMemo(() => getDepositTierDetails(selectedAmount), [selectedAmount])
+  const selectedCurrencyOption = useMemo(
+    () => paymentOptions.find(item => item.symbol === payCurrency) || null,
+    [paymentOptions, payCurrency]
+  )
+  const availableNetworks = selectedCurrencyOption?.networks || []
+
+  const loadPaymentOptions = async () => {
+    setOptionsLoading(true)
+    setOptionsError(null)
+    try {
+      const res = await api.depositPaymentOptions()
+      const currencies = Array.isArray(res?.currencies) ? res.currencies : []
+      if (!currencies.length) throw new Error('No hay monedas habilitadas para recibir pagos ahora mismo')
+      setPaymentOptions(currencies)
+      const firstCurrency = currencies.find(item => item.symbol === 'USDT') || currencies[0]
+      setPayCurrency(current => currencies.some(item => item.symbol === current) ? current : firstCurrency.symbol)
+    } catch (e) {
+      setPaymentOptions([])
+      setOptionsError(e.message || 'No se pudieron cargar las opciones de pago')
+    } finally {
+      setOptionsLoading(false)
+    }
+  }
+
+  useEffect(() => { loadPaymentOptions() }, [])
+
+  useEffect(() => {
+    if (!availableNetworks.length) {
+      setPayNetwork('')
+      return
+    }
+    const preferred = availableNetworks.find(item => /^(bsc|bep20|binance smart chain)$/i.test(item.network) || /bep20|binance smart chain/i.test(item.name))
+    setPayNetwork(current => availableNetworks.some(item => item.network === current) ? current : (preferred || availableNetworks[0]).network)
+  }, [payCurrency, availableNetworks.length])
+
+  useEffect(() => {
+    if (!invoice?.expired_at) { setSecondsLeft(null); return undefined }
+    const update = () => setSecondsLeft(Math.max(0, Math.floor(Number(invoice.expired_at) - Date.now() / 1000)))
+    update()
+    const timer = window.setInterval(update, 1000)
+    return () => window.clearInterval(timer)
+  }, [invoice?.expired_at])
 
   async function createInvoice(value = amount) {
     const numeric = Number(String(value).replace(',', '.'))
     if (!numeric || numeric <= 0) { setErr('Escribe un monto válido'); return }
+    if (!payCurrency || !payNetwork) {
+      setErr('Selecciona una moneda y una red antes de continuar')
+      return
+    }
     setLoading(true); setErr(null); setStatus(null)
     try {
-      const inv = await api.createDeposit(numeric)
+      const inv = await api.createWhiteLabelDeposit(numeric, payCurrency, payNetwork)
       setInvoice(inv)
-      try { 
-        if (inv?.pay_link) {
-          tg?.openLink?.(inv.pay_link) || window.open(inv.pay_link, '_blank')
-        }
-      } catch {}
     } catch (e) { setErr(e.message) }
     setLoading(false)
   }
 
-  async function checkPayment() {
+  async function checkPayment(silent = false) {
     if (!invoice?.track_id) return
-    setChecking(true); setErr(null)
+    if (!silent) { setChecking(true); setErr(null) }
     try {
       const res = await api.checkDeposit(invoice.track_id)
-      setStatus(res.status)
-      if (res.status === 'paid') onPaid?.(res.balance)
-    } catch (e) { setErr(e.message) }
-    setChecking(false)
+      const nextStatus = String(res.status || '').toLowerCase()
+      setStatus(nextStatus)
+      if (nextStatus === 'paid') onPaid?.(res.balance)
+    } catch (e) { if (!silent) setErr(e.message) }
+    if (!silent) setChecking(false)
+  }
+
+  useEffect(() => {
+    if (!invoice?.track_id || status === 'paid' || secondsLeft === 0) return undefined
+    const timer = window.setInterval(() => checkPayment(true), 12000)
+    return () => window.clearInterval(timer)
+  }, [invoice?.track_id, status, secondsLeft])
+
+  async function copyPaymentAddress() {
+    if (!invoice?.address) return
+    try {
+      await navigator.clipboard.writeText(invoice.address)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1600)
+    } catch {
+      setErr('No se pudo copiar la dirección. Mantén pulsado para copiarla manualmente.')
+    }
+  }
+
+  const formatTimeLeft = (seconds) => {
+    if (seconds === null) return ''
+    const minutes = Math.floor(seconds / 60)
+    return `${minutes}:${String(seconds % 60).padStart(2, '0')}`
   }
 
   return (
@@ -12073,7 +14549,7 @@ function TopUpModal({ onClose, onPaid, me, initialAmount = '25' }) {
                   Recargar saldo USDT
                 </h3>
                 <p className="text-[11px] text-white/50 leading-tight">
-                  Acreditación instantánea vía OxaPay sin comisiones
+                  Elige moneda y red, sin salir de Francho Shop
                 </p>
               </div>
             </div>
@@ -12084,61 +14560,86 @@ function TopUpModal({ onClose, onPaid, me, initialAmount = '25' }) {
 
           {!invoice ? (
             <>
-              {/* Chips rápidos de monto */}
-              <div>
-                <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-[11px] font-bold text-white/60 uppercase tracking-wider">
-                    Monto rápido:
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => setShowTierModal(true)}
-                    className="text-[11px] font-semibold text-accent hover:underline flex items-center gap-1"
-                  >
-                    <Sparkles className="h-3 w-3" />
-                    <span>Ver descuentos</span>
+              {/* Contenedor de selección de monto para el tour de recarga */}
+              <div data-tour="topup-amount-chips" className="space-y-3 rounded-2xl p-1 -m-1">
+                {/* Chips rápidos de monto */}
+                <div>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <label className="text-[11px] font-bold text-white/60 uppercase tracking-wider">
+                      Monto rápido:
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setShowTierModal(true)}
+                      className="text-[11px] font-semibold text-accent hover:underline flex items-center gap-1"
+                    >
+                      <Sparkles className="h-3 w-3" />
+                      <span>Ver descuentos</span>
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[10, 25, 50, 100].map((presetVal) => {
+                      const isSelected = selectedAmount === presetVal
+                      return (
+                        <button
+                          key={presetVal}
+                          type="button"
+                          onClick={() => {
+                            setAmount(String(presetVal))
+                            setErr(null)
+                          }}
+                          className={`py-2 px-1 rounded-xl border text-center font-bold text-xs sm:text-sm transition-all active:scale-95 ${
+                            isSelected
+                              ? 'border-accent bg-accent/20 text-accent ring-1 ring-accent/40 shadow-sm'
+                              : 'border-white/10 bg-card hover:border-white/20 text-white/80'
+                          }`}
+                        >
+                          ${presetVal}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+
+                {/* Input personalizado */}
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 font-bold text-base">$</span>
+                  <input
+                    value={amount}
+                    onChange={(e) => {
+                      setAmount(e.target.value)
+                      setErr(null)
+                    }}
+                    inputMode="decimal"
+                    className="w-full rounded-2xl border border-white/10 bg-card pl-8 pr-16 py-3 text-base sm:text-lg font-black text-white outline-none focus:border-accent transition-colors"
+                    placeholder="25"
+                  />
+                  <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-white/40 uppercase">
+                    USDT
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button type="button" onClick={() => setPaymentSelector('currency')} disabled={optionsLoading || !!optionsError} className="relative flex min-h-14 min-w-0 items-center gap-2 overflow-hidden rounded-xl border border-emerald-300/35 bg-gradient-to-b from-emerald-200/15 to-emerald-900/20 px-2.5 text-left text-white shadow-[inset_0_1px_1px_rgba(255,255,255,.2),0_3px_0_#057544,0_8px_16px_rgba(0,194,111,.16)] transition active:translate-y-[2px] disabled:opacity-50">
+                    <span aria-hidden="true" className="absolute inset-x-2 top-1 h-2 rounded-full bg-white/15 blur-[1px]" />
+                    <PaymentAssetIcon symbol={payCurrency} className="relative h-7 w-7" />
+                    <span className="relative min-w-0"><span className="block text-[9px] font-bold uppercase text-white/45">Moneda</span><span className="block truncate text-xs font-black">{payCurrency || 'Cargando'}</span></span>
+                    <ChevronDown className="relative ml-auto h-4 w-4 shrink-0 text-emerald-200" />
+                  </button>
+                  <button type="button" onClick={() => setPaymentSelector('network')} disabled={optionsLoading || !!optionsError || !payCurrency} className="relative flex min-h-14 min-w-0 items-center gap-2 overflow-hidden rounded-xl border border-cyan-300/35 bg-gradient-to-b from-cyan-200/15 to-cyan-900/20 px-2.5 text-left text-white shadow-[inset_0_1px_1px_rgba(255,255,255,.2),0_3px_0_#0c5262,0_8px_16px_rgba(34,211,238,.16)] transition active:translate-y-[2px] disabled:opacity-50">
+                    <span aria-hidden="true" className="absolute inset-x-2 top-1 h-2 rounded-full bg-white/15 blur-[1px]" />
+                    <PaymentAssetIcon network={payNetwork} className="relative h-7 w-7" />
+                    <span className="relative min-w-0"><span className="block text-[9px] font-bold uppercase text-white/45">Red</span><span className="block truncate text-xs font-black">{payNetwork || 'Seleccionar'}</span></span>
+                    <ChevronDown className="relative ml-auto h-4 w-4 shrink-0 text-cyan-200" />
                   </button>
                 </div>
-                <div className="grid grid-cols-4 gap-2">
-                  {[10, 25, 50, 100].map((presetVal) => {
-                    const isSelected = selectedAmount === presetVal
-                    return (
-                      <button
-                        key={presetVal}
-                        type="button"
-                        onClick={() => {
-                          setAmount(String(presetVal))
-                          setErr(null)
-                        }}
-                        className={`py-2 px-1 rounded-xl border text-center font-bold text-xs sm:text-sm transition-all active:scale-95 ${
-                          isSelected
-                            ? 'border-accent bg-accent/20 text-accent ring-1 ring-accent/40 shadow-sm'
-                            : 'border-white/10 bg-card hover:border-white/20 text-white/80'
-                        }`}
-                      >
-                        ${presetVal}
-                      </button>
-                    )
-                  })}
-                </div>
-              </div>
-
-              {/* Input personalizado */}
-              <div className="relative">
-                <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white/40 font-bold text-base">$</span>
-                <input
-                  value={amount}
-                  onChange={(e) => {
-                    setAmount(e.target.value)
-                    setErr(null)
-                  }}
-                  inputMode="decimal"
-                  className="w-full rounded-2xl border border-white/10 bg-card pl-8 pr-16 py-3 text-base sm:text-lg font-black text-white outline-none focus:border-accent transition-colors"
-                  placeholder="25"
-                />
-                <span className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs font-bold text-white/40 uppercase">
-                  USDT
-                </span>
+                {optionsLoading && <p className="flex items-center gap-1.5 text-[11px] text-white/45"><Loader2 className="h-3.5 w-3.5 animate-spin" />Cargando monedas y redes disponibles…</p>}
+                {optionsError && (
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-amber-400/25 bg-amber-400/10 p-2.5 text-xs text-amber-100">
+                    <span>{optionsError}</span>
+                    <button type="button" onClick={loadPaymentOptions} className="shrink-0 font-bold text-amber-300 underline">Reintentar</button>
+                  </div>
+                )}
               </div>
 
               {/* Píldora de 1 sola línea con el Nivel alcanzado */}
@@ -12169,8 +14670,9 @@ function TopUpModal({ onClose, onPaid, me, initialAmount = '25' }) {
               {/* Botón de Pago Principal */}
               <button
                 type="button"
+                data-tour="topup-pay-btn"
                 onClick={() => createInvoice()}
-                disabled={loading || selectedAmount <= 0}
+                disabled={loading || optionsLoading || !!optionsError || selectedAmount <= 0 || !payCurrency || !payNetwork}
                 className="w-full rounded-2xl bg-accent py-3.5 px-4 text-sm font-black text-bg hover:bg-accent/90 disabled:opacity-50 transition-all flex items-center justify-center gap-2 shadow-lg shadow-accent/20 active:scale-[0.98]"
               >
                 {loading ? (
@@ -12187,65 +14689,82 @@ function TopUpModal({ onClose, onPaid, me, initialAmount = '25' }) {
               </button>
             </>
           ) : (
-            /* Pantalla Limpia de Factura Generada */
-            <div className="space-y-4 pt-1">
-              <div className="rounded-2xl border border-accent/30 bg-accent/5 p-4 text-center space-y-2">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-white/50 block">
-                  Orden de pago generada
-                </span>
-                <div className="text-2xl sm:text-3xl font-black text-white">
-                  ${Number(invoice.amount).toFixed(2)} <span className="text-accent text-lg">USDT</span>
+            <div className="space-y-3 pt-1">
+              <div className="rounded-2xl border border-accent/30 bg-accent/5 p-4 text-center">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-white/50">Envía exactamente</span>
+                <div className="mt-1 text-2xl sm:text-3xl font-black text-white">
+                  {invoice.pay_amount} <span className="text-accent text-lg">{invoice.pay_currency}</span>
                 </div>
-                <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-yellow-500/20 border border-yellow-500/30 text-yellow-300 text-[11px] font-bold">
+                <p className="mt-1 text-xs font-bold text-white/70">Red: <span className="text-accent">{invoice.network}</span></p>
+                <div className={`mt-2 inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-bold ${secondsLeft === 0 ? 'border-red-500/30 bg-red-500/15 text-red-200' : 'border-yellow-500/30 bg-yellow-500/20 text-yellow-300'}`}>
                   <Clock className="h-3 w-3" />
-                  <span>{status || invoice.status || 'Esperando confirmación'}</span>
+                  <span>{secondsLeft === 0 ? 'Esta orden venció' : `${status === 'paying' ? 'Pago detectado, esperando red' : 'Esperando pago'}${secondsLeft !== null ? ` · vence en ${formatTimeLeft(secondsLeft)}` : ''}`}</span>
                 </div>
-                <p className="text-xs text-white/60 pt-1">
-                  Redes disponibles en OxaPay: <strong>TRC20, BEP20, Polygon, Arbitrum</strong> y más.
-                </p>
               </div>
 
-              <div className="space-y-2">
-                <button
-                  type="button"
-                  onClick={() => tg?.openLink?.(invoice.pay_link) || window.open(invoice.pay_link, '_blank')}
-                  className="w-full rounded-2xl bg-accent py-3.5 px-4 text-sm font-black text-bg hover:bg-accent/90 transition-all flex items-center justify-center gap-2 shadow-lg shadow-accent/20 active:scale-[0.98]"
-                >
-                  <ExternalLink className="h-4 w-4" />
-                  <span>Abrir pago en OxaPay</span>
-                </button>
+              {invoice.qr_code && (
+                <div className="mx-auto grid w-fit place-items-center rounded-2xl bg-white p-2 shadow-lg shadow-black/30">
+                  <img src={invoice.qr_code} alt="QR de pago" className="h-40 w-40 rounded-lg" />
+                </div>
+              )}
 
-                <button
-                  type="button"
-                  onClick={checkPayment}
-                  disabled={checking}
-                  className="w-full rounded-2xl bg-white/10 hover:bg-white/15 border border-white/10 py-3 px-4 text-xs font-bold text-white transition-all flex items-center justify-center gap-2 disabled:opacity-60 active:scale-[0.98]"
-                >
-                  {checking ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      <span>Verificando en blockchain...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Check className="h-3.5 w-3.5 text-accent" />
-                      <span>Ya pagué / Verificar estado</span>
-                    </>
-                  )}
+              <div className="rounded-2xl border border-white/10 bg-card p-3">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-white/45">Dirección de destino</p>
+                <p className="mt-1 break-all select-text font-mono text-xs leading-relaxed text-white/90">{invoice.address}</p>
+                <button type="button" onClick={copyPaymentAddress} className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-xl bg-white/10 px-3 py-2 text-xs font-bold text-white transition hover:bg-white/15 active:scale-[0.98]">
+                  {copied ? <Check className="h-4 w-4 text-accent" /> : <Copy className="h-4 w-4" />}
+                  {copied ? 'Dirección copiada' : 'Copiar dirección'}
                 </button>
-
-                <button
-                  type="button"
-                  onClick={() => { setInvoice(null); setStatus(null); }}
-                  className="w-full text-center text-xs text-white/40 hover:text-white/70 py-1 transition-colors"
-                >
-                  Cambiar monto
-                </button>
+                {invoice.memo && <p className="mt-2 rounded-lg border border-amber-300/20 bg-amber-300/10 p-2 text-xs text-amber-100">Memo/Destino: <span className="select-text font-mono font-bold">{invoice.memo}</span></p>}
               </div>
+
+              <div className="rounded-xl border border-amber-400/20 bg-amber-400/10 p-3 text-xs leading-relaxed text-amber-100/90">
+                Envía solamente <strong>{invoice.pay_currency}</strong> por la red <strong>{invoice.network}</strong>. No cierres esta pantalla hasta que se acredite el saldo.
+              </div>
+
+              {err && <div className="rounded-xl border border-red-500/20 bg-red-500/10 p-2.5 text-xs text-red-300">{err}</div>}
+
+              <button
+                type="button"
+                onClick={() => checkPayment()}
+                disabled={checking || secondsLeft === 0}
+                className="w-full rounded-2xl bg-accent py-3 px-4 text-sm font-black text-bg transition-all hover:bg-accent/90 disabled:opacity-50 active:scale-[0.98]"
+              >
+                <span className="inline-flex items-center justify-center gap-2">{checking ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}{checking ? 'Verificando en blockchain…' : 'Ya pagué / Verificar estado'}</span>
+              </button>
+              <button type="button" onClick={() => { setInvoice(null); setStatus(null); setErr(null); }} className="w-full py-1 text-center text-xs text-white/45 transition hover:text-white/70">Cambiar monto o red</button>
             </div>
           )}
         </div>
       </div>
+
+      {paymentSelector && !invoice && (
+        <div className="fixed inset-0 z-[1000000] flex items-end justify-center bg-black/75 p-3 backdrop-blur-sm sm:items-center" onClick={(e) => e.target === e.currentTarget && setPaymentSelector(null)}>
+          <div role="dialog" aria-modal="true" aria-label={paymentSelector === 'currency' ? 'Seleccionar moneda' : 'Seleccionar red'} className="w-full max-w-md rounded-2xl border border-white/10 bg-[#11171e] p-4 shadow-2xl">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div><p className="text-sm font-black text-white">{paymentSelector === 'currency' ? 'Selecciona moneda' : `Red para ${payCurrency}`}</p><p className="mt-0.5 text-[11px] text-white/45">Solo se muestran opciones habilitadas por OxaPay.</p></div>
+              <button type="button" onClick={() => setPaymentSelector(null)} className="grid h-9 w-9 place-items-center rounded-full bg-white/10 text-white/70 transition hover:bg-white/15"><X className="h-4 w-4" /></button>
+            </div>
+            <div className={`max-h-[55vh] overflow-y-auto pr-1 [scrollbar-width:thin] ${paymentSelector === 'currency' ? 'grid grid-cols-3 gap-2 sm:grid-cols-4' : 'grid grid-cols-2 gap-2'}`}>
+              {(paymentSelector === 'currency' ? paymentOptions : availableNetworks).map((option) => {
+                const value = paymentSelector === 'currency' ? option.symbol : option.network
+                const selected = paymentSelector === 'currency' ? value === payCurrency : value === payNetwork
+                const title = paymentSelector === 'currency' ? option.symbol : option.name
+                return <button key={value} type="button" onClick={() => {
+                  if (paymentSelector === 'currency') setPayCurrency(value)
+                  else setPayNetwork(value)
+                  setErr(null)
+                  setPaymentSelector(null)
+                }} className={`relative flex min-h-16 items-center gap-2 overflow-hidden rounded-xl border p-2 text-left transition active:translate-y-[2px] ${selected ? 'border-accent/70 bg-gradient-to-b from-emerald-300/20 to-emerald-900/20 text-white shadow-[inset_0_1px_1px_rgba(255,255,255,.2),0_3px_0_#057544]' : 'border-white/10 bg-white/[.045] text-white/75 shadow-[inset_0_1px_1px_rgba(255,255,255,.06),0_3px_0_#050709]'}`}>
+                  <PaymentAssetIcon symbol={paymentSelector === 'currency' ? value : ''} network={paymentSelector === 'network' ? value : ''} className="h-7 w-7" />
+                  <span className="min-w-0"><span className="block truncate text-xs font-black">{title}</span>{paymentSelector === 'currency' && <span className="block truncate text-[9px] text-white/45">{option.name}</span>}</span>
+                  {selected && <Check className="ml-auto h-4 w-4 shrink-0 text-accent" />}
+                </button>
+              })}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Secundario de Escala de Beneficios / Descuentos */}
       {showTierModal && (
@@ -12388,6 +14907,8 @@ function ManualBuyModal({ product: initialProduct, onClose, onBought, buyResult,
   const [buying, setBuying] = useState(false)
   const [err, setErr] = useState(null)
   const [cupSettings, setCupSettings] = useState(null)
+  const [cupSettingsError, setCupSettingsError] = useState('')
+  const [pendingCupOrder, setPendingCupOrder] = useState(null)
   const [paymentMethod, setPaymentMethod] = useState('balance')
   const [cupReference, setCupReference] = useState('')
   const [proofFile, setProofFile] = useState(null)
@@ -12407,13 +14928,18 @@ function ManualBuyModal({ product: initialProduct, onClose, onBought, buyResult,
   const [loadingRewardLink, setLoadingRewardLink] = useState(false)
   const displayShareLink = rewardShareLink || shareLink
 
-  useEffect(() => {
-    api.cupPaymentSettings()
-      .then(res => {
-        if (res && res.enabled) setCupSettings(res)
-      })
-      .catch(() => {})
-  }, [])
+  const loadCupSettings = async () => {
+    setCupSettingsError('')
+    try {
+      const res = await api.cupPaymentSettings()
+      setCupSettings(res?.enabled ? res : null)
+    } catch (error) {
+      setCupSettings(null)
+      setCupSettingsError(error?.message || 'Error temporal al cargar la configuración de CUP.')
+    }
+  }
+
+  useEffect(() => { loadCupSettings() }, [])
 
   useEffect(() => {
     if (!proofFile) {
@@ -12432,8 +14958,8 @@ function ManualBuyModal({ product: initialProduct, onClose, onBought, buyResult,
     setTimeout(() => setCopiedField(null), 2000)
   }
 
-  const cardRate = Number(cupSettings?.transfer_rate) || 1190.90909091
-  const mobileRate = Number(cupSettings?.mobile_rate) || 643.73464374
+  const cardRate = Number(cupSettings?.transfer_rate) || 0
+  const mobileRate = Number(cupSettings?.mobile_rate) || 0
   const numericDisplayPrice = Number(displayPrice || 0)
   const cardCupAmount = Math.round((numericDisplayPrice * cardRate) / 10) * 10
   const mobileCupAmount = Math.round((numericDisplayPrice * mobileRate) / 10) * 10
@@ -12484,7 +15010,10 @@ function ManualBuyModal({ product: initialProduct, onClose, onBought, buyResult,
     }
     setBuying(true); setErr(null)
     try {
-      const orderRes = await api.createManualCupOrder({
+      if (!cupReference.trim()) {
+        throw new Error(paymentMethod === 'cup_mobile_balance' ? 'Escribe el número de teléfono desde el que enviaste el saldo.' : 'Escribe el número de transacción de tu comprobante.')
+      }
+      const orderRes = pendingCupOrder || await api.createManualCupOrder({
         product_id: product.id,
         option_id: selectedOptionId,
         customer_data: customerData,
@@ -12492,7 +15021,9 @@ function ManualBuyModal({ product: initialProduct, onClose, onBought, buyResult,
         referral_code: getProductReferral(product.id),
       })
       if (!orderRes?.order_id) throw new Error('No se pudo generar la orden CUP')
+      setPendingCupOrder(orderRes)
       await api.uploadCupPaymentProof(orderRes.order_id, cupReference, proofFile)
+      setPendingCupOrder(null)
       setCupSuccess({
         order_id: orderRes.order_id,
         product: orderRes.product || product.name,
@@ -12500,7 +15031,7 @@ function ManualBuyModal({ product: initialProduct, onClose, onBought, buyResult,
         payment_method: paymentMethod,
       })
     } catch (e) {
-      setErr(e.message)
+      setErr(pendingCupOrder ? `El pedido #${pendingCupOrder.order_id} ya fue creado. Corrige el comprobante o la conexión y vuelve a enviarlo; no se generará otro pedido.` : e.message)
     } finally {
       setBuying(false)
     }
@@ -12739,10 +15270,14 @@ function ManualBuyModal({ product: initialProduct, onClose, onBought, buyResult,
                 )}
 
                 <PaymentMethodSection
+                  isGuest={Boolean(me?.is_guest)}
+                  onLoginRequired={onLoginRequired}
                   paymentMethod={paymentMethod}
                   setPaymentMethod={setPaymentMethod}
                   priceUsdt={numericDisplayPrice}
                   cupSettings={cupSettings}
+                  cupSettingsError={cupSettingsError}
+                  onRetryCupSettings={loadCupSettings}
                   userBalance={Number(me?.balance || 0)}
                   cardCupAmount={cardCupAmount}
                   mobileCupAmount={mobileCupAmount}
@@ -12830,9 +15365,16 @@ Francho Shop no vende cuentas robadas, hackeadas, recuperadas, baneadas o con da
                 >
                   <Share2 className="h-5 w-5 mx-auto text-violet-400" />
                 </button>
-                <button onClick={handleBuy} disabled={buying}
-                  className="min-w-0 flex-1 rounded-xl bg-gradient-to-r from-accent to-accent2 px-3 py-3 font-bold active:scale-95 disabled:opacity-50">
-                  {buying ? (
+                <button
+                  onClick={me?.is_guest ? onLoginRequired : handleBuy}
+                  disabled={!me?.is_guest && (buying || (paymentMethod !== 'balance' && (!proofFile || !cupReference.trim())))}
+                  className="min-w-0 flex-1 rounded-xl bg-gradient-to-r from-accent to-accent2 px-3 py-3 font-bold active:scale-95 disabled:opacity-50 text-bg">
+                  {me?.is_guest ? (
+                    <span key="login_req" className="inline-flex items-center justify-center gap-2">
+                      <Lock className="h-5 w-5" />
+                      <span>Iniciar sesión para comprar</span>
+                    </span>
+                  ) : buying ? (
                     <span key="buying" className="inline-flex items-center justify-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       <span>Procesando...</span>
@@ -12850,7 +15392,7 @@ Francho Shop no vende cuentas robadas, hackeadas, recuperadas, baneadas o con da
                   ) : (
                     <span key="buy" className="inline-flex items-center justify-center gap-2">
                       <ShoppingCart className="h-5 w-5" />
-                      <span>Comprar por ${Number(displayPrice).toFixed(2)} USDT</span>
+                      <span>Comprar</span>
                     </span>
                   )}
                 </button>
@@ -18330,6 +20872,14 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
   const activeRoleLabel = stripEmoji(activeRole.label)
   const profileMsgIsError = profileMsg && /^(No se pudo|Error|Mínimo|Invalid|Fallo)/i.test(profileMsg)
   const displayName = profile.display_name || profile.name || 'Usuario'
+  const hasProfileKyc = profile.kyc_status === 'approved'
+  const hasProfileAdminVip = profile.role === 'admin' && !!(profile.is_vip || profile.vip_badge)
+  const showProfileRing = hasProfileKyc || hasProfileAdminVip
+  const profileRingColor = hasProfileKyc && (profile.is_vip || profile.vip_badge)
+    ? 'bg-[conic-gradient(#22c55e,#86efac,#facc15,#fde047,#16a34a,#22c55e)]'
+    : hasProfileKyc
+      ? 'bg-[conic-gradient(#16a34a,#86efac,#14b8a6,#4ade80,#22c55e,#16a34a)]'
+      : 'bg-[conic-gradient(#facc15,#fff7bf,#16a34a,#f59e0b,#fde047,#facc15)]'
 
   async function handleLinkTelegram() {
     try {
@@ -18393,7 +20943,7 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-3 py-3.5 max-w-lg mx-auto w-full pb-36 md:pb-16 scrollbar-thin">
+    <div className="fs-profile-surface flex-1 overflow-y-auto px-3 py-3.5 max-w-lg mx-auto w-full pb-36 md:pb-16 scrollbar-thin">
       {/* Barra superior con botón volver */}
       <div className="flex items-center justify-between gap-3 mb-3.5 pb-2.5 border-b border-white/5">
         <div className="flex items-center gap-2.5">
@@ -18413,15 +20963,18 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
       </div>
 
       {/* Perfil principal */}
-      <div className="card relative mb-3 overflow-hidden border-white/10 bg-card p-4 shadow-lg shadow-black/20">
+      <div data-tour="profile-card" className="card relative mb-3 overflow-hidden border-white/10 bg-card p-4 shadow-lg shadow-black/20">
         <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-accent/70 to-transparent" />
         <div className="pointer-events-none absolute -right-10 -top-16 h-36 w-36 rounded-full bg-accent/10 blur-3xl" />
 
         {/* Botón Editar perfil en la esquina superior derecha */}
         <button
+          type="button"
+          data-tour="profile-edit-btn"
           onClick={() => {
             setProfileName(profile.display_name || profile.name || '')
             setProfileEmail(profile.email || '')
+            setProfileMsg(null)
             setEditProfile(true)
           }}
           className="absolute top-3.5 right-3.5 inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 px-2.5 py-1 text-xs font-bold text-white/80 hover:text-white active:scale-95 transition"
@@ -18432,7 +20985,8 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
 
         <div className="relative flex items-center gap-3.5 pr-20">
           <div className="relative h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0">
-            <div className={`h-16 w-16 sm:h-20 sm:w-20 overflow-hidden rounded-full border-2 bg-black/25 ring-2 ${activeRole.ring}`}>
+            {showProfileRing && <span aria-hidden="true" className={`${hasProfileAdminVip ? 'fs-account-ring-spin-admin' : 'fs-account-ring-spin'} fs-account-ring-3d pointer-events-none absolute -inset-[3px] rounded-full ${profileRingColor}`} />}
+            <div className={`relative z-[1] h-16 w-16 sm:h-20 sm:w-20 overflow-hidden rounded-full border-2 bg-black/25 ring-2 ${activeRole.ring}`}>
               {profile.photo_url ? (
                 <img src={storeAssetUrl(profile.photo_url)} alt="" className="h-full w-full object-cover" />
               ) : (
@@ -18447,7 +21001,11 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
           </div>
 
           <div className="min-w-0 flex-1 text-left">
-            <h2 className="truncate text-base sm:text-lg font-black leading-tight text-white">{displayName}</h2>
+            <div className="flex min-w-0 items-center gap-1.5">
+              <h2 className="truncate text-base sm:text-lg font-black leading-tight text-white">{displayName}</h2>
+              <UserIdentityBadges profile={profile} />
+              <FranchoFMark className="h-5 w-5 shrink-0 text-[#00e878]" />
+            </div>
             {profile.username && <p className="truncate text-xs text-white/50">@{profile.username}</p>}
             <div className="mt-1 flex flex-wrap items-center gap-1.5">
               <div className={`inline-flex max-w-full items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold ${activeRole.badge}`}>
@@ -18460,7 +21018,7 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
         </div>
 
         {/* Saldo y Recarga compacta integrada en la misma tarjeta */}
-        <div className="mt-3 flex items-center justify-between gap-2 pt-2.5 border-t border-white/5">
+        <div data-tour="profile-balance" className="mt-3 flex items-center justify-between gap-2 pt-2.5 border-t border-white/5">
           <div className="flex items-center gap-2">
             <span className="text-[10px] font-bold uppercase tracking-wider text-white/45">Saldo:</span>
             <strong className="text-sm font-black text-white">${Number(profile?.balance || 0).toFixed(2)} <span className="text-[10px] font-bold text-accent">USDT</span></strong>
@@ -18474,58 +21032,59 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
           </button>
         </div>
 
-        {/* Modal Editar Perfil */}
-        {editProfile && (
-          <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={() => setEditProfile(false)}>
-            <div className="w-full max-w-md rounded-t-2xl border border-white/10 bg-card p-4 text-left shadow-2xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-base font-black">Editar perfil</h3>
-                  <p className="text-xs text-white/45">Actualiza tu nombre, email e imagen.</p>
-                </div>
-                <button onClick={() => setEditProfile(false)} className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5 text-white/60 active:scale-95"><X className="h-4 w-4" /></button>
+        {profileMsg && <p className={`mt-3 rounded-lg border px-3 py-2 text-xs font-semibold ${profileMsgIsError ? 'border-red-500/25 bg-red-500/10 text-red-300' : 'border-green-500/25 bg-green-500/10 text-green-300'}`}>{profileMsg}</p>}
+      </div>
+
+      {/* Se monta fuera de la tarjeta: su overflow no puede recortar el diálogo en móvil. */}
+      {editProfile && (
+        <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={() => setEditProfile(false)} role="presentation">
+          <div role="dialog" aria-modal="true" aria-labelledby="edit-profile-title" className="w-full max-w-md rounded-t-2xl border border-white/10 bg-card p-4 text-left shadow-2xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h3 id="edit-profile-title" className="text-base font-black">Editar perfil</h3>
+                <p className="text-xs text-white/45">Actualiza tu nombre, email e imagen.</p>
               </div>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-3">
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold text-white">Imagen de perfil</p>
-                    <p className="truncate text-[11px] text-white/40">JPG, PNG, WEBP o GIF</p>
-                  </div>
-                  <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-accent/15 px-3 py-2 text-xs font-bold text-accent active:scale-95">
-                    {photoUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Edit3 className="h-4 w-4" />}
-                    Cambiar
-                    <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" disabled={photoUploading} onChange={(e) => { handleProfilePhoto(e.target.files?.[0]); e.target.value = '' }} />
-                  </label>
+              <button type="button" onClick={() => setEditProfile(false)} aria-label="Cerrar" className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5 text-white/60 active:scale-95"><X className="h-4 w-4" /></button>
+            </div>
+            <div className="space-y-3">
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-3">
+                <div className="min-w-0">
+                  <p className="text-xs font-bold text-white">Imagen de perfil</p>
+                  <p className="truncate text-[11px] text-white/40">JPG, PNG, WEBP o GIF</p>
                 </div>
-                <div>
-                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-white/45">Nombre visible</label>
-                  <input value={profileName} onChange={e => setProfileName(e.target.value)}
-                    className="w-full rounded-xl border border-white/10 bg-bg px-3 py-2.5 text-sm text-white outline-none focus:border-accent"
-                    placeholder="Tu nombre para mostrar" maxLength={60} />
-                </div>
-                <div>
-                  <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-white/45">Email</label>
-                  <input type="email" value={profileEmail} onChange={e => setProfileEmail(e.target.value)}
-                    className="w-full rounded-xl border border-white/10 bg-bg px-3 py-2.5 text-sm text-white outline-none focus:border-accent"
-                    placeholder="correo@ejemplo.com" maxLength={120} />
-                  <p className="mt-1 text-[10px] text-white/35">Si cambias el email, quedará pendiente de verificación.</p>
-                </div>
-                <div className="grid grid-cols-2 gap-2 pt-1">
-                  <button onClick={() => setEditProfile(false)}
-                    className="rounded-xl border border-white/10 bg-white/5 py-2.5 text-xs font-bold text-white/60 active:scale-95">
-                    Cancelar
-                  </button>
-                  <button onClick={handleSaveProfile} disabled={profileSaving}
-                    className="rounded-xl bg-accent py-2.5 text-xs font-black text-bg active:scale-95 disabled:opacity-50">
-                    {profileSaving ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Guardar'}
-                  </button>
-                </div>
+                <label className="inline-flex cursor-pointer items-center justify-center gap-2 rounded-lg bg-accent/15 px-3 py-2 text-xs font-bold text-accent active:scale-95">
+                  {photoUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Edit3 className="h-4 w-4" />}
+                  Cambiar
+                  <input type="file" accept="image/png,image/jpeg,image/webp,image/gif" className="hidden" disabled={photoUploading} onChange={(e) => { handleProfilePhoto(e.target.files?.[0]); e.target.value = '' }} />
+                </label>
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-white/45">Nombre visible</label>
+                <input value={profileName} onChange={e => setProfileName(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-bg px-3 py-2.5 text-sm text-white outline-none focus:border-accent"
+                  placeholder="Tu nombre para mostrar" maxLength={60} />
+              </div>
+              <div>
+                <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-white/45">Email</label>
+                <input type="email" value={profileEmail} onChange={e => setProfileEmail(e.target.value)}
+                  className="w-full rounded-xl border border-white/10 bg-bg px-3 py-2.5 text-sm text-white outline-none focus:border-accent"
+                  placeholder="correo@ejemplo.com" maxLength={120} />
+                <p className="mt-1 text-[10px] text-white/35">Si cambias el email, quedará pendiente de verificación.</p>
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <button type="button" onClick={() => setEditProfile(false)}
+                  className="rounded-xl border border-white/10 bg-white/5 py-2.5 text-xs font-bold text-white/60 active:scale-95">
+                  Cancelar
+                </button>
+                <button type="button" onClick={handleSaveProfile} disabled={profileSaving}
+                  className="rounded-xl bg-accent py-2.5 text-xs font-black text-bg active:scale-95 disabled:opacity-50">
+                  {profileSaving ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Guardar'}
+                </button>
               </div>
             </div>
           </div>
-        )}
-        {profileMsg && <p className={`mt-3 rounded-lg border px-3 py-2 text-xs font-semibold ${profileMsgIsError ? 'border-red-500/25 bg-red-500/10 text-red-300' : 'border-green-500/25 bg-green-500/10 text-green-300'}`}>{profileMsg}</p>}
-      </div>
+        </div>
+      )}
 
       {showTopUp && <TopUpModal me={profile} onClose={() => setShowTopUp(false)} onPaid={(balance) => { setProfile(prev => ({ ...prev, balance })); setShowTopUp(false) }} />}
 
@@ -18533,6 +21092,7 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
       <div className="space-y-1.5 mb-3">
         {/* Mis pedidos */}
         <button
+          data-tour="profile-orders"
           onClick={onOrders}
           className="card px-3.5 py-2.5 w-full flex items-center justify-between border-white/5 hover:border-white/15 bg-card active:scale-[0.99] transition"
         >
@@ -18554,6 +21114,7 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
 
         {/* Centro de Reclamos & Soporte */}
         <button
+          data-tour="profile-support"
           onClick={onSupport}
           className="card px-3.5 py-2.5 w-full flex items-center justify-between border-white/5 hover:border-amber-400/30 bg-card active:scale-[0.99] transition"
         >
@@ -18568,6 +21129,7 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
 
         {/* Referidos */}
         <button
+          data-tour="profile-referrals"
           id="referrals-section"
           onClick={() => setShowReferralsModal(true)}
           className="card px-3.5 py-2.5 w-full flex items-center justify-between border-white/5 hover:border-emerald-500/30 bg-card active:scale-[0.99] transition"
@@ -18637,6 +21199,7 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
 
         {/* Cuentas vinculadas */}
         <button
+          data-tour="profile-linked-accounts"
           onClick={() => setShowLinkedAccountsModal(true)}
           className="card px-3.5 py-2.5 w-full flex items-center justify-between border-white/5 hover:border-accent/30 bg-card active:scale-[0.99] transition"
         >
@@ -18656,6 +21219,7 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
 
         {/* Contraseña web */}
         <button
+          data-tour="profile-password"
           onClick={() => setShowPwdModal(true)}
           className="card px-3.5 py-2.5 w-full flex items-center justify-between border-white/5 hover:border-amber-400/30 bg-card active:scale-[0.99] transition"
         >
@@ -19187,6 +21751,9 @@ function OrderCaseChatScreen({ orderId, admin = false, me, openReviewOnLoad = fa
   const [escalateModalOpen, setEscalateModalOpen] = useState(false)
   const [escalateReason, setEscalateReason] = useState('')
   const [escalating, setEscalating] = useState(false)
+  const [showQrModal, setShowQrModal] = useState(false)
+  const [qrDataUrl, setQrDataUrl] = useState(null)
+  const [loadingQr, setLoadingQr] = useState(false)
   const messagesEndRef = useRef(null)
   const fileInputRef = useRef(null)
   const lastMsgCount = useRef(0)
@@ -19733,6 +22300,128 @@ function OrderCaseChatScreen({ orderId, admin = false, me, openReviewOnLoad = fa
                 <Info className="h-4 w-4 text-white/40 flex-shrink-0 mt-0.5" />
                 <span>Nota del vendedor: {order.admin_note}</span>
               </p>
+            )}
+            {order.delivery_data.includes('[Interface]') && (
+              <div className="mt-3 flex flex-wrap gap-2 pt-2 border-t border-green-500/20">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const blob = new Blob([order.delivery_data], { type: 'application/octet-stream' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `francho-vpn-${orderId || 'wireguard'}.conf`
+                    document.body.appendChild(a)
+                    a.click()
+                    document.body.removeChild(a)
+                    setTimeout(() => URL.revokeObjectURL(url), 2000)
+                  }}
+                  className="flex items-center gap-1.5 rounded-lg bg-green-500/20 hover:bg-green-500/30 text-green-300 px-3 py-1.5 text-xs font-bold border border-green-500/40 active:scale-95 transition"
+                >
+                  📥 Descargar .conf (WireGuard)
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setShowQrModal(true)
+                    if (!qrDataUrl && order?.delivery_data) {
+                      setLoadingQr(true)
+                      try {
+                        const res = await api.getVpnQr(order.delivery_data)
+                        if (res?.qr_data_url) setQrDataUrl(res.qr_data_url)
+                      } catch (e) {
+                        console.error('Error fetching VPN QR:', e)
+                      } finally {
+                        setLoadingQr(false)
+                      }
+                    }
+                  }}
+                  className="flex items-center gap-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 px-3 py-1.5 text-xs font-bold border border-cyan-500/40 active:scale-95 transition"
+                >
+                  <QrCode className="h-3.5 w-3.5" />
+                  📱 Ver Código QR
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (navigator.clipboard?.writeText) {
+                      navigator.clipboard.writeText(order.delivery_data)
+                    }
+                    alert('¡Configuración WireGuard copiada al portapapeles!')
+                  }}
+                  className="flex items-center gap-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-white/90 px-3 py-1.5 text-xs font-medium border border-white/10 active:scale-95 transition"
+                >
+                  <Copy className="h-3.5 w-3.5" />
+                  Copiar Configuración
+                </button>
+              </div>
+            )}
+
+            {/* Modal Código QR WireGuard */}
+            {showQrModal && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+                <div className="relative w-full max-w-sm rounded-2xl border border-white/15 bg-[#0f1722] p-5 shadow-2xl text-center">
+                  <button
+                    type="button"
+                    onClick={() => setShowQrModal(false)}
+                    className="absolute top-4 right-4 p-1.5 rounded-full text-white/60 hover:text-white bg-white/5 hover:bg-white/10 transition"
+                  >
+                    <X className="h-5 w-5" />
+                  </button>
+
+                  <div className="flex items-center justify-center gap-2 text-emerald-400 font-black text-sm mb-1">
+                    <QrCode className="h-5 w-5" />
+                    <span>Código QR de Conexión</span>
+                  </div>
+                  <p className="text-[11px] text-white/60 mb-4">
+                    Pedido #{orderId} · WireGuard
+                  </p>
+
+                  <div className="mx-auto w-56 h-56 bg-white p-3 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/10 mb-4">
+                    {loadingQr ? (
+                      <div className="flex flex-col items-center gap-2 text-black/60 text-xs font-bold">
+                        <RefreshCcw className="h-6 w-6 animate-spin text-emerald-600" />
+                        <span>Generando QR...</span>
+                      </div>
+                    ) : qrDataUrl ? (
+                      <img src={qrDataUrl} alt="WireGuard QR" className="w-full h-full object-contain" />
+                    ) : (
+                      <img src={`/api/manual-orders/${orderId}/qr`} alt="WireGuard QR" className="w-full h-full object-contain" />
+                    )}
+                  </div>
+
+                  <p className="text-xs text-white/85 leading-relaxed mb-4 px-2">
+                    📱 En tu celular abre <b>WireGuard</b>, presiona <b>(+)</b> y selecciona <b>Escanear código QR</b> para importar el túnel de inmediato.
+                  </p>
+
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const blob = new Blob([order.delivery_data], { type: 'application/octet-stream' })
+                        const url = URL.createObjectURL(blob)
+                        const a = document.createElement('a')
+                        a.href = url
+                        a.download = `francho-vpn-${orderId || 'wireguard'}.conf`
+                        document.body.appendChild(a)
+                        a.click()
+                        document.body.removeChild(a)
+                        setTimeout(() => URL.revokeObjectURL(url), 2000)
+                      }}
+                      className="flex-1 rounded-xl bg-emerald-400 hover:bg-emerald-300 py-2.5 text-xs font-black text-black active:scale-95 transition"
+                    >
+                      Descargar .conf
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShowQrModal(false)}
+                      className="flex-1 rounded-xl bg-white/10 hover:bg-white/15 py-2.5 text-xs font-bold text-white active:scale-95 transition"
+                    >
+                      Listo
+                    </button>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
         )}
@@ -20297,6 +22986,7 @@ function OrdersScreen({ onOpenCase, onGoSupport, onBack }) {
   const [err, setErr] = useState(null)
   const [selectedReceipt, setSelectedReceipt] = useState(null)
   const [expandedOrders, setExpandedOrders] = useState(() => new Set())
+  const [selectedQrOrder, setSelectedQrOrder] = useState(null)
 
   const toggleExpand = (orderKey) => {
     setExpandedOrders(prev => {
@@ -20371,9 +23061,9 @@ function OrdersScreen({ onOpenCase, onGoSupport, onBack }) {
   }
 
   return (
-    <div className="flex-1 overflow-y-auto px-2.5 py-4 md:p-6 pb-32 md:pb-12 scrollbar-thin">
+    <div className="fs-orders-surface flex-1 overflow-y-auto px-2.5 py-4 md:p-6 pb-32 md:pb-12 scrollbar-thin">
       <div className="mx-auto max-w-2xl">
-        <div className="flex items-center gap-3 mb-4">
+        <div data-tour="orders-header" className="flex items-center gap-3 mb-4">
           {onBack && (
             <button
               type="button"
@@ -20391,7 +23081,7 @@ function OrdersScreen({ onOpenCase, onGoSupport, onBack }) {
 
         {/* Banner de Soporte & Reclamos */}
         {onGoSupport && (
-          <div className="mb-4 rounded-2xl border border-accent/25 bg-gradient-to-r from-accent/15 via-accent/5 to-transparent p-3.5 flex items-center justify-between gap-3 shadow-sm">
+          <div className="fs-orders-card mb-4 flex items-center justify-between gap-3 rounded-2xl border border-accent/25 bg-gradient-to-r from-accent/15 via-accent/5 to-transparent p-3">
             <div className="flex items-center gap-3 min-w-0">
               <div className="h-9 w-9 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-center text-accent flex-shrink-0">
                 <Headphones className="h-4 w-4" />
@@ -20402,6 +23092,7 @@ function OrdersScreen({ onOpenCase, onGoSupport, onBack }) {
               </div>
             </div>
             <button
+              data-tour="orders-support-btn"
               type="button"
               onClick={onGoSupport}
               className="flex-shrink-0 rounded-xl bg-accent px-3 py-1.5 text-xs font-black text-[#07110f] hover:bg-accent/90 active:scale-95 transition shadow-sm"
@@ -20412,10 +23103,13 @@ function OrdersScreen({ onOpenCase, onGoSupport, onBack }) {
         )}
 
         {orders.length === 0 ? (
-          <p className="text-center text-white/50 py-8">Aún no tienes pedidos</p>
+          <div data-tour="orders-list" className="text-center text-white/50 py-8 bg-card/40 rounded-2xl border border-white/5 p-4">
+            <Package className="h-8 w-8 mx-auto mb-2 text-white/30" />
+            <p>Aún no tienes pedidos registrados</p>
+          </div>
         ) : (
-          <div className="space-y-2.5">
-            {orders.map(o => {
+          <div data-tour="orders-list" className="space-y-2">
+            {orders.map((o, idx) => {
               const orderKey = `${o.type}-${o.id}`
               const isExpanded = expandedOrders.has(orderKey)
               const info = STATUS_INFO[o.status] || { status: 'pending', label: o.status, color: 'text-white' }
@@ -20430,7 +23124,8 @@ function OrdersScreen({ onOpenCase, onGoSupport, onBack }) {
               return (
                 <div
                   key={orderKey}
-                  className={`rounded-2xl border transition overflow-hidden ${
+                  data-tour={idx === 0 ? "orders-item-first" : undefined}
+                  className={`fs-orders-card rounded-2xl border transition overflow-hidden ${
                     isExpanded
                       ? 'border-accent/40 bg-[#121829] shadow-lg shadow-accent/5'
                       : 'border-white/10 bg-[#0e1322] hover:border-white/20'
@@ -20726,6 +23421,54 @@ function OrdersScreen({ onOpenCase, onGoSupport, onBack }) {
                               </span>
                             </p>
                           )}
+                          {o.delivery_data.includes('[Interface]') && (
+                            <div className="mt-2.5 flex flex-wrap gap-2 pt-2 border-t border-green-500/20">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setSelectedQrOrder(o)
+                                }}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-cyan-500/20 hover:bg-cyan-500/30 text-cyan-300 px-3 py-1.5 text-xs font-bold border border-cyan-500/40 active:scale-95 transition"
+                              >
+                                <QrCode className="h-3.5 w-3.5" />
+                                📱 Ver Código QR
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  const blob = new Blob([o.delivery_data], { type: 'application/octet-stream' })
+                                  const url = URL.createObjectURL(blob)
+                                  const a = document.createElement('a')
+                                  a.href = url
+                                  a.download = `francho-vpn-${o.id || 'wireguard'}.conf`
+                                  document.body.appendChild(a)
+                                  a.click()
+                                  document.body.removeChild(a)
+                                  setTimeout(() => URL.revokeObjectURL(url), 2000)
+                                }}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-300 px-3 py-1.5 text-xs font-bold border border-emerald-500/40 active:scale-95 transition"
+                              >
+                                <Download className="h-3.5 w-3.5" />
+                                Descargar .conf
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  if (navigator.clipboard?.writeText) {
+                                    navigator.clipboard.writeText(o.delivery_data)
+                                  }
+                                  alert('¡Configuración WireGuard copiada al portapapeles!')
+                                }}
+                                className="inline-flex items-center gap-1.5 rounded-lg bg-white/10 hover:bg-white/15 text-white/90 px-3 py-1.5 text-xs font-medium border border-white/10 active:scale-95 transition"
+                              >
+                                <Copy className="h-3.5 w-3.5" />
+                                Copiar
+                              </button>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -20850,6 +23593,71 @@ function OrdersScreen({ onOpenCase, onGoSupport, onBack }) {
             }}
             onClose={() => setSelectedReceipt(null)}
           />
+        )}
+
+        {selectedQrOrder && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in">
+            <div className="relative w-full max-w-sm rounded-2xl border border-white/15 bg-[#0f1722] p-5 shadow-2xl text-center">
+              <button
+                type="button"
+                onClick={() => setSelectedQrOrder(null)}
+                className="absolute top-4 right-4 p-1.5 rounded-full text-white/60 hover:text-white bg-white/5 hover:bg-white/10 transition"
+              >
+                <X className="h-5 w-5" />
+              </button>
+
+              <div className="flex items-center justify-center gap-2 text-emerald-400 font-black text-sm mb-1">
+                <QrCode className="h-5 w-5" />
+                <span>Código QR de Conexión</span>
+              </div>
+              <p className="text-[11px] text-white/60 mb-4">
+                Pedido #{selectedQrOrder.id} · {selectedQrOrder.product || 'WireGuard'}
+              </p>
+
+              <div className="mx-auto w-56 h-56 bg-white p-3 rounded-2xl flex items-center justify-center shadow-lg shadow-emerald-500/10 mb-4">
+                <img
+                  src={`/api/manual-orders/${selectedQrOrder.id}/qr`}
+                  alt="WireGuard QR"
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    e.target.onerror = null
+                    e.target.src = '/order-50-qr.png'
+                  }}
+                />
+              </div>
+
+              <p className="text-xs text-white/85 leading-relaxed mb-4 px-2">
+                📱 Abre la app <b>WireGuard</b> en tu teléfono, presiona <b>(+)</b> y selecciona <b>Escanear código QR</b> para importar el túnel al instante.
+              </p>
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const blob = new Blob([selectedQrOrder.delivery_data], { type: 'application/octet-stream' })
+                    const url = URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `francho-vpn-${selectedQrOrder.id || 'wireguard'}.conf`
+                    document.body.appendChild(a)
+                    a.click()
+                    document.body.removeChild(a)
+                    setTimeout(() => URL.revokeObjectURL(url), 2000)
+                  }}
+                  className="flex-1 rounded-xl bg-emerald-400 hover:bg-emerald-300 py-2.5 text-xs font-black text-black active:scale-95 transition"
+                >
+                  Descargar .conf
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedQrOrder(null)}
+                  className="flex-1 rounded-xl bg-white/10 hover:bg-white/15 py-2.5 text-xs font-bold text-white active:scale-95 transition"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
@@ -23549,7 +26357,7 @@ function PanelScreen({ me, setMe, onLogout, onHome, onOpenCase, onEditProduct, i
   }
 
   return (
-    <div className="flex h-screen bg-bg text-white overflow-hidden select-none">
+    <div className="flex h-screen bg-bg text-white overflow-hidden select-text">
       {/* Sidebar - Desktop & Mobile overlay */}
       <aside className={`fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-white/10 bg-card transition-transform duration-300 md:static md:translate-x-0 ${menuOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
         {/* Header de Sidebar */}
@@ -24498,7 +27306,7 @@ function ResellerCatalog({ me, onBought }) {
 
   const q = searchQuery.toLowerCase().trim()
   const filteredGames = games.filter(g => g.title.toLowerCase().includes(q) || g.name.toLowerCase().includes(q))
-  const filteredManual = manualProducts.filter(p => p.name.toLowerCase().includes(q) || (p.description && p.description.toLowerCase().includes(q)))
+  const filteredManual = manualProducts.filter(p => Number(p.id) !== 33 && Number(p.id) !== 34 && (p.name.toLowerCase().includes(q) || (p.description && p.description.toLowerCase().includes(q))))
 
   if (loading) {
     return <div className="flex justify-center p-8"><Loader2 className="h-8 w-8 animate-spin text-accent" /></div>

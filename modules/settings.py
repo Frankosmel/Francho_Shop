@@ -41,6 +41,17 @@ DEFAULTS = {
     "min_deposit": str(config.DEFAULT_MIN_DEPOSIT),
     "min_withdrawal": str(config.DEFAULT_MIN_WITHDRAWAL),
 
+    # Pago directo en CUP (tienda principal; no afecta B2B ni el monedero USDT)
+    "cup_direct_enabled": "0",
+    "cup_usdt_purchase_price": "1100",
+    "cup_mobile_credit_value": "1.96",
+    "cup_transfer_card_enabled": "1",
+    "cup_transfer_card_number": "",
+    "cup_transfer_confirmation_number": "",
+    "cup_mobile_transfer_enabled": "1",
+    "cup_mobile_destination_number": "",
+    "cup_payment_max_delivery_hours": "24",
+
     # Vendedores internos / wallet USDT BEP20
     "seller_default_commission_pct": "10",
     "seller_min_platform_fee": "0.10",
@@ -87,10 +98,14 @@ DEFAULTS = {
     # Branding
     "brand_name": "GameStore",
 
-    # Asistente IA / soporte híbrido
+    # Asistente IA / soporte híbrido (Multi-proveedor: Vibi.top / New API y Gemini)
     "ai_chat_enabled": "1",
+    "ai_provider": "auto",  # auto, vibi, gemini
     "ai_chat_model": "gemini-2.0-flash-lite",
     "gemini_api_key": "",
+    "vibi_api_key": "",
+    "vibi_base_url": "https://vibi.top/v1",
+    "vibi_model": "gpt-4o-mini",
 
     # SMS / Números Virtuales
     "sms_default_markup": "1.50",
@@ -124,6 +139,16 @@ DEFAULTS = {
     "fzr_capcut_instructions": "Pega correctamente tu User ID de CapCut antes de confirmar. No podemos corregir entregas enviadas a un ID equivocado.",
     "fzr_telegram_sort_order": "100",
     "fzr_capcut_sort_order": "100",
+    "fzr_telegram_premium_price_3m": "14.03",
+    "fzr_telegram_premium_price_6m": "18.25",
+    "fzr_telegram_premium_price_12m": "31.49",
+
+    # Notificaciones automáticas de Reporte Semanal a Telegram
+    "weekly_report_enabled": "1",
+    "weekly_report_day": "0",          # 0 = Lunes, 6 = Domingo
+    "weekly_report_hour": "9",         # Hora local (09:00 AM)
+    "weekly_report_cup_rate": "940",   # Tasa de conversión informativa a CUP
+    "last_weekly_report_sent": "0",
 }
 
 

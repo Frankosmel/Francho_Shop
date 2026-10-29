@@ -11,6 +11,7 @@ webapp/frontend/dist/
 
 # Bases de datos y configuraciones confidenciales
 *.db
+*.db.*
 *.db-shm
 *.db-wal
 .env
@@ -31,3 +32,35 @@ _cleanup_pending/
 _franchoshop_review/
 _ux_backups/
 data/
+
+# === Capacitor / Android ===
+webapp/frontend/android/
+webapp/frontend/dist/
+webapp/frontend/node_modules/
+webapp/frontend/.env.local
+webapp/frontend/.env.capacitor
+# Firma / keystore
+*.keystore
+*.jks
+*.p12
+android/local.properties
+
+# Credenciales y capturas locales: nunca se versionan
+firebase-service-account.json
+*firebase-adminsdk-*.json
+google-services.json
+transfermovil_dump.json
+b2b_sms_standalone/config.php
+
+# Artefactos locales, APKs y copias de recuperación
+*.apk
+*.bak
+*.recovered
+*.before-*
+*.bak_*
+webapp/frontend/src/app_history.txt
+backups/
+audit_screenshots_android/
+scratch/
+uploads_promo/
+webapp/frontend/public/capturas_admin/

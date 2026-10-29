@@ -58,6 +58,14 @@ export function AppSidebar({
       sublabel: 'Netflix, Disney+, Spotify, HBO'
     },
     {
+      id: 'vpn',
+      label: 'VPN WireGuard',
+      icon: ShieldCheck,
+      badge: 'BBR PRO',
+      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+      sublabel: 'Normal & Gaming Cuba'
+    },
+    {
       id: 'swap',
       label: 'Cripto Swap',
       icon: ArrowLeftRight,
@@ -102,8 +110,16 @@ export function AppSidebar({
       sublabel: 'Historial y estado de compras'
     },
     {
+      id: 'my-web-store',
+      label: 'Mi Tienda Web & Mini App',
+      icon: Globe2,
+      badge: 'TU TIENDA',
+      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+      sublabel: 'Negocio propio con Bot Telegram'
+    },
+    {
       id: 'api-docs',
-      label: 'API Revendedores',
+      label: 'API Mayoristas B2B',
       icon: Terminal,
       badge: 'B2B',
       badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
@@ -143,7 +159,7 @@ export function AppSidebar({
     }
   ]
 
-  // Menú exclusivo y tradicional para Clientes normales (solo tienda, pedidos, soporte y perfil)
+  // Menú exclusivo y tradicional para Clientes normales
   const clientItems = [
     {
       id: 'home',
@@ -160,6 +176,22 @@ export function AppSidebar({
       badge: 'AUTO',
       badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
       sublabel: 'Netflix, Disney+, Spotify, HBO'
+    },
+    {
+      id: 'vpn',
+      label: 'VPN WireGuard',
+      icon: ShieldCheck,
+      badge: 'BBR PRO',
+      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+      sublabel: 'Normal & Gaming Cuba'
+    },
+    {
+      id: 'my-web-store',
+      label: 'Mi Tienda Web & Mini App',
+      icon: Globe2,
+      badge: 'TU NEGOCIO',
+      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
+      sublabel: 'Crea tu propia tienda online'
     },
     {
       id: 'orders',
@@ -189,16 +221,16 @@ export function AppSidebar({
   if (me?.role === 'reseller' || me?.role === 'admin') {
     clientItems.push({
       id: 'api-docs',
-      label: 'API Revendedores',
+      label: 'API Mayoristas B2B',
       icon: Terminal,
       badge: 'B2B',
       badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
-      sublabel: 'Integración automática'
+      sublabel: 'Endpoints y Webhooks'
     })
   }
 
   const content = (
-    <div className="flex h-full flex-col justify-between overflow-hidden bg-[#0c101c] text-white">
+    <div className="fs-sidebar-surface flex h-full flex-col justify-between overflow-hidden bg-[#0c101c] text-white">
       {/* 1. Header con Logo de Francho Shop */}
       <div className="flex items-center justify-between border-b border-white/10 px-4 py-3.5 bg-[#0e1322]">
         <button
@@ -208,14 +240,16 @@ export function AppSidebar({
         >
           <div className="relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-accent/40 bg-card shadow-lg shadow-accent/15 group-hover:border-accent transition">
             <img
-              src="/api/icons/franchoshop.jpg"
+              src="/franchoshop.jpg"
               alt="Francho Shop"
               className="h-full w-full object-cover"
               onError={(e) => {
                 e.currentTarget.style.display = 'none'
+                const fallback = e.currentTarget.nextElementSibling
+                if (fallback) fallback.classList.remove('hidden')
               }}
             />
-            <span className="font-black text-sm text-accent">FS</span>
+            <span className="font-black text-sm text-accent hidden">FS</span>
           </div>
           <div>
             <div className="flex items-center gap-1.5">
@@ -325,6 +359,7 @@ export function AppSidebar({
             <div className="mt-2.5 grid grid-cols-2 gap-1.5">
               <button
                 type="button"
+                data-tour="sidebar-deposit"
                 onClick={() => {
                   if (onTopUp) onTopUp()
                   if (onClose) onClose()
@@ -570,7 +605,7 @@ export function AppSidebar({
       {!window.Capacitor?.isNativePlatform?.() && (
         <div className="p-3 border-t border-white/5 bg-[#0e1424]/60">
           <a
-            href="/downloads/FranchoShop-v2.3.apk"
+            href="/FranchoShop-v2.3.apk"
             download="FranchoShop-v2.3.apk"
             className="flex items-center justify-between gap-2 w-full p-2.5 rounded-xl bg-gradient-to-r from-emerald-500/20 to-teal-500/10 border border-emerald-500/30 hover:border-emerald-400 text-white transition group active:scale-98 shadow-sm"
           >

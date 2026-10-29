@@ -764,6 +764,10 @@ async def upsert_user(user_id: int, username: str = None, first_name: str = None
 
 
 async def get_user(user_id: int) -> dict | None:
+    if isinstance(user_id, dict):
+        user_id = user_id.get("user_id")
+    if not user_id:
+        return None
     async with aiosqlite.connect(DB) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute("SELECT * FROM users WHERE user_id=?", (user_id,)) as c:
@@ -1009,6 +1013,22 @@ async def get_balance_history(user_id: int, limit: int = 20) -> list[dict]:
         db.row_factory = aiosqlite.Row
         async with db.execute(
             "SELECT * FROM balance_log WHERE user_id=? ORDER BY created_at DESC LIMIT ?",
+            (user_id, limit),
+        ) as c:
+            return [dict(r) for r in await c.fetchall()]
+
+
+async def get_fc_transfer_history(user_id: int, limit: int = 20) -> list[dict]:
+    """Historial exclusivo de transferencias internas de FC entre usuarios."""
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            """
+            SELECT * FROM balance_log
+            WHERE user_id=? AND type IN ('transfer_out', 'transfer_in', 'transfer_sent', 'transfer_received')
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
             (user_id, limit),
         ) as c:
             return [dict(r) for r in await c.fetchall()]
@@ -1285,7 +1305,7 @@ async def get_public_reviews(product_id: int = None, manual_product_id: int = No
         """, params) as c:
             stats = dict(await c.fetchone())
         async with db.execute(f"""
-            SELECT r.id, r.order_type, r.order_id, r.rating, r.comment, r.created_at,
+            SELECT r.id, r.order_type, r.order_id, r.product_id, r.manual_product_id, r.rating, r.comment, r.created_at,
                    r.source, r.verified_label,
                    u.first_name, u.username,
                    COALESCE(o.product_name, mp.name, mp_legacy.name) as product_name
@@ -1306,6 +1326,9 @@ async def get_public_reviews(product_id: int = None, manual_product_id: int = No
         if len(name) > 18:
             name = name[:18] + "..."
         items.append({
+            "id": row.get("id"),
+            "product_id": row.get("product_id"),
+            "manual_product_id": row.get("manual_product_id"),
             "rating": int(row.get("rating") or 0),
             "comment": row.get("comment") or "",
             "created_at": row.get("created_at"),
@@ -1899,6 +1922,7 @@ async def init_manual_products():
                 seller_id       INTEGER,
                 price           REAL NOT NULL,
                 customer_data   TEXT,
+                delivery_time   TEXT DEFAULT '',
                 status          TEXT DEFAULT 'pending',
                 admin_note      TEXT,
                 delivery_data   TEXT,
@@ -2107,6 +2131,7 @@ async def init_manual_products():
             ("customer_data", "TEXT"),
             ("seller_id", "INTEGER"),
             ("completed_by", "INTEGER"),
+            ("delivery_time", "TEXT DEFAULT ''"),
         ]:
             if col not in order_cols:
                 await db.execute(f"ALTER TABLE manual_orders ADD COLUMN {col} {defn}")
@@ -2208,7 +2233,7 @@ async def replace_manual_fields(product_id: int, fields: list[dict]):
         await db.commit()
 
 
-async def get_manual_products(active_only: bool = True, created_by: int = None) -> list[dict]:
+async def get_manual_products(active_only: bool = True, created_by: int = None, store_slug: str = None, is_main_store: bool = False) -> list[dict]:
     async with aiosqlite.connect(DB) as db:
         db.row_factory = aiosqlite.Row
         q = "SELECT * FROM manual_products"
@@ -2219,6 +2244,11 @@ async def get_manual_products(active_only: bool = True, created_by: int = None) 
         if created_by is not None:
             filters.append("created_by=?")
             params.append(created_by)
+        if is_main_store:
+            filters.append("(store_slug IS NULL OR store_slug = '' OR store_slug = '__main__')")
+        elif store_slug is not None:
+            filters.append("store_slug=?")
+            params.append(store_slug)
         if filters:
             q += " WHERE " + " AND ".join(filters)
         q += " ORDER BY category, name"
@@ -2319,16 +2349,25 @@ async def delete_manual_product(product_id: int):
         await db.commit()
 
 
-async def create_manual_order(product_id: int, user_id: int, price: float, option_id: int = None, option_name: str = None, customer_data: dict = None) -> int:
+async def create_manual_order(
+    product_id: int,
+    user_id: int,
+    price: float,
+    option_id: int = None,
+    option_name: str = None,
+    customer_data: dict = None,
+    delivery_time: str = None,
+    **kwargs
+) -> int:
     async with aiosqlite.connect(DB) as db:
         db.row_factory = aiosqlite.Row
         async with db.execute("SELECT created_by FROM manual_products WHERE id=?", (product_id,)) as p:
             product = await p.fetchone()
         seller_id = product["created_by"] if product else None
         c = await db.execute("""
-            INSERT INTO manual_orders (product_id, option_id, option_name, user_id, seller_id, price, customer_data)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
-        """, (product_id, option_id, option_name, user_id, seller_id, price, json.dumps(customer_data or {}, ensure_ascii=False)))
+            INSERT INTO manual_orders (product_id, option_id, option_name, user_id, seller_id, price, customer_data, delivery_time)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """, (product_id, option_id, option_name, user_id, seller_id, price, json.dumps(customer_data or {}, ensure_ascii=False), str(delivery_time or '')))
         # Descontar stock si no es ilimitado
         if option_id:
             await db.execute("""
@@ -4951,6 +4990,35 @@ async def create_cup_order(
         await conn.commit()
     return mid
 
+async def find_recent_equivalent_fzr_cup_order(
+    *, user_id: int, recharge_config: str, payment_method: str, within_seconds: int = 1800
+) -> dict | None:
+    """Devuelve una reserva CUP FZR aún pendiente para reintentos del mismo checkout.
+
+    El cliente puede recargar la página o perder la conexión después de crear la
+    reserva, antes de subir el comprobante. Reutilizarla evita generar dos pagos
+    por la misma compra, sin impedir una compra nueva una vez pasado el plazo.
+    """
+    cutoff = time.time() - max(60, int(within_seconds))
+    async with aiosqlite.connect(DB) as conn:
+        conn.row_factory = aiosqlite.Row
+        async with conn.execute("""
+            SELECT merchant_order_id, payment_status, payment_method, payment_amount,
+                   product_name, created_at
+            FROM orders
+            WHERE user_id=?
+              AND sales_channel='fzr_cup'
+              AND recharge_config=?
+              AND payment_method=?
+              AND payment_status IN ('awaiting_proof', 'pending_verification', 'awaiting_network_confirmation')
+              AND created_at>=?
+            ORDER BY created_at DESC
+            LIMIT 1
+        """, (user_id, recharge_config, payment_method, cutoff)) as cursor:
+            row = await cursor.fetchone()
+    return dict(row) if row else None
+
+
 async def create_fzr_cup_order(
     *, user_id: int, user_role: str, provider_type: str, category_id: str, offer_id: str,
     product_name: str, cost_price: float, public_sell_price: float, markup_pct: float,
@@ -5041,7 +5109,7 @@ async def claim_cup_order_verification(merchant_order_id: str, admin_id: int) ->
         cur = await conn.execute("""
             UPDATE orders
             SET payment_status='verifying', cup_payment_verified_by=?, updated_at=?
-            WHERE merchant_order_id=? AND payment_status='pending_verification'
+            WHERE merchant_order_id=? AND payment_status IN ('pending_verification', 'awaiting_network_confirmation')
               AND payment_method IN ('cup_card_transfer', 'cup_mobile_balance')
         """, (admin_id, now, merchant_order_id))
         if cur.rowcount != 1:
@@ -5127,17 +5195,25 @@ async def submit_cup_payment_proof(merchant_order_id: str, user_id: int, proof_u
         await conn.commit()
         return dict(row) if row else None
 
-async def update_fzr_cup_order_provider_status(merchant_order_id: str, provider_status: str, raw_response: str = "") -> None:
+async def update_fzr_cup_order_provider_status(merchant_order_id: str, provider_status: str, raw_response: str = "", error_message: str = None) -> None:
     normalized = str(provider_status or "processing").lower()
     completed = normalized in {"completed", "complete", "delivered", "success"}
     failed = normalized in {"failed", "rejected", "cancelled", "canceled", "refunded", "refund"}
     order_status = 2 if completed else (4 if failed else 1)
+    refund_status = 1 if failed else 0
     async with aiosqlite.connect(DB) as conn:
-        await conn.execute("""
-            UPDATE orders
-            SET provider_status=?, order_status=?, updated_at=?
-            WHERE merchant_order_id=? AND provider_code='fzr' AND payment_status='verified'
-        """, (normalized, order_status, time.time(), merchant_order_id))
+        if failed and error_message:
+            await conn.execute("""
+                UPDATE orders
+                SET provider_status=?, order_status=?, refund_status=CASE WHEN refund_status=0 THEN ? ELSE refund_status END, error_message=?, updated_at=?
+                WHERE merchant_order_id=? AND provider_code='fzr' AND payment_status IN ('verified', 'paid')
+            """, (normalized, order_status, refund_status, error_message, time.time(), merchant_order_id))
+        else:
+            await conn.execute("""
+                UPDATE orders
+                SET provider_status=?, order_status=?, refund_status=CASE WHEN ?=4 AND refund_status=0 THEN 1 ELSE refund_status END, updated_at=?
+                WHERE merchant_order_id=? AND provider_code='fzr' AND payment_status IN ('verified', 'paid')
+            """, (normalized, order_status, order_status, time.time(), merchant_order_id))
         await conn.commit()
 
 async def _enqueue_reseller_order_event(conn, merchant_order_id: str, event_type: str):
@@ -5493,15 +5569,16 @@ async def list_user_swap_orders(user_id: int, limit: int = 20) -> list[dict]:
 async def get_web_store_by_slug(slug: str) -> dict | None:
     async with aiosqlite.connect(DB) as db:
         db.row_factory = aiosqlite.Row
-        async with db.execute("SELECT * FROM reseller_web_stores WHERE store_slug = ?", (slug.lower().strip(),)) as c:
+        clean_slug = str(slug).lower().strip()
+        async with db.execute("SELECT * FROM reseller_web_stores WHERE LOWER(slug) = ?", (clean_slug,)) as c:
             row = await c.fetchone()
             return dict(row) if row else None
 
 async def get_web_store_by_domain(domain: str) -> dict | None:
     async with aiosqlite.connect(DB) as db:
         db.row_factory = aiosqlite.Row
-        clean_domain = domain.lower().strip().replace("http://", "").replace("https://", "").split("/")[0]
-        async with db.execute("SELECT * FROM reseller_web_stores WHERE custom_domain = ?", (clean_domain,)) as c:
+        clean_domain = str(domain).lower().strip().replace("http://", "").replace("https://", "").split("/")[0]
+        async with db.execute("SELECT * FROM reseller_web_stores WHERE LOWER(custom_domain) = ?", (clean_domain,)) as c:
             row = await c.fetchone()
             return dict(row) if row else None
 
@@ -5514,22 +5591,26 @@ async def get_web_store_by_user(user_id: int) -> dict | None:
 
 async def upsert_web_store(user_id: int, store_data: dict) -> dict:
     now = time.time()
-    slug = store_data.get("store_slug", "").lower().strip()
-    name = store_data.get("store_name", "").strip()
-    tagline = store_data.get("tagline", "")
-    logo = store_data.get("logo_url", "")
-    banner = store_data.get("banner_url", "")
-    p_color = store_data.get("primary_color", "#22c55e")
-    s_color = store_data.get("secondary_color", "#10b981")
-    bg_style = store_data.get("bg_style", "dark")
-    domain = store_data.get("custom_domain", "").lower().strip() if store_data.get("custom_domain") else None
-    markup = float(store_data.get("profit_markup_percent", 5.0))
-    game_markup = float(store_data.get("game_markup_percent", markup))
-    theme_cfg = store_data.get("theme_config", "{}")
-    contact = store_data.get("contact_info", "{}")
-    status = store_data.get("status", "active")
-    plan = store_data.get("subscription_plan", "standard")
-    expires = store_data.get("subscription_expires_at", now + 30 * 86400)
+    slug = (store_data.get("slug") or store_data.get("store_slug") or f"store{user_id}").lower().strip()
+    name = (store_data.get("store_name") or f"Tienda {user_id}").strip()
+    tagline = store_data.get("tagline") or ""
+    logo = store_data.get("logo_url") or ""
+    banner = store_data.get("banner_url") or ""
+    p_color = store_data.get("primary_color") or "#00C26F"
+    s_color = store_data.get("secondary_color") or "#3B82F6"
+    bg_style = store_data.get("bg_style") or "midnight"
+    theme_cfg = json.dumps(store_data["theme_config"]) if isinstance(store_data.get("theme_config"), dict) else (store_data.get("theme_config") or "{}")
+    game_markups = json.dumps(store_data["game_markups"]) if isinstance(store_data.get("game_markups"), dict) else (store_data.get("game_markups") or "{}")
+    payment_methods = json.dumps(store_data["payment_methods"]) if isinstance(store_data.get("payment_methods"), dict) else (store_data.get("payment_methods") or "{}")
+    contact_email = store_data.get("contact_email") or ""
+    email_config = json.dumps(store_data["email_config"]) if isinstance(store_data.get("email_config"), dict) else (store_data.get("email_config") or "{}")
+    wa = store_data.get("whatsapp_number") or ""
+    tg = store_data.get("telegram_username") or ""
+    ig = store_data.get("instagram_url") or ""
+    domain = (store_data.get("custom_domain") or "").lower().strip()
+    markup = float(store_data.get("markup_percent") or store_data.get("profit_markup_percent") or 10.0)
+    store_mode = store_data.get("store_mode") or "both"
+    notif_prefs = json.dumps(store_data["notification_prefs"]) if isinstance(store_data.get("notification_prefs"), dict) else (store_data.get("notification_prefs") or '{"notify_telegram": true, "notify_email": true}')
 
     async with aiosqlite.connect(DB) as db:
         db.row_factory = aiosqlite.Row
@@ -5539,39 +5620,74 @@ async def upsert_web_store(user_id: int, store_data: dict) -> dict:
         if existing:
             await db.execute("""
                 UPDATE reseller_web_stores SET
-                    store_slug = ?, store_name = ?, tagline = ?, logo_url = ?, banner_url = ?,
-                    primary_color = ?, secondary_color = ?, bg_style = ?, custom_domain = ?,
-                    profit_markup_percent = ?, game_markup_percent = ?, theme_config = ?,
-                    contact_info = ?, updated_at = ?
+                    slug = ?, store_name = ?, tagline = ?, logo_url = ?, banner_url = ?,
+                    primary_color = ?, secondary_color = ?, bg_style = ?, theme_config = ?,
+                    game_markups = ?, payment_methods = ?, contact_email = ?, email_config = ?,
+                    whatsapp_number = ?, telegram_username = ?, instagram_url = ?,
+                    custom_domain = ?, markup_percent = ?, store_mode = ?, notification_prefs = ?,
+                    updated_at = ?
                 WHERE user_id = ?
-            """, (slug, name, tagline, logo, banner, p_color, s_color, bg_style, domain, markup, game_markup, theme_cfg, contact, now, user_id))
+            """, (slug, name, tagline, logo, banner, p_color, s_color, bg_style, theme_cfg,
+                  game_markups, payment_methods, contact_email, email_config, wa, tg, ig,
+                  domain, markup, store_mode, notif_prefs, now, user_id))
         else:
+            plan = store_data.get("plan") or "basico"
+            billing = store_data.get("plan_billing") or "monthly"
+            expires_at = float(store_data.get("expires_at") or (now + 30 * 86400))
             await db.execute("""
                 INSERT INTO reseller_web_stores (
-                    user_id, store_slug, store_name, tagline, logo_url, banner_url,
-                    primary_color, secondary_color, bg_style, custom_domain,
-                    profit_markup_percent, game_markup_percent, theme_config, contact_info,
-                    status, subscription_plan, subscription_expires_at, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (user_id, slug, name, tagline, logo, banner, p_color, s_color, bg_style, domain, markup, game_markup, theme_cfg, contact, status, plan, expires, now, now))
+                    user_id, slug, store_name, tagline, logo_url, banner_url,
+                    primary_color, secondary_color, bg_style, theme_config,
+                    game_markups, payment_methods, contact_email, email_config,
+                    whatsapp_number, telegram_username, instagram_url,
+                    custom_domain, markup_percent, plan, plan_billing,
+                    is_active, expires_at, store_mode, notification_prefs,
+                    created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)
+            """, (user_id, slug, name, tagline, logo, banner,
+                  p_color, s_color, bg_style, theme_cfg,
+                  game_markups, payment_methods, contact_email, email_config,
+                  wa, tg, ig,
+                  domain, markup, plan, billing,
+                  expires_at, store_mode, notif_prefs,
+                  now, now))
         await db.commit()
 
         async with db.execute("SELECT * FROM reseller_web_stores WHERE user_id = ?", (user_id,)) as c:
-            return dict(await c.fetchone())
+            row = await c.fetchone()
+            return dict(row) if row else None
 
-async def record_web_store_subscription(store_id: int, user_id: int, plan: str, months: int):
+async def record_web_store_subscription(store_id: int, user_id: int, plan: str, billing_cycle: str = "monthly", days: int = 30, amount: float = 0.0, months: int = None, **kwargs) -> dict:
     now = time.time()
-    add_seconds = months * 30 * 86400
+    if months is not None:
+        duration_days = int(months) * 30
+    else:
+        duration_days = int(days or 30)
+    add_seconds = duration_days * 86400
+
     async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
         await db.execute("""
             UPDATE reseller_web_stores
-            SET subscription_plan = ?,
-                subscription_expires_at = MAX(COALESCE(subscription_expires_at, ?), ?) + ?,
-                status = 'active',
+            SET plan = ?,
+                plan_billing = ?,
+                expires_at = MAX(COALESCE(expires_at, ?), ?) + ?,
+                is_active = 1,
                 updated_at = ?
             WHERE id = ?
-        """, (plan, now, now, add_seconds, now, store_id))
+        """, (plan, billing_cycle, now, now, add_seconds, now, store_id))
+
+        if amount > 0:
+            await db.execute("""
+                INSERT INTO reseller_store_invoices (store_id, user_id, plan, billing_cycle, amount, duration_days, status, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, 'paid', ?)
+            """, (store_id, user_id, plan, billing_cycle, float(amount), int(duration_days), now))
+
         await db.commit()
+
+        async with db.execute("SELECT * FROM reseller_web_stores WHERE id = ?", (store_id,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
 
 async def list_all_web_stores(limit: int = 100) -> list[dict]:
     async with aiosqlite.connect(DB) as db:
@@ -5594,10 +5710,22 @@ async def link_google(user_id: int, google_id: str, email: str = None) -> bool:
         await db.commit()
     return True
 
-async def create_google_user(email: str, google_id: str, name: str = "", photo_url: str = "") -> dict:
+async def create_google_user(email: str, name: str = "", google_id: str = "", photo_url: str = "", **kwargs) -> dict:
     now = time.time()
     clean_email = email.lower().strip()
-    first_name = name.split()[0] if name else clean_email.split('@')[0]
+
+    # Detectar inteligentemente si los argumentos name y google_id vinieron invertidos
+    # El google_id es una cadena larga de dígitos numéricos (sub)
+    val_a = str(name or "").strip()
+    val_b = str(google_id or "").strip()
+    if val_a.isdigit() and len(val_a) > 10 and not val_b.isdigit():
+        actual_gid = val_a
+        actual_name = val_b
+    else:
+        actual_gid = val_b if val_b.isdigit() else (val_a if val_a.isdigit() else val_b)
+        actual_name = val_a if not val_a.isdigit() else val_b
+
+    first_name = actual_name.split()[0] if actual_name else clean_email.split('@')[0]
     username = clean_email.split('@')[0]
     generated_id = int(str(uuid.uuid4().int)[:9])
 
@@ -5608,23 +5736,134 @@ async def create_google_user(email: str, google_id: str, name: str = "", photo_u
                 user_id, username, first_name, email, google_id, photo_url,
                 role, balance, created_at, last_seen
             ) VALUES (?, ?, ?, ?, ?, ?, 'user', 0.0, ?, ?)
-        """, (generated_id, username, first_name, clean_email, google_id, photo_url, now, now))
+        """, (generated_id, username, first_name, clean_email, actual_gid, photo_url, now, now))
         await db.commit()
         async with db.execute("SELECT * FROM users WHERE user_id = ?", (generated_id,)) as c:
-            return dict(await c.fetchone())
+            row = await c.fetchone()
+            return dict(row) if row else {"user_id": generated_id}
 
-async def update_google_user_profile(user_id: int, name: str = None, photo_url: str = None):
+async def update_google_user_profile(user_id: int, google_id: str = None, photo_url: str = None, name: str = None, **kwargs):
     now = time.time()
-    first_name = name.split()[0] if name else None
+    actual_name = name or (google_id if (google_id and not str(google_id).isdigit()) else None)
+    first_name = actual_name.split()[0] if actual_name else None
+    actual_gid = str(google_id) if (google_id and str(google_id).isdigit()) else None
     async with aiosqlite.connect(DB) as db:
         await db.execute("""
             UPDATE users
             SET first_name = COALESCE(?, first_name),
                 photo_url = COALESCE(?, photo_url),
+                google_id = COALESCE(?, google_id),
                 last_seen = ?
             WHERE user_id = ?
-        """, (first_name, photo_url, now, user_id))
+        """, (first_name, photo_url, actual_gid, now, user_id))
         await db.commit()
+
+async def get_user_by_telegram_id(telegram_id: int) -> dict | None:
+    if not telegram_id:
+        return None
+    tid = int(telegram_id)
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM users WHERE telegram_id = ? OR user_id = ?", (tid, tid)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+async def upsert_telegram_user(telegram_id: int, first_name: str = "", username: str = None, photo_url: str = None) -> dict:
+    tid = int(telegram_id)
+    now = time.time()
+    clean_username = username.strip().lstrip("@") if username else None
+    clean_name = first_name.strip() if first_name else (clean_username or f"User{tid}")
+
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM users WHERE telegram_id = ? OR user_id = ?", (tid, tid)) as c:
+            existing = await c.fetchone()
+
+        if existing:
+            uid = existing["user_id"]
+            await db.execute("""
+                UPDATE users SET
+                    telegram_id = ?,
+                    username = COALESCE(?, username),
+                    first_name = COALESCE(?, first_name),
+                    photo_url = COALESCE(?, photo_url),
+                    last_seen = ?
+                WHERE user_id = ?
+            """, (tid, clean_username, clean_name, photo_url, now, uid))
+            await db.commit()
+            async with db.execute("SELECT * FROM users WHERE user_id = ?", (uid,)) as c2:
+                return dict(await c2.fetchone())
+        else:
+            await db.execute("""
+                INSERT INTO users (
+                    user_id, telegram_id, username, first_name, photo_url,
+                    role, auth_method, balance, created_at, last_seen
+                ) VALUES (?, ?, ?, ?, ?, 'user', 'telegram', 0.0, ?, ?)
+            """, (tid, tid, clean_username, clean_name, photo_url, now, now))
+            await db.commit()
+            async with db.execute("SELECT * FROM users WHERE user_id = ?", (tid,)) as c2:
+                return dict(await c2.fetchone())
+
+async def link_telegram_to_user(user_id: int, telegram_id: int) -> bool:
+    tid = int(telegram_id)
+    uid = int(user_id)
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        async with db.execute("SELECT user_id FROM users WHERE telegram_id = ? AND user_id != ?", (tid, uid)) as c:
+            other = await c.fetchone()
+            if other:
+                return False
+        await db.execute("UPDATE users SET telegram_id = ?, last_seen = ? WHERE user_id = ?", (tid, now, uid))
+        await db.commit()
+        return True
+
+async def init_telegram_login_tokens_table():
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS telegram_login_tokens (
+                token TEXT PRIMARY KEY,
+                telegram_id INTEGER,
+                username TEXT,
+                first_name TEXT,
+                photo_url TEXT,
+                status TEXT DEFAULT 'pending',
+                created_at REAL,
+                expires_at REAL
+            )
+        """)
+        await db.commit()
+
+async def create_telegram_login_token(token: str, expires_seconds: int = 600) -> bool:
+    await init_telegram_login_tokens_table()
+    now = time.time()
+    expires_at = now + expires_seconds
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("""
+            INSERT OR REPLACE INTO telegram_login_tokens (token, status, created_at, expires_at)
+            VALUES (?, 'pending', ?, ?)
+        """, (token, now, expires_at))
+        await db.commit()
+        return True
+
+async def approve_telegram_login_token(token: str, telegram_id: int, username: str = None, first_name: str = None, photo_url: str = None) -> bool:
+    await init_telegram_login_tokens_table()
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        cur = await db.execute("""
+            UPDATE telegram_login_tokens
+            SET telegram_id = ?, username = ?, first_name = ?, photo_url = ?, status = 'approved'
+            WHERE token = ? AND expires_at > ? AND status = 'pending'
+        """, (int(telegram_id), username, first_name, photo_url, token, now))
+        await db.commit()
+        return cur.rowcount > 0
+
+async def get_telegram_login_token(token: str) -> dict | None:
+    await init_telegram_login_tokens_table()
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM telegram_login_tokens WHERE token = ?", (token,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
 
 async def get_user_by_username(username: str) -> dict | None:
     async with aiosqlite.connect(DB) as db:
@@ -6542,3 +6781,136 @@ async def get_seller_score_breakdown(seller_id: int, period: str = None) -> dict
         "total_sellers": ranking_data.get("total_sellers", 1),
         "events": events
     }
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  SECCIÓN AUTOMATIZACIÓN TRANSFERMÓVIL & SALDO MÓVIL CUP
+# ══════════════════════════════════════════════════════════════════════════════
+
+async def record_cuba_bank_receipt(
+    tx_id: str, provider: str, sender: str, amount_cup: float,
+    destination_card: str = None, sender_phone: str = None,
+    sms_date_epoch: int = None, sms_date_formatted: str = None,
+    raw_body: str = '', auto_burn: bool = False, note: str = ''
+) -> dict:
+    now = time.time()
+    async with aiosqlite.connect(DB) as conn:
+        conn.row_factory = aiosqlite.Row
+        used_val = 1 if auto_burn else 0
+        used_at = now if auto_burn else None
+        await conn.execute("""
+            INSERT INTO cuba_bank_receipts 
+            (transaction_id, provider, sender, amount_cup, destination_card, sender_phone, sms_date_epoch, sms_date_formatted, raw_body, used, used_at, note, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(transaction_id) DO UPDATE SET
+                destination_card = COALESCE(destination_card, excluded.destination_card),
+                sender_phone = COALESCE(sender_phone, excluded.sender_phone),
+                sms_date_epoch = COALESCE(sms_date_epoch, excluded.sms_date_epoch)
+        """, (
+            tx_id.strip(), provider, sender, amount_cup, destination_card,
+            sender_phone, sms_date_epoch, sms_date_formatted, raw_body,
+            used_val, used_at, note, now
+        ))
+        await conn.commit()
+        async with conn.execute('SELECT * FROM cuba_bank_receipts WHERE transaction_id = ?', (tx_id.strip(),)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else {}
+
+async def get_cuba_receipt_by_tx(tx_id: str) -> dict | None:
+    async with aiosqlite.connect(DB) as conn:
+        conn.row_factory = aiosqlite.Row
+        clean_tx = tx_id.strip().upper().replace('#', '')
+        async with conn.execute("SELECT * FROM cuba_bank_receipts WHERE UPPER(TRIM(REPLACE(transaction_id, '#', ''))) = ?", (clean_tx,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+async def mark_cuba_receipt_used(tx_id: str, order_id: str, note: str = '') -> bool:
+    now = time.time()
+    async with aiosqlite.connect(DB) as conn:
+        cur = await conn.execute("""
+            UPDATE cuba_bank_receipts
+            SET used = 1, order_id = ?, used_at = ?, note = ?
+            WHERE transaction_id = ? AND used = 0
+        """, (order_id, now, note, tx_id.strip()))
+        await conn.commit()
+        return cur.rowcount > 0
+
+async def find_unused_cuba_receipt_by_phone(phone: str, amount_cup: float) -> dict | None:
+    clean_phone = re.sub(r'\D', '', str(phone))
+    if len(clean_phone) >= 8:
+        short_phone = clean_phone[-8:]
+        async with aiosqlite.connect(DB) as conn:
+            conn.row_factory = aiosqlite.Row
+            query = """
+                SELECT * FROM cuba_bank_receipts
+                WHERE provider = 'saldomovil'
+                  AND used = 0
+                  AND sender_phone LIKE ?
+                  AND amount_cup >= ? - 1.0 AND amount_cup <= ? + 1.0
+                ORDER BY created_at DESC LIMIT 1
+            """
+            async with conn.execute(query, (f'%{short_phone}%', amount_cup, amount_cup)) as c:
+                row = await c.fetchone()
+                return dict(row) if row else None
+    return None
+
+async def find_matching_pending_order_for_receipt(tx_id: str, amount_cup: float, provider: str = 'transfermovil', sender_phone: str = None) -> dict | None:
+    async with aiosqlite.connect(DB) as conn:
+        conn.row_factory = aiosqlite.Row
+        clean_tx = tx_id.strip().upper().replace('#', '')
+        if clean_tx:
+            query = """
+                SELECT * FROM orders
+                WHERE UPPER(TRIM(REPLACE(COALESCE(cup_payment_reference, ''), '#', ''))) = ?
+                  AND payment_status IN ('awaiting_network_confirmation', 'awaiting_proof', 'pending_verification')
+                  AND payment_method IN ('cup_card_transfer', 'cup_mobile_balance')
+                ORDER BY created_at DESC LIMIT 1
+            """
+            async with conn.execute(query, (clean_tx,)) as c:
+                row = await c.fetchone()
+                if row:
+                    return dict(row)
+
+        if sender_phone:
+            clean_phone = re.sub(r'\D', '', str(sender_phone))
+            if len(clean_phone) >= 8:
+                short_phone = clean_phone[-8:]
+                query_phone = """
+                    SELECT * FROM orders
+                    WHERE cup_payment_reference LIKE ?
+                      AND payment_status IN ('awaiting_network_confirmation', 'awaiting_proof', 'pending_verification')
+                      AND payment_method = 'cup_mobile_balance'
+                      AND cup_amount_snapshot >= ? - 1.0 AND cup_amount_snapshot <= ? + 1.0
+                    ORDER BY created_at DESC LIMIT 1
+                """
+                async with conn.execute(query_phone, (f'%{short_phone}%', amount_cup, amount_cup)) as c:
+                    row_phone = await c.fetchone()
+                    if row_phone:
+                        return dict(row_phone)
+
+        return None
+
+async def register_order_pending_tx(merchant_order_id: str, user_id: int, tx_id: str) -> bool:
+    now = time.time()
+    async with aiosqlite.connect(DB) as conn:
+        cur = await conn.execute("""
+            UPDATE orders
+            SET cup_payment_reference = ?, payment_status = 'awaiting_network_confirmation', updated_at = ?
+            WHERE merchant_order_id = ? AND user_id = ?
+              AND payment_method IN ('cup_card_transfer', 'cup_mobile_balance')
+              AND payment_status IN ('awaiting_proof', 'awaiting_network_confirmation', 'pending_verification')
+        """, (tx_id.strip(), now, merchant_order_id, user_id))
+        await conn.commit()
+        return cur.rowcount > 0
+
+async def has_used_vpn_free_trial(user_id: int) -> bool:
+    """Verifica si el usuario ya consumió una prueba gratis de VPN (producto 33 o 34)."""
+    async with aiosqlite.connect(DB) as db:
+        cur = await db.execute("""
+            SELECT id FROM manual_orders
+            WHERE user_id = ? AND product_id IN (33, 34) AND price = 0
+              AND status != 'cancelled'
+            LIMIT 1
+        """, (user_id,))
+        row = await cur.fetchone()
+        return bool(row)

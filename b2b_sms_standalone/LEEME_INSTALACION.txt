@@ -1,0 +1,47 @@
+========================================================================
+  SCRIPT AUTÓNOMO DE NÚMEROS VIRTUALES (SMS) - FRANCHO SHOP B2B
+========================================================================
+
+¡Felicidades! Este paquete contiene una tienda independiente y completa
+de números virtuales SMS para verificación (WhatsApp, Telegram, ChatGPT, etc.)
+conectada directamente a la API oficial de Francho Shop.
+
+CARACTERÍSTICAS PRINCIPALES:
+------------------------------------------------------------------------
+* Base de datos autónoma SQLite (Cero configuración de MySQL en cPanel).
+* Misma interfaz visual oficial de Francho Shop (Cyberpunk / Midnight).
+* Selección de más de 30 países con banderas y más de 500 aplicaciones.
+* Cuenta regresiva en vivo, radar de espera y detección automática de SMS.
+* Sonido y copia instantánea en un clic al recibir el código.
+* Botón de cancelación automática tras 2 minutos con reembolso inmediato.
+* Panel de administración (admin.php) para ajustar el margen de ganancia (%)
+  y exportar el reporte completo de ventas a Excel / CSV.
+
+PASOS DE INSTALACIÓN EN CPANEL / HOSTING:
+------------------------------------------------------------------------
+1. Sube este archivo ZIP a tu hosting (por ejemplo dentro de la carpeta
+   de tu subdominio o en `public_html/numeros/`) y dale a "Extraer / Unzip".
+
+2. Asegúrate de que los archivos estén en la carpeta deseada:
+   - index.php       -> Tienda para tus clientes
+   - admin.php       -> Panel de administración para ti y tu encargado
+   - api.php         -> Conector seguro con Francho Shop
+   - db.php          -> Gestor de base de datos SQLite
+   - config.php      -> Configuración inicial
+   - .htaccess       -> Protección de seguridad
+
+3. Abre en tu navegador web:
+   https://tusubdominio.com/admin.php
+
+4. Inicia sesión con la contraseña por defecto:
+   Contraseña: admin123
+
+5. En el panel:
+   - Pega tu API Key de Francho Shop.
+   - Configura el margen de ganancia deseado (ejemplo: +25% o +30%).
+   - Cambia la contraseña de administrador por una propia.
+   - Haz clic en "Guardar Ajustes".
+
+¡Listo! Ya tus clientes pueden entrar a `https://tusubdominio.com` y
+comprar números virtuales con entrega inmediata.
+========================================================================

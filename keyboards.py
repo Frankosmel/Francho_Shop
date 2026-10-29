@@ -73,6 +73,7 @@ BTN_CFG_WELCOME = "💬 Bienvenida"
 BTN_CFG_SUPPORT = "📞 Soporte"
 BTN_CFG_MAINT = "🛠 Toggle Mantenimiento"
 BTN_CFG_APPS = "💼 Toggle Solicitudes"
+BTN_CFG_CUP = "🇨🇺 Tasas CUP"
 
 # Productos admin
 BTN_PROD_REFRESH = "🔄 Refrescar BuffPin"
@@ -217,8 +218,9 @@ def kb_admin_config() -> ReplyKeyboardMarkup:
     rows = [
         [BTN_CFG_RETAIL, BTN_CFG_RESELLER],
         [BTN_CFG_MIN_DEP, BTN_CFG_MIN_WD],
-        [BTN_CFG_WELCOME, BTN_CFG_SUPPORT],
-        [BTN_CFG_MAINT, BTN_CFG_APPS],
+        [BTN_CFG_CUP, BTN_CFG_SUPPORT],
+        [BTN_CFG_WELCOME, BTN_CFG_MAINT],
+        [BTN_CFG_APPS],
         [BTN_BACK],
     ]
     return _kb(rows, "Configurar...")

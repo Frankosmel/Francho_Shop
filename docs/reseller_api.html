@@ -1,0 +1,439 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Francho Shop B2B Reseller API v1</title>
+<meta name="description" content="Documentación oficial de la API de revendedores B2B de Francho Shop v1">
+<style>
+:root{--bg:#0b1015;--panel:#111820;--panel2:#151e27;--line:#26313b;--text:#eef3f6;--muted:#93a0aa;--accent:#23d5ab;--yellow:#f4c95d;--red:#ff7b7b;--code:#080d11}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;letter-spacing:0}
+a{color:inherit}
+.topbar{position:fixed;inset:0 0 auto 0;height:58px;z-index:20;display:flex;align-items:center;justify-content:space-between;padding:0 22px;border-bottom:1px solid var(--line);background:rgba(11,16,21,.96);backdrop-filter:blur(12px)}
+.brand{font-size:15px;font-weight:900}.brand b{color:var(--accent)}
+.version{margin-left:10px;padding:3px 7px;border:1px solid var(--line);border-radius:5px;color:var(--muted);font-size:10px}
+.top-actions{display:flex;gap:8px}
+.top-actions a,.btn{display:inline-flex;align-items:center;justify-content:center;min-height:34px;padding:0 12px;border:1px solid var(--line);border-radius:6px;text-decoration:none;font-size:11px;font-weight:800}
+.top-actions .primary{border-color:var(--accent);background:var(--accent);color:#07110f}
+.sidebar{position:fixed;top:58px;bottom:0;left:0;width:250px;padding:18px 14px;overflow:auto;border-right:1px solid var(--line);background:var(--panel)}
+.sidebar p{margin:14px 10px 6px;color:#687782;font-size:9px;font-weight:900;text-transform:uppercase}
+.sidebar a{display:block;padding:8px 10px;border-radius:5px;color:var(--muted);font-size:12px;text-decoration:none}
+.sidebar a:hover{background:#ffffff08;color:var(--text)}
+main{margin-left:250px;padding:88px 34px 80px;max-width:1120px}
+.intro{padding-bottom:28px;border-bottom:1px solid var(--line)}
+.eyebrow{color:var(--accent);font-size:10px;font-weight:900;text-transform:uppercase}
+.intro h1{margin:8px 0 12px;font-size:34px;line-height:1.1}
+.intro>p{max-width:740px;margin:0;color:var(--muted);font-size:14px;line-height:1.7}
+.base{display:flex;align-items:center;gap:10px;margin-top:18px;padding:12px 14px;border:1px solid var(--line);border-radius:7px;background:var(--panel);font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.base span{min-width:0;overflow-wrap:anywhere;color:var(--accent);font-weight:700}
+section{padding:28px 0;border-bottom:1px solid var(--line);scroll-margin-top:72px}
+h2{margin:0 0 12px;font-size:21px}
+h3{margin:22px 0 9px;font-size:14px}
+p,li{color:var(--muted);font-size:13px;line-height:1.7}
+.notice{margin:14px 0;padding:12px 14px;border-left:3px solid var(--yellow);background:#f4c95d0d;color:#d8d0b7;font-size:12px;line-height:1.6}
+.grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.fact{padding:14px;border:1px solid var(--line);border-radius:7px;background:var(--panel)}
+.fact strong{display:block;margin-bottom:4px;font-size:12px}
+.fact span{color:var(--muted);font-size:11px;line-height:1.5}
+.code{position:relative;margin:10px 0 16px;border:1px solid var(--line);border-radius:7px;overflow:hidden;background:var(--code)}
+.code-head{display:flex;align-items:center;justify-content:space-between;padding:8px 11px;border-bottom:1px solid var(--line);color:#71808a;font-size:9px;font-weight:900;text-transform:uppercase}
+.copy{border:0;background:transparent;color:var(--accent);font-size:10px;font-weight:800;cursor:pointer}
+pre{margin:0;padding:15px;overflow:auto;color:#cbd8df;font:11px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre}
+.endpoint{padding:18px 0}
+.endpoint+.endpoint{border-top:1px solid var(--line)}
+.endpoint-title{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.method{min-width:44px;padding:4px 7px;border-radius:4px;text-align:center;font:900 9px ui-monospace,monospace}
+.get{background:#23d5ab17;color:var(--accent);border:1px solid #23d5ab38}
+.post{background:#f4c95d17;color:var(--yellow);border:1px solid #f4c95d38}
+.path{font:700 13px ui-monospace,monospace;overflow-wrap:anywhere}
+.endpoint h3{margin:10px 0 3px}
+.endpoint p{margin:3px 0}
+.params{width:100%;margin:12px 0;border-collapse:collapse;font-size:11px}
+.params th,.params td{padding:9px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+.params th{color:#71808a;font-size:9px;text-transform:uppercase}
+.params td{color:var(--muted)}
+code.inline{padding:2px 5px;border-radius:4px;background:#ffffff0a;color:#cbd8df;font:11px ui-monospace,monospace}
+.status-list{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+.status-list div{padding:10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);font-size:11px}
+.status-list b{color:var(--accent);font-family:ui-monospace,monospace}
+.footer{padding-top:28px;color:#667681;font-size:10px}
+.menu{display:none}
+@media(max-width:760px){
+  .topbar{padding:0 12px}
+  .version,.top-actions a:not(.primary){display:none}
+  .menu{display:inline-flex;border:1px solid var(--line);background:transparent;color:var(--text);border-radius:5px;padding:7px}
+  .sidebar{transform:translateX(-100%);transition:.2s;z-index:30}
+  .sidebar.open{transform:translateX(0);box-shadow:20px 0 50px #0008}
+  main{margin-left:0;padding:82px 15px 60px}
+  .intro h1{font-size:27px}
+  .grid{grid-template-columns:1fr}
+  .status-list{grid-template-columns:1fr}
+  .base{align-items:flex-start}
+  .top-actions{margin-left:auto;margin-right:8px}
+}
+</style>
+</head>
+<body>
+<header class="topbar">
+  <button class="menu" aria-label="Abrir navegación" onclick="document.querySelector('.sidebar').classList.toggle('open')">☰</button>
+  <div class="brand">FRANCHO <b>SHOP</b><span class="version">API v1</span></div>
+  <div class="top-actions">
+    <a href="/api/docs/openapi.json">OpenAPI JSON</a>
+    <a href="/api/docs/guide.md">Guía Markdown</a>
+    <a class="primary" href="/?mode=panel">Panel revendedor</a>
+  </div>
+</header>
+
+<nav class="sidebar">
+  <p>Introducción</p>
+  <a href="#overview">Descripción general</a>
+  <a href="#quickstart">Inicio rápido</a>
+  <a href="#auth">Autenticación</a>
+  <a href="#idempotency">Idempotencia</a>
+  <p>Billetera</p>
+  <a href="#wallet">Consultar saldo</a>
+  <a href="#movements">Movimientos</a>
+  <p>Catálogo</p>
+  <a href="#products">Productos</a>
+  <a href="#offers">Ofertas de producto</a>
+  <p>Pedidos</p>
+  <a href="#create-order">Crear recarga / orden</a>
+  <a href="#get-order">Consultar pedido</a>
+  <a href="#list-orders">Historial de pedidos</a>
+  <p>Números SMS</p>
+  <a href="#sms-countries">Países SMS</a>
+  <a href="#sms-services">Servicios & Apps</a>
+  <a href="#sms-create">Comprar número</a>
+  <a href="#sms-get">Consultar código SMS</a>
+  <p>Referencia</p>
+  <a href="#statuses">Estados de orden</a>
+  <a href="#errors">Errores HTTP</a>
+  <a href="#security">Seguridad</a>
+</nav>
+
+<main>
+  <div class="intro" id="overview">
+    <div class="eyebrow">Documentación Oficial B2B</div>
+    <h1>Reseller API v1</h1>
+    <p>Integra el catálogo oficial de Francho Shop, recargas directas en juegos, tarjetas de regalo, suscripciones digitales y recepción de códigos SMS en tu servidor, bot o tienda web.</p>
+    <div class="base">
+      <strong>Base URL</strong>
+      <span>https://franchoshop.com/v1</span>
+    </div>
+  </div>
+
+  <section>
+    <div class="grid">
+      <div class="fact"><strong>Formato</strong><span>JSON estándar UTF-8 sobre HTTPS.</span></div>
+      <div class="fact"><strong>Moneda</strong><span>Todos los precios y saldos se manejan en USDT.</span></div>
+      <div class="fact"><strong>Entrega Inmediata</strong><span>Las compras descuentan saldo y se procesan en tiempo real.</span></div>
+    </div>
+    <div class="notice">
+      La clave API debe custodiarse exclusivamente en tu servidor backend. Nunca la expongas en JavaScript frontend, aplicaciones cliente distribuidas ni repositorios públicos.
+    </div>
+  </section>
+
+  <section id="quickstart">
+    <h2>Inicio rápido</h2>
+    <p>Comprueba tu saldo y conexión enviando tu clave de revendedor:</p>
+    <div class="code">
+      <div class="code-head"><span>cURL</span><button class="copy" onclick="copyCode(this)">Copiar</button></div>
+      <pre>curl "https://franchoshop.com/v1/wallet" \
+  -H "Authorization: Bearer fs_live_TU_CLAVE"</pre>
+    </div>
+    <div class="code">
+      <div class="code-head"><span>Node.js / JavaScript</span><button class="copy" onclick="copyCode(this)">Copiar</button></div>
+      <pre>const res = await fetch("https://franchoshop.com/v1/wallet", {
+  headers: { "Authorization": "Bearer fs_live_TU_CLAVE" }
+});
+const wallet = await res.json();
+console.log("Saldo disponible:", wallet.data.available, "USDT");</pre>
+    </div>
+    <div class="code">
+      <div class="code-head"><span>Python</span><button class="copy" onclick="copyCode(this)">Copiar</button></div>
+      <pre>import requests
+
+res = requests.get(
+    "https://franchoshop.com/v1/wallet",
+    headers={"Authorization": "Bearer fs_live_TU_CLAVE"},
+    timeout=15
+)
+data = res.json()["data"]
+print(f"Saldo: {data['available']} USDT")</pre>
+    </div>
+  </section>
+
+  <section id="auth">
+    <h2>Autenticación</h2>
+    <p>Cada petición debe incluir tu clave en uno de los siguientes encabezados HTTP:</p>
+    <div class="code">
+      <div class="code-head"><span>Bearer (Recomendado)</span><button class="copy" onclick="copyCode(this)">Copiar</button></div>
+      <pre>Authorization: Bearer fs_live_TU_CLAVE</pre>
+    </div>
+    <div class="code">
+      <div class="code-head"><span>X-API-Key</span><button class="copy" onclick="copyCode(this)">Copiar</button></div>
+      <pre>X-API-Key: fs_live_TU_CLAVE</pre>
+    </div>
+  </section>
+
+  <section id="idempotency">
+    <h2>Idempotencia</h2>
+    <p>Para prevenir cobros duplicados en caso de desconexión o reintentos automáticos de tu cliente, envía el encabezado opcional <code class="inline">Idempotency-Key</code>:</p>
+    <div class="code">
+      <div class="code-head"><span>Encabezado</span><button class="copy" onclick="copyCode(this)">Copiar</button></div>
+      <pre>Idempotency-Key: mi-orden-20261013-0001</pre>
+    </div>
+    <div class="notice">
+      Si una petición se interrumpe y la reintentas con el mismo identificador, Francho Shop responderá con la orden original ya registrada sin generar un segundo débito de saldo. Si no envías el encabezado, el sistema genera automáticamente un identificador seguro.
+    </div>
+  </section>
+
+  <section>
+    <h2>Billetera y Saldo</h2>
+    <div class="endpoint" id="wallet">
+      <div class="endpoint-title"><span class="method get">GET</span><span class="path">/wallet</span></div>
+      <h3>Consultar Saldo</h3>
+      <p>Devuelve el saldo disponible en USDT y el plan activo.</p>
+      <div class="code">
+        <div class="code-head"><span>Respuesta</span><button class="copy" onclick="copyCode(this)">Copiar</button></div>
+        <pre>{
+  "data": {
+    "currency": "USDT",
+    "balance": "85.4500",
+    "reserved": "0.0000",
+    "available": "85.4500",
+    "plan": "reseller"
+  }
+}</pre>
+      </div>
+    </div>
+
+    <div class="endpoint" id="movements">
+      <div class="endpoint-title"><span class="method get">GET</span><span class="path">/wallet/movements?limit=25</span></div>
+      <h3>Movimientos de Saldo</h3>
+      <p>Lista los débitos por compras, recargas y reembolsos de la cuenta.</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Catálogo</h2>
+    <div class="endpoint" id="products">
+      <div class="endpoint-title"><span class="method get">GET</span><span class="path">/catalog/products?limit=100</span></div>
+      <h3>Listar Productos</h3>
+      <p>Devuelve todos los productos disponibles con sus códigos técnicos estables (ej: <code class="inline">free_fire_latam</code>, <code class="inline">telegram_premium</code>).</p>
+      <table class="params">
+        <tr><th>Parámetro</th><th>Tipo</th><th>Descripción</th></tr>
+        <tr><td><code class="inline">limit</code></td><td>Query int</td><td>Número de productos por página (1 a 100).</td></tr>
+        <tr><td><code class="inline">search</code></td><td>Query string</td><td>Búsqueda por texto (ej: <code class="inline">Free Fire</code>).</td></tr>
+        <tr><td><code class="inline">group</code></td><td>Query string</td><td>Filtrar por grupo: <code class="inline">games</code>, <code class="inline">service_topup</code>, <code class="inline">giftcards</code>.</td></tr>
+      </table>
+      <div class="code">
+        <div class="code-head"><span>Respuesta</span><button class="copy" onclick="copyCode(this)">Copiar</button></div>
+        <pre>{
+  "data": [
+    {
+      "id": "free_fire_latam",
+      "category_id": "free_fire_latam",
+      "public_id": "prd_RBynh3P7Ux7ECLEbKpIEpsYW",
+      "name": "Free Fire (LATAM)",
+      "group": "games",
+      "type": "topup",
+      "available": true,
+      "image_url": "https://franchoshop.com/v1/catalog/products/free_fire_latam/image"
+    }
+  ],
+  "meta": { "limit": 100, "has_more": false, "total": 42 }
+}</pre>
+      </div>
+    </div>
+
+    <div class="endpoint" id="offers">
+      <div class="endpoint-title"><span class="method get">GET</span><span class="path">/catalog/products/{product_id}/offers</span></div>
+      <h3>Ofertas de un Producto</h3>
+      <p>Devuelve los paquetes o denominaciones de recarga con precios de revendedor y los campos obligatorios que debes pedir a tu cliente final.</p>
+      <div class="code">
+        <div class="code-head"><span>cURL</span><button class="copy" onclick="copyCode(this)">Copiar</button></div>
+        <pre>curl "https://franchoshop.com/v1/catalog/products/free_fire_latam/offers" \
+  -H "Authorization: Bearer fs_live_TU_CLAVE"</pre>
+      </div>
+      <div class="code">
+        <div class="code-head"><span>Respuesta</span><button class="copy" onclick="copyCode(this)">Copiar</button></div>
+        <pre>{
+  "data": [
+    {
+      "id": "110_diamonds",
+      "offer_id": "110_diamonds",
+      "name": "110 Diamantes",
+      "price": "0.7700",
+      "currency": "USDT",
+      "available": true,
+      "required_fields": [
+        { "key": "player_id", "label": "ID de Jugador", "required": true, "type": "text" }
+      ]
+    }
+  ],
+  "product": {
+    "id": "free_fire_latam",
+    "name": "Free Fire (LATAM)"
+  }
+}</pre>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Pedidos y Recargas</h2>
+    <div class="endpoint" id="create-order">
+      <div class="endpoint-title"><span class="method post">POST</span><span class="path">/orders</span></div>
+      <h3>Crear Pedido / Recarga Directa</h3>
+      <p>Debita el saldo de tu cuenta y ejecuta la recarga o entrega digital en tiempo real.</p>
+      <table class="params">
+        <tr><th>Campo</th><th>Tipo</th><th>Descripción</th></tr>
+        <tr><td><code class="inline">product_id</code></td><td>string</td><td>Código del producto obtenido del catálogo (ej: <code class="inline">free_fire_latam</code>). Obligatorio.</td></tr>
+        <tr><td><code class="inline">offer_id</code></td><td>string</td><td>Código de la oferta deseada (ej: <code class="inline">110_diamonds</code>). Obligatorio.</td></tr>
+        <tr><td><code class="inline">quantity</code></td><td>int</td><td>Cantidad a adquirir (por defecto 1).</td></tr>
+        <tr><td><code class="inline">fields</code></td><td>object</td><td>Diccionario con los datos requeridos por la oferta (ej: <code class="inline">{"player_id": "123456789"}</code>).</td></tr>
+      </table>
+      <div class="code">
+        <div class="code-head"><span>cURL</span><button class="copy" onclick="copyCode(this)">Copiar</button></div>
+        <pre>curl -X POST "https://franchoshop.com/v1/orders" \
+  -H "Authorization: Bearer fs_live_TU_CLAVE" \
+  -H "Content-Type: application/json" \
+  -H "Idempotency-Key: mi-orden-20261013-0001" \
+  -d '{
+    "product_id": "free_fire_latam",
+    "offer_id": "110_diamonds",
+    "quantity": 1,
+    "fields": {
+      "player_id": "123456789"
+    }
+  }'</pre>
+      </div>
+      <div class="code">
+        <div class="code-head"><span>Respuesta (201 Created)</span><button class="copy" onclick="copyCode(this)">Copiar</button></div>
+        <pre>{
+  "data": {
+    "id": "FSB2B-3F4A7C9B10D2E58A",
+    "status": "completed",
+    "product": { "id": "free_fire_latam", "name": "Free Fire (LATAM)" },
+    "offer": { "id": "110_diamonds", "name": "110 Diamantes" },
+    "quantity": 1,
+    "unit_price": "0.7700",
+    "total": "0.7700",
+    "currency": "USDT",
+    "delivery": {
+      "type": "topup",
+      "status": "completed",
+      "destination": { "player_id": "123456789" }
+    }
+  }
+}</pre>
+      </div>
+    </div>
+
+    <div class="endpoint" id="get-order">
+      <div class="endpoint-title"><span class="method get">GET</span><span class="path">/orders/{order_id}</span></div>
+      <h3>Consultar Estado de un Pedido</h3>
+      <p>Devuelve el estado en tiempo real, destino de recarga y monto facturado.</p>
+    </div>
+
+    <div class="endpoint" id="list-orders">
+      <div class="endpoint-title"><span class="method get">GET</span><span class="path">/orders?limit=25</span></div>
+      <h3>Listar Pedidos Recientes</h3>
+      <p>Historial paginado de pedidos realizados por la cuenta revendedora.</p>
+    </div>
+  </section>
+
+  <section id="sms">
+    <h2>Números Virtuales (SMS para Verificaciones)</h2>
+    <p>Adquiere números virtuales temporales en más de 180 países para recibir códigos de activación en WhatsApp, Telegram, Google, TikTok, Discord, etc.</p>
+    <div class="grid" style="margin:16px 0;">
+      <div class="fact"><strong>👑 Oro VIP (≥ $100)</strong><span>Margen +7% (precio mín. $0.40)</span></div>
+      <div class="fact"><strong>🥈 Plata (≥ $50)</strong><span>Margen +10% (precio mín. $0.50)</span></div>
+      <div class="fact"><strong>🥉 Bronce (≥ $25)</strong><span>Margen +14% (precio mín. $0.60)</span></div>
+    </div>
+    <div class="notice">
+      <strong>Reglas de Reembolso:</strong> Si transcurren <strong>20 minutos</strong> sin llegar ningún SMS, la orden expira y <strong>se reembolsa el 100% automáticamente</strong>. Si transcurren <strong>120 segundos (2 minutos)</strong> sin recibir SMS, puedes cancelarla manualmente con reembolso inmediato.
+    </div>
+
+    <div class="endpoint" id="sms-countries">
+      <div class="endpoint-title"><span class="method get">GET</span><span class="path">/api/v1/reseller/sms/countries</span></div>
+      <h3>Países Disponibles</h3>
+      <p>Devuelve banderas, nombres, códigos ISO e iconos.</p>
+    </div>
+
+    <div class="endpoint" id="sms-services">
+      <div class="endpoint-title"><span class="method get">GET</span><span class="path">/api/v1/reseller/sms/services?country=usa</span></div>
+      <h3>Servicios y Precios</h3>
+      <p>Lista servicios/apps disponibles con stock en tiempo real y precios con descuento mayorista.</p>
+    </div>
+
+    <div class="endpoint" id="sms-create">
+      <div class="endpoint-title"><span class="method post">POST</span><span class="path">/api/v1/reseller/sms/orders</span></div>
+      <h3>Comprar Número Virtual</h3>
+      <div class="code">
+        <div class="code-head"><span>cURL</span><button class="copy" onclick="copyCode(this)">Copiar</button></div>
+        <pre>curl -X POST "https://franchoshop.com/api/v1/reseller/sms/orders" \
+  -H "Authorization: Bearer fs_live_TU_CLAVE" \
+  -H "Content-Type: application/json" \
+  -d '{"country": "usa", "service": "whatsapp"}'</pre>
+      </div>
+    </div>
+
+    <div class="endpoint" id="sms-get">
+      <div class="endpoint-title"><span class="method get">GET</span><span class="path">/api/v1/reseller/sms/orders/{order_id}</span></div>
+      <h3>Consultar Código SMS</h3>
+      <p>Sincroniza en tiempo real. Cuando el código llega, el campo <code class="inline">sms_code</code> contiene el código de verificación.</p>
+    </div>
+  </section>
+
+  <section id="statuses">
+    <h2>Estados de Pedido</h2>
+    <div class="status-list">
+      <div><b>completed</b> · Completado y entregado</div>
+      <div><b>processing</b> · En proceso con la red</div>
+      <div><b>refunded</b> · Rechazado o cancelado (100% reembolsado)</div>
+    </div>
+  </section>
+
+  <section id="errors">
+    <h2>Errores HTTP</h2>
+    <table class="params">
+      <tr><th>Código</th><th>Significado</th><th>Solución</th></tr>
+      <tr><td>400</td><td>Parámetros o datos inválidos</td><td>Verifica que todos los campos requeridos en <code class="inline">fields</code> estén presentes.</td></tr>
+      <tr><td>401</td><td>No autorizado</td><td>Clave ausente, revocada o inválida. Revisa tu encabezado de autorización.</td></tr>
+      <tr><td>404</td><td>No encontrado</td><td>El <code class="inline">product_id</code> u <code class="inline">offer_id</code> no existe.</td></tr>
+      <tr><td>422</td><td>Error de validación</td><td><code class="inline">Idempotency-Key</code> debe tener entre 8 y 128 caracteres.</td></tr>
+      <tr><td>502</td><td>Error de entrega</td><td>La recarga fue rechazada por la red central; el saldo se reembolsa al instante.</td></tr>
+    </table>
+  </section>
+
+  <section id="security">
+    <h2>Seguridad y Buenas Prácticas</h2>
+    <ul>
+      <li>Utiliza variables de entorno seguras para guardar tu clave API en tu servidor backend.</li>
+      <li>Usa <code class="inline">Idempotency-Key</code> en solicitudes de compra para asegurar reintentos limpios ante interrupciones de red.</li>
+      <li>Comprueba siempre el código HTTP de respuesta antes de procesar el cuerpo JSON.</li>
+      <li>Si detectas cualquier anomalía con una clave, revócala y rota una nueva desde el panel de revendedores.</li>
+    </ul>
+  </section>
+
+  <div class="footer">
+    Francho Shop B2B Reseller API v1 · Documentación Oficial · <a href="/api/docs/openapi.json">Descargar OpenAPI 3.1</a> · <a href="/api/docs/guide.md">Guía Markdown</a>
+  </div>
+</main>
+
+<script>
+function copyCode(btn){
+  const pre = btn.closest('.code').querySelector('pre');
+  navigator.clipboard.writeText(pre.innerText).then(()=>{
+    const old = btn.innerText;
+    btn.innerText = '¡Copiado!';
+    setTimeout(()=>btn.innerText = old, 2000);
+  });
+}
+</script>
+</body>
+</html>

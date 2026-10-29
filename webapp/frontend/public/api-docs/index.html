@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Documentación API — Francho Shop | API para Desarrolladores y Revendedores</title>
+  <meta name="description" content="Documentación oficial de la API REST de Francho Shop. Integra recargas automáticas de diamantes Free Fire, Robux, números virtuales SMS y gift cards en tu web o bot de Telegram.">
+  <meta name="keywords" content="api francho shop, francho shop api docs, api recargas free fire cuba, api recargas videojuegos, api revendedores recargas">
+  <link rel="canonical" href="https://franchoshop.com/api-docs">
+  
+  <!-- Open Graph -->
+  <meta property="og:type" content="article">
+  <meta property="og:url" content="https://franchoshop.com/api-docs">
+  <meta property="og:site_name" content="Francho Shop">
+  <meta property="og:title" content="Documentación API REST — Francho Shop">
+  <meta property="og:description" content="Integra recargas de juegos y servicios digitales en tu plataforma mediante la API REST de Francho Shop.">
+  <meta property="og:image" content="https://franchoshop.com/og-image.png?v=2">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="API REST Francho Shop para Desarrolladores">
+  <meta name="twitter:description" content="Endpoints REST para automatizar recargas de Free Fire, Robux y gift cards.">
+  <meta name="twitter:image" content="https://franchoshop.com/og-image.png?v=2">
+
+  <link rel="icon" type="image/jpeg" href="/franchoshop.jpg">
+
+  <!-- Schema.org TechArticle y BreadcrumbList -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "TechArticle",
+        "@id": "https://franchoshop.com/api-docs#article",
+        "url": "https://franchoshop.com/api-docs",
+        "name": "Documentación API REST Francho Shop",
+        "headline": "API Oficial para Revendedores y Desarrolladores — Francho Shop",
+        "description": "Especificación técnica de endpoints REST JSON para recargas automáticas de juegos, gift cards y números virtuales SMS.",
+        "inLanguage": "es",
+        "author": {
+          "@type": "Organization",
+          "name": "Francho Shop",
+          "url": "https://franchoshop.com"
+        }
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": "https://franchoshop.com/api-docs#breadcrumb",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Inicio",
+            "item": "https://franchoshop.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Documentación API",
+            "item": "https://franchoshop.com/api-docs"
+          }
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <style>
+    :root {
+      --bg: #08090d;
+      --card: #0f131a;
+      --border: rgba(255, 255, 255, 0.08);
+      --accent: #ffff00;
+      --accent-hover: #e6e600;
+      --cyan: #06b6d4;
+      --text: #ffffff;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 840px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: #fff;
+      font-weight: 800;
+      font-size: 22px;
+      letter-spacing: -0.5px;
+    }
+    .logo img {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+    .box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 28px;
+      margin-bottom: 24px;
+    }
+    h1 {
+      font-size: 28px;
+      font-weight: 800;
+      margin: 0 0 10px 0;
+      text-align: center;
+    }
+    p.subtitle {
+      color: var(--muted);
+      font-size: 15px;
+      text-align: center;
+      margin-top: 0;
+      margin-bottom: 24px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      background: rgba(6, 182, 212, 0.15);
+      border: 1px solid var(--cyan);
+      color: var(--cyan);
+      font-size: 12px;
+      font-weight: 700;
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+    pre {
+      background: #040508;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 10px;
+      padding: 16px;
+      color: #38bdf8;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 13px;
+      overflow-x: auto;
+    }
+    .endpoint {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 12px 0;
+      font-family: monospace;
+      font-size: 14px;
+    }
+    .method {
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 12px;
+    }
+    .get { background: #10b981; color: #000; }
+    .post { background: #3b82f6; color: #fff; }
+    .btn-main {
+      display: inline-block;
+      text-align: center;
+      background: var(--accent);
+      color: #000;
+      font-weight: 700;
+      font-size: 15px;
+      padding: 12px 24px;
+      border-radius: 10px;
+      text-decoration: none;
+      transition: background 0.2s;
+    }
+    .btn-main:hover {
+      background: var(--accent-hover);
+    }
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 40px;
+    }
+    footer a {
+      color: var(--muted);
+      text-decoration: underline;
+    }
+  </style>
+  <script>
+    if (!/bot|crawler|spider|crawling|googlebot|bingbot|yandex/i.test(navigator.userAgent)) {
+      window.location.replace('/?screen=api-docs');
+    }
+  </script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <a href="/" class="logo">
+        <img src="/franchoshop.jpg" alt="Francho Shop">
+        <span>FRANCHO SHOP</span>
+      </a>
+    </header>
+
+    <main>
+      <div class="box">
+        <div style="text-align: center;"><span class="badge">DEVELOPER API v2</span></div>
+        <h1>Documentación Oficial de API Francho Shop</h1>
+        <p class="subtitle">Automatiza compras de diamantes Free Fire, Robux, gift cards y activación de números SMS en tu propia tienda o bot.</p>
+
+        <h3 style="color: #fff; margin-top: 24px;">🔑 Autenticación</h3>
+        <p style="color: var(--muted); font-size: 14px;">Todas las solicitudes a la API deben incluir tu clave secreta de API en el encabezado HTTP <code>X-API-Key</code> o mediante Bearer token.</p>
+        <pre><code>Authorization: Bearer TU_API_KEY_AQUI
+Content-Type: application/json</code></pre>
+
+        <h3 style="color: #fff; margin-top: 24px;">📡 Endpoints Principales</h3>
+        
+        <div class="endpoint">
+          <span class="method get">GET</span>
+          <span>https://franchoshop.com/api/v2/balance</span>
+        </div>
+        <p style="color: var(--muted); font-size: 13px; margin: 0 0 16px 0;">Consulta tu saldo disponible en CUP y USDT.</p>
+
+        <div class="endpoint">
+          <span class="method get">GET</span>
+          <span>https://franchoshop.com/api/v2/catalog</span>
+        </div>
+        <p style="color: var(--muted); font-size: 13px; margin: 0 0 16px 0;">Obtiene la lista de juegos disponibles, paquetes, precios y campos requeridos (Player ID, Región, etc.).</p>
+
+        <div class="endpoint">
+          <span class="method post">POST</span>
+          <span>https://franchoshop.com/api/v2/orders/create</span>
+        </div>
+        <p style="color: var(--muted); font-size: 13px; margin: 0 0 16px 0;">Crea una recarga automática por ID. Se descuenta de tu saldo y se procesa en segundos.</p>
+
+        <div class="endpoint">
+          <span class="method get">GET</span>
+          <span>https://franchoshop.com/api/v2/orders/{order_id}</span>
+        </div>
+        <p style="color: var(--muted); font-size: 13px; margin: 0 0 16px 0;">Consulta el estado en tiempo real (completed, processing, failed) de una recarga.</p>
+
+        <div style="text-align: center; margin-top: 32px;">
+          <a href="/?screen=api-docs" class="btn-main">💻 Abrir Consola Interactiva de API en la App</a>
+        </div>
+      </div>
+    </main>
+
+    <footer>
+      <p><a href="/">Inicio</a> · <a href="/panel">Panel Revendedores</a> · <a href="/login">Iniciar Sesión</a> · <a href="/catalogo">Catálogo</a> · <a href="/soporte">Soporte API</a></p>
+      <p>© 2026 Francho Shop. Tienda líder de recargas automáticas en Cuba.</p>
+    </footer>
+  </div>
+</body>
+</html>

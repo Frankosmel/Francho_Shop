@@ -19,11 +19,20 @@ class OxaPayError(Exception):
 class OxaPayClient:
     def __init__(self):
         self.api_url = config.OXAPAY_API_URL
-        self.merchant_key = config.OXAPAY_MERCHANT_KEY
-        self.payout_key = getattr(config, "OXAPAY_PAYOUT_API_KEY", "")
-        self.general_key = getattr(config, "OXAPAY_GENERAL_API_KEY", "")
         self.sandbox = config.OXAPAY_SANDBOX
         self._session: aiohttp.ClientSession | None = None
+
+    @property
+    def merchant_key(self) -> str:
+        return config.OXAPAY_MERCHANT_KEY or os.getenv("OXAPAY_MERCHANT_KEY", "")
+
+    @property
+    def payout_key(self) -> str:
+        return getattr(config, "OXAPAY_PAYOUT_API_KEY", "") or os.getenv("OXAPAY_PAYOUT_API_KEY", "")
+
+    @property
+    def general_key(self) -> str:
+        return getattr(config, "OXAPAY_GENERAL_API_KEY", "") or os.getenv("OXAPAY_GENERAL_API_KEY", "")
 
     async def _get_session(self) -> aiohttp.ClientSession:
         if self._session is None or self._session.closed:
@@ -81,6 +90,66 @@ class OxaPayClient:
             if data.get("trackId") and not data.get("track_id"):
                 data["track_id"] = data["trackId"]
             return data
+
+    async def create_white_label(
+        self, amount: float, order_id: str,
+        pay_currency: str = "USDT", network: str | None = None,
+        description: str = "", callback_url: str = None,
+    ) -> dict:
+        """Crea una orden White Label para la moneda y red ya validadas."""
+        session = await self._get_session()
+        headers = {
+            "merchant_api_key": self.merchant_key,
+            "Content-Type": "application/json",
+        }
+        data = {
+            "amount": amount,
+            "currency": "USD",
+            "pay_currency": pay_currency,
+            "to_currency": "USDT",
+            "order_id": order_id,
+            "description": description or f"GameStore #{order_id}",
+            "fee_paid_by_payer": 1,
+            "under_paid_coverage": 1.0,
+            "lifetime": 120,
+        }
+        if network:
+            data["network"] = network
+        if callback_url:
+            data["callback_url"] = callback_url
+        async with session.post(
+            f"{self.api_url}/payment/white-label",
+            json=data,
+            headers=headers,
+        ) as resp:
+            result = await resp.json()
+            log.info("OxaPay create_white_label: %s", result)
+            if result.get("status") != 200:
+                raise OxaPayError(
+                    result.get("status", 0),
+                    result.get("message", "Error al generar dirección de pago"),
+                )
+            return result.get("data", result)
+
+    async def get_accepted_currencies(self) -> list[str]:
+        """Monedas que el merchant habilitó realmente para cobrar."""
+        session = await self._get_session()
+        headers = {"merchant_api_key": self.merchant_key, "Content-Type": "application/json"}
+        async with session.get(f"{self.api_url}/payment/accepted-currencies", headers=headers) as resp:
+            result = await resp.json()
+            if result.get("status") != 200:
+                raise OxaPayError(result.get("status", resp.status), result.get("message", "No se pudieron cargar las monedas aceptadas"))
+            data = result.get("data") or {}
+            return [str(symbol).upper() for symbol in (data.get("list") or []) if str(symbol).strip()]
+
+    async def get_supported_currencies(self) -> dict:
+        """Catálogo público de monedas y redes que OxaPay reporta como activas."""
+        session = await self._get_session()
+        async with session.get(f"{self.api_url}/common/currencies") as resp:
+            result = await resp.json()
+            if result.get("status") != 200:
+                raise OxaPayError(result.get("status", resp.status), result.get("message", "No se pudieron cargar las redes compatibles"))
+            return result.get("data") or {}
 
     async def get_payment(self, track_id: str) -> dict:
         session = await self._get_session()

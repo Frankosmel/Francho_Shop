@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Iniciar Sesión — Francho Shop | Acceso a tu Cuenta y Saldo</title>
+  <meta name="description" content="Inicia sesión en Francho Shop con tu correo, Google o Telegram. Gestiona tu saldo en CUP y USDT, consulta tus pedidos de recargas y activa tus servicios al instante.">
+  <meta name="keywords" content="iniciar sesion francho shop, login francho shop, entrar cuenta francho shop, francho shop saldo, francho shop registro">
+  <link rel="canonical" href="https://franchoshop.com/login">
+  
+  <!-- Open Graph -->
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://franchoshop.com/login">
+  <meta property="og:site_name" content="Francho Shop">
+  <meta property="og:title" content="Iniciar Sesión — Francho Shop | Acceso a tu Cuenta">
+  <meta property="og:description" content="Inicia sesión en Francho Shop con correo, Google o Telegram. Recargas automáticas 24/7 y gestión de saldo.">
+  <meta property="og:image" content="https://franchoshop.com/og-image.png?v=2">
+  <meta property="og:image:alt" content="Iniciar Sesión en Francho Shop">
+
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Iniciar Sesión — Francho Shop">
+  <meta name="twitter:description" content="Accede a tu cuenta de Francho Shop para recargas automáticas y consulta de saldo.">
+  <meta name="twitter:image" content="https://franchoshop.com/og-image.png?v=2">
+
+  <link rel="icon" type="image/jpeg" href="/franchoshop.jpg">
+
+  <!-- Schema.org WebPage y BreadcrumbList -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "WebPage",
+        "@id": "https://franchoshop.com/login#webpage",
+        "url": "https://franchoshop.com/login",
+        "name": "Iniciar Sesión — Francho Shop",
+        "description": "Acceso seguro a la plataforma de Francho Shop para clientes y revendedores.",
+        "isPartOf": {
+          "@type": "WebSite",
+          "@id": "https://franchoshop.com/#website",
+          "name": "Francho Shop",
+          "url": "https://franchoshop.com/"
+        }
+      },
+      {
+        "@type": "BreadcrumbList",
+        "@id": "https://franchoshop.com/login#breadcrumb",
+        "itemListElement": [
+          {
+            "@type": "ListItem",
+            "position": 1,
+            "name": "Inicio",
+            "item": "https://franchoshop.com/"
+          },
+          {
+            "@type": "ListItem",
+            "position": 2,
+            "name": "Iniciar Sesión",
+            "item": "https://franchoshop.com/login"
+          }
+        ]
+      }
+    ]
+  }
+  </script>
+
+  <style>
+    :root {
+      --bg: #08090d;
+      --card: #0f131a;
+      --border: rgba(255, 255, 255, 0.08);
+      --accent: #ffff00;
+      --accent-hover: #e6e600;
+      --text: #ffffff;
+      --muted: #94a3b8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      line-height: 1.6;
+    }
+    .container {
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 40px 20px;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 32px;
+    }
+    .logo {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: #fff;
+      font-weight: 800;
+      font-size: 22px;
+      letter-spacing: -0.5px;
+    }
+    .logo img {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+    }
+    .box {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 32px;
+      margin-bottom: 24px;
+    }
+    h1 {
+      font-size: 26px;
+      font-weight: 800;
+      margin: 0 0 10px 0;
+      text-align: center;
+    }
+    p.subtitle {
+      color: var(--muted);
+      font-size: 15px;
+      text-align: center;
+      margin-top: 0;
+      margin-bottom: 24px;
+    }
+    .btn-main {
+      display: block;
+      width: 100%;
+      text-align: center;
+      background: var(--accent);
+      color: #000;
+      font-weight: 700;
+      font-size: 16px;
+      padding: 14px 24px;
+      border-radius: 12px;
+      text-decoration: none;
+      margin-top: 16px;
+      transition: background 0.2s;
+    }
+    .btn-main:hover {
+      background: var(--accent-hover);
+    }
+    .btn-secondary {
+      display: block;
+      width: 100%;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--border);
+      color: #fff;
+      font-weight: 600;
+      font-size: 15px;
+      padding: 12px 20px;
+      border-radius: 12px;
+      text-decoration: none;
+      margin-top: 10px;
+    }
+    .features-list {
+      list-style: none;
+      padding: 0;
+      margin: 20px 0 0 0;
+    }
+    .features-list li {
+      padding: 8px 0;
+      color: var(--muted);
+      font-size: 14px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .features-list li strong {
+      color: #fff;
+    }
+    footer {
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      margin-top: 40px;
+    }
+    footer a {
+      color: var(--muted);
+      text-decoration: underline;
+    }
+  </style>
+  <script>
+    if (!/bot|crawler|spider|crawling|googlebot|bingbot|yandex/i.test(navigator.userAgent)) {
+      window.location.replace('/?screen=login');
+    }
+  </script>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <a href="/" class="logo">
+        <img src="/franchoshop.jpg" alt="Francho Shop">
+        <span>FRANCHO SHOP</span>
+      </a>
+    </header>
+
+    <main>
+      <div class="box">
+        <h1>Iniciar Sesión en Francho Shop</h1>
+        <p class="subtitle">Accede a tu cuenta para gestionar recargas de juegos, saldo en CUP y pedidos automáticos.</p>
+        
+        <div style="text-align: center; margin: 24px 0;">
+          <a href="/?screen=login" class="btn-main">🚀 Iniciar Sesión con Correo / Contraseña</a>
+          <a href="/?screen=login" class="btn-secondary">🔵 Iniciar Sesión con Google</a>
+          <a href="/?screen=login" class="btn-secondary">✈️ Iniciar Sesión con Telegram</a>
+        </div>
+
+        <ul class="features-list">
+          <li>✨ <strong>Historial Completo:</strong> Revisa el estado de tus diamantes Free Fire, Robux y gift cards al instante.</li>
+          <li>⚡ <strong>Saldo en Moneda Nacional (CUP):</strong> Paga pedidos en 1 clic utilizando tu monedero con Transfermóvil o EnZona.</li>
+          <li>🛡️ <strong>Soporte Prioritario 24/7:</strong> Atención directa por chat y Telegram con garantía en todas tus órdenes.</li>
+          <li>💼 <strong>Panel de Revendedores:</strong> Si vendes recargas a otros usuarios, accede a descuentos mayoristas y API.</li>
+        </ul>
+
+        <div style="text-align: center; margin-top: 24px; font-size: 14px; color: var(--muted);">
+          ¿Aún no tienes cuenta? <a href="/registro" style="color: var(--accent); font-weight: 700;">Regístrate gratis aquí</a>
+        </div>
+      </div>
+    </main>
+
+    <footer>
+      <p><a href="/">Inicio</a> · <a href="/catalogo">Catálogo</a> · <a href="/registro">Crear Cuenta</a> · <a href="/api-docs">API Docs</a> · <a href="/soporte">Soporte</a></p>
+      <p>© 2026 Francho Shop. Tienda líder de recargas automáticas en Cuba.</p>
+    </footer>
+  </div>
+</body>
+</html>

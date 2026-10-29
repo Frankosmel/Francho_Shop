@@ -1,0 +1,11 @@
+# Protección de seguridad Francho Shop B2B Standalone
+# Bloquea la descarga directa de la base de datos SQLite y archivos de configuración sensibles
+
+<FilesMatch "\.(db|sqlite|sqlite3|env|log)$">
+    Order Deny,Allow
+    Deny from all
+</FilesMatch>
+
+# Opciones de seguridad adicionales
+Options -Indexes
+ServerSignature Off

@@ -20811,10 +20811,10 @@ function ProfileSkeleton() {
 
 function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPartnerHelp, onApi, onWebStore, onLogin }) {
   const isGuest = !me || me.is_guest || (!api.isLoggedIn() && (!tg || !tg.initData))
-  const initialProfile = _cachedProfileData || (me && !me.is_guest ? {
+  const initialProfile = useMemo(() => _cachedProfileData || (me && !me.is_guest ? {
     ...me,
     stats: me?.stats || { total_deposited: 0, total_spent: 0, total_orders: 0, completed_orders: 0, failed_orders: 0 }
-  } : null)
+  } : null), [me])
   const [profile, setProfile] = useState(() => initialProfile)
   const [loading, setLoading] = useState(() => !initialProfile && !isGuest)
   const [err, setErr] = useState(null)

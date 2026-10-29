@@ -21077,7 +21077,7 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
             setProfileMsg(null)
             setEditProfile(true)
           }}
-          className="absolute top-3.5 right-3.5 inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 px-2.5 py-1 text-xs font-bold text-white/80 hover:text-white active:scale-95 transition"
+          className="absolute z-20 top-3.5 right-3.5 inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 px-2.5 py-1 text-xs font-bold text-white/80 hover:text-white active:scale-95 transition"
         >
           <Edit3 className="h-3.5 w-3.5 text-accent" />
           <span>Editar</span>

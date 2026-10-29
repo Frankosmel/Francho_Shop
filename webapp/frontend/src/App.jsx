@@ -1,5 +1,6 @@
 // build:1781971166
 import { useState, useEffect, useRef, useMemo, Component } from 'react'
+import { QRCodeSVG } from 'qrcode.react'
 import {
   AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BadgeCheck, Ban, BookOpen, BriefcaseBusiness, Check, Compass,
   CircleCheck, CircleHelp, CircleX, ClipboardList, Clock, Copy, CreditCard, Crown, DollarSign, ExternalLink, Paperclip,
@@ -2130,6 +2131,13 @@ function AppInner({ adminPortal = false }) {
 
   const isPolicyScreen = ['terms', 'privacy', 'faq', 'cookies'].includes(screen)
   const showAppSidebar = !isPrivatePortal && !activeWebStore && screen !== 'panel' && screen !== 'case' && !isPolicyScreen
+  const publicPayRoute = typeof window !== 'undefined'
+    ? window.location.pathname.match(/^\/pay\/([a-z0-9_-]{4,24})\/?$/i)
+    : null
+
+  if (publicPayRoute?.[1]) {
+    return <PublicPaymentProfileScreen handle={decodeURIComponent(publicPayRoute[1]).toLowerCase()} />
+  }
 
   return (
     <div className={showAppSidebar ? "flex h-screen w-full bg-bg text-white overflow-hidden select-text" : ((activeWebStore && screen === 'home') ? "min-h-screen bg-bg" : (screen === 'panel' || screen === 'sms' || screen === 'smm' || screen === 'telegram' || screen === 'capcut' || screen === 'fzr-catalog' || screen === 'home' || screen === 'vpn') ? "h-screen bg-bg overflow-hidden flex flex-col" : "min-h-screen bg-bg pb-24")}>
@@ -20705,6 +20713,77 @@ function writeProfileCache(data) {
 
 let _cachedProfileData = readProfileCache()
 
+function PublicPaymentProfileScreen({ handle }) {
+  const [state, setState] = useState({ loading: true, profile: null, error: '' })
+  const [copied, setCopied] = useState(false)
+  const paymentUrl = typeof window !== 'undefined' ? `${window.location.origin}/pay/${handle}` : ''
+
+  useEffect(() => {
+    let cancelled = false
+    api.getPublicPaymentProfile(handle)
+      .then((data) => {
+        if (!cancelled) setState({ loading: false, profile: data?.profile || null, error: '' })
+      })
+      .catch(() => {
+        if (!cancelled) setState({ loading: false, profile: null, error: 'Este perfil de pagos no está disponible.' })
+      })
+    return () => { cancelled = true }
+  }, [handle])
+
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(paymentUrl)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    } catch {}
+  }
+
+  const shareLink = async () => {
+    if (navigator.share) {
+      try { await navigator.share({ title: 'Francho Shop', text: `Paga de forma segura a @${handle}`, url: paymentUrl }); return } catch {}
+    }
+    copyLink()
+  }
+
+  if (state.loading) {
+    return <div className="min-h-screen bg-bg flex items-center justify-center text-sm font-bold text-white/55"><Loader2 className="mr-2 h-5 w-5 animate-spin text-accent" />Cargando perfil…</div>
+  }
+  if (!state.profile) {
+    return <div className="min-h-screen bg-bg flex items-center justify-center p-5 text-center"><div className="max-w-sm rounded-2xl border border-white/10 bg-card p-6"><CircleX className="mx-auto h-8 w-8 text-red-400" /><h1 className="mt-3 text-base font-black text-white">Perfil no disponible</h1><p className="mt-1 text-xs text-white/50">{state.error}</p><a href="/" className="mt-5 inline-flex rounded-xl bg-accent px-4 py-2 text-xs font-black text-bg">Ir a Francho Shop</a></div></div>
+  }
+
+  const profile = state.profile
+  return (
+    <main className="min-h-screen bg-bg px-4 py-8 text-white sm:py-12">
+      <section className="mx-auto w-full max-w-sm overflow-hidden rounded-2xl border border-white/10 bg-card shadow-2xl shadow-black/35">
+        <div className="h-1 bg-gradient-to-r from-emerald-400 via-accent to-cyan-400" />
+        <div className="p-5 text-center">
+          <div className="mx-auto flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-accent/60 bg-bg text-xl font-black text-accent shadow-lg shadow-accent/15">
+            {profile.photo_url ? <img src={storeAssetUrl(profile.photo_url)} alt="" className="h-full w-full object-cover" /> : (profile.name || '?')[0]?.toUpperCase()}
+          </div>
+          <div className="mt-3 flex items-center justify-center gap-1.5">
+            <h1 className="text-lg font-black">{profile.name}</h1>
+            <UserIdentityBadges profile={{ is_verified: profile.is_verified, is_vip: profile.is_gold }} />
+          </div>
+          <p className="mt-1 text-sm font-bold text-accent">@{profile.handle}</p>
+          <p className="mt-1 text-[11px] text-white/40">{profile.public_code}</p>
+
+          <div className="mt-5 rounded-2xl border border-white/10 bg-white p-4 shadow-inner">
+            <QRCodeSVG value={paymentUrl} size={188} level="M" includeMargin className="mx-auto max-w-full" />
+          </div>
+          <p className="mt-3 text-xs leading-relaxed text-white/55">Escanea este código o usa el enlace para iniciar un pago a este perfil cuando Francho Pay esté habilitado.</p>
+
+          <div className="mt-5 grid grid-cols-2 gap-2">
+            <button type="button" onClick={copyLink} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs font-bold text-white active:scale-95"><Copy className="h-3.5 w-3.5" />{copied ? 'Copiado' : 'Copiar enlace'}</button>
+            <button type="button" onClick={shareLink} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-accent px-3 py-2.5 text-xs font-black text-bg active:scale-95"><Share2 className="h-3.5 w-3.5" />Compartir</button>
+          </div>
+        </div>
+        <div className="border-t border-white/5 px-5 py-3 text-center text-[10px] text-white/35">Francho Shop · Perfil de pagos verificado</div>
+      </section>
+    </main>
+  )
+}
+
 function ProfileSkeleton() {
   return (
     <div className="px-2.5 py-4 md:p-6 max-w-lg mx-auto space-y-4">
@@ -20767,6 +20846,11 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
   const [bindRefLoading, setBindRefLoading] = useState(false)
   const [bindRefMsg, setBindRefMsg] = useState(null)
   const [bindRefErr, setBindRefErr] = useState(null)
+  const [showPaymentProfile, setShowPaymentProfile] = useState(false)
+  const [paymentHandleInput, setPaymentHandleInput] = useState(() => initialProfile?.payment_handle || '')
+  const [paymentProfileEnabled, setPaymentProfileEnabled] = useState(() => !!initialProfile?.payment_profile_enabled)
+  const [paymentIdentitySaving, setPaymentIdentitySaving] = useState(false)
+  const [paymentIdentityMsg, setPaymentIdentityMsg] = useState(null)
 
   const handleBindReferral = async () => {
     if (!bindRefCode.trim()) return
@@ -20800,6 +20884,8 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
         setProfile(p)
         setProfileName(p.display_name || p.name || '')
         setProfileEmail(p.email || '')
+        setPaymentHandleInput(p.payment_handle || '')
+        setPaymentProfileEnabled(!!p.payment_profile_enabled)
         api.referralMyEarnings().then(setShareEarnings).catch(() => null)
         setLoading(false)
       })
@@ -20880,6 +20966,9 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
     : hasProfileKyc
       ? 'bg-[conic-gradient(#16a34a,#86efac,#14b8a6,#4ade80,#22c55e,#16a34a)]'
       : 'bg-[conic-gradient(#facc15,#fff7bf,#16a34a,#f59e0b,#fde047,#facc15)]'
+  const paymentProfileUrl = profile.payment_handle && typeof window !== 'undefined'
+    ? `${window.location.origin}/pay/${profile.payment_handle}`
+    : ''
 
   async function handleLinkTelegram() {
     try {
@@ -20940,6 +21029,26 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
       setProfileMsg('Imagen de perfil actualizada correctamente')
     } catch (e) { setProfileMsg(`No se pudo actualizar la imagen: ${e.message}`) }
     setPhotoUploading(false)
+  }
+
+  async function handleSavePaymentIdentity() {
+    setPaymentIdentitySaving(true)
+    setPaymentIdentityMsg(null)
+    try {
+      const result = await api.updatePaymentIdentity({
+        handle: paymentHandleInput.trim(),
+        profile_enabled: paymentProfileEnabled,
+      })
+      const identity = result?.identity || {}
+      setProfile(prev => ({ ...prev, ...identity }))
+      setPaymentHandleInput(identity.payment_handle || '')
+      setPaymentProfileEnabled(!!identity.payment_profile_enabled)
+      setPaymentIdentityMsg('Perfil de pagos actualizado.')
+    } catch (e) {
+      setPaymentIdentityMsg(e?.message || 'No se pudo actualizar el perfil de pagos.')
+    } finally {
+      setPaymentIdentitySaving(false)
+    }
   }
 
   return (
@@ -21035,6 +21144,21 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
         {profileMsg && <p className={`mt-3 rounded-lg border px-3 py-2 text-xs font-semibold ${profileMsgIsError ? 'border-red-500/25 bg-red-500/10 text-red-300' : 'border-green-500/25 bg-green-500/10 text-green-300'}`}>{profileMsg}</p>}
       </div>
 
+      <button
+        type="button"
+        onClick={() => { setPaymentIdentityMsg(null); setShowPaymentProfile(true) }}
+        className="card mb-3 flex w-full items-center justify-between gap-3 border-emerald-400/20 bg-gradient-to-r from-emerald-500/10 via-card to-card px-3.5 py-3 text-left transition hover:border-emerald-300/45 active:scale-[0.99]"
+      >
+        <span className="flex min-w-0 items-center gap-3">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-400/10 text-emerald-300"><QrCode className="h-4.5 w-4.5" /></span>
+          <span className="min-w-0">
+            <span className="block text-xs font-black text-white">Francho Pay</span>
+            <span className="block truncate text-[11px] text-white/50">{profile.payment_handle ? `@${profile.payment_handle}${profile.payment_profile_enabled ? ' · Perfil público activo' : ' · Perfil privado'}` : 'Crea tu usuario y enlace de cobro'}</span>
+          </span>
+        </span>
+        <ChevronRight className="h-4 w-4 shrink-0 text-emerald-300/70" />
+      </button>
+
       {/* Se monta fuera de la tarjeta: su overflow no puede recortar el diálogo en móvil. */}
       {editProfile && (
         <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/70 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={() => setEditProfile(false)} role="presentation">
@@ -21081,6 +21205,49 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
                   {profileSaving ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Guardar'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPaymentProfile && (
+        <div className="fixed inset-0 z-[105] flex items-end justify-center bg-black/75 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={() => setShowPaymentProfile(false)} role="presentation">
+          <div role="dialog" aria-modal="true" aria-labelledby="payment-profile-title" className="w-full max-w-md rounded-t-2xl border border-white/10 bg-card p-4 text-left shadow-2xl sm:rounded-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-start justify-between gap-3">
+              <div>
+                <h3 id="payment-profile-title" className="text-base font-black text-white">Francho Pay</h3>
+                <p className="mt-0.5 text-xs text-white/45">Tu perfil público para recibir pagos.</p>
+              </div>
+              <button type="button" onClick={() => setShowPaymentProfile(false)} aria-label="Cerrar" className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5 text-white/60 active:scale-95"><X className="h-4 w-4" /></button>
+            </div>
+
+            <div className="space-y-3">
+              <div>
+                <label className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-white/45">Tu usuario Francho Shop</label>
+                <div className="flex overflow-hidden rounded-xl border border-white/10 bg-bg focus-within:border-emerald-400/70">
+                  <span className="flex items-center px-3 text-sm font-black text-emerald-300">@</span>
+                  <input value={paymentHandleInput} onChange={(e) => setPaymentHandleInput(e.target.value.replace(/^@+/, '').toLowerCase())} className="min-w-0 flex-1 bg-transparent py-2.5 pr-3 text-sm text-white outline-none" placeholder="frankosmel" maxLength={24} autoCapitalize="none" autoCorrect="off" />
+                </div>
+                <p className="mt-1 text-[10px] text-white/35">Entre 4 y 24 caracteres: letras, números, guion y guion bajo.</p>
+              </div>
+
+              <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-3">
+                <span><span className="block text-xs font-bold text-white">Activar perfil público</span><span className="mt-0.5 block text-[10px] text-white/45">Permitirá abrir y compartir tu enlace de pagos.</span></span>
+                <input type="checkbox" checked={paymentProfileEnabled} onChange={(e) => setPaymentProfileEnabled(e.target.checked)} className="h-4 w-4 accent-emerald-400" />
+              </label>
+
+              {profile.public_code && <div className="flex items-center justify-between rounded-xl border border-white/10 bg-white/[.03] px-3 py-2 text-xs"><span className="text-white/45">Código Francho Shop</span><code className="font-black text-emerald-300">{profile.public_code}</code></div>}
+
+              {paymentProfileUrl && profile.payment_profile_enabled && (
+                <div className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-3 text-center">
+                  <div className="inline-flex rounded-lg bg-white p-2"><QRCodeSVG value={paymentProfileUrl} size={118} level="M" /></div>
+                  <p className="mt-2 truncate text-[11px] font-semibold text-emerald-200">{paymentProfileUrl}</p>
+                  <button type="button" onClick={async () => { try { await navigator.clipboard.writeText(paymentProfileUrl); setPaymentIdentityMsg('Enlace copiado.') } catch {} }} className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-emerald-300"><Copy className="h-3.5 w-3.5" />Copiar enlace</button>
+                </div>
+              )}
+
+              {paymentIdentityMsg && <p className={`rounded-lg border px-3 py-2 text-xs font-semibold ${/no se pudo|inválido|reservado|uso|dentro/i.test(paymentIdentityMsg) ? 'border-red-500/25 bg-red-500/10 text-red-300' : 'border-emerald-500/25 bg-emerald-500/10 text-emerald-300'}`}>{paymentIdentityMsg}</p>}
+              <button type="button" onClick={handleSavePaymentIdentity} disabled={paymentIdentitySaving} className="w-full rounded-xl bg-accent py-3 text-xs font-black text-bg active:scale-[0.98] disabled:opacity-50">{paymentIdentitySaving ? 'Guardando…' : 'Guardar perfil de pagos'}</button>
             </div>
           </div>
         </div>

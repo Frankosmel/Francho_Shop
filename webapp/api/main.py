@@ -5694,6 +5694,11 @@ class WalletTransferRequest(BaseModel):
     note: str = ""
 
 
+class PaymentIdentityUpdateRequest(BaseModel):
+    handle: str | None = Field(default=None, max_length=25)
+    profile_enabled: bool | None = None
+
+
 class VipSubscribeRequest(BaseModel):
     plan_id: str
 
@@ -5733,6 +5738,95 @@ async def wallet_movements(limit: int = 30, user: dict = Depends(get_current_use
     return {"ok": True, "movements": movements}
 
 
+PUBLIC_HANDLE_RATE_BUCKETS: dict[str, list[float]] = defaultdict(list)
+PUBLIC_HANDLE_RATE_LOCK = asyncio.Lock()
+
+
+async def enforce_public_handle_rate_limit(request: Request, limit: int = 20, window_seconds: int = 60):
+    """Evita enumeración masiva de handles desde rutas públicas."""
+    ip = reseller_api_client_ip(request)
+    now = time.time()
+    async with PUBLIC_HANDLE_RATE_LOCK:
+        bucket = [timestamp for timestamp in PUBLIC_HANDLE_RATE_BUCKETS[ip] if timestamp >= now - window_seconds]
+        if len(bucket) >= limit:
+            PUBLIC_HANDLE_RATE_BUCKETS[ip] = bucket
+            raise HTTPException(429, "Demasiadas consultas. Inténtalo nuevamente en un minuto.")
+        bucket.append(now)
+        PUBLIC_HANDLE_RATE_BUCKETS[ip] = bucket
+
+
+def payment_identity_payload(identity: dict) -> dict:
+    return {
+        "public_code": identity.get("public_code"),
+        "payment_handle": identity.get("payment_handle"),
+        "payment_profile_enabled": bool(identity.get("payment_profile_enabled")),
+        "payment_handle_changed_at": identity.get("payment_handle_changed_at"),
+        "payment_profile_updated_at": identity.get("payment_profile_updated_at"),
+    }
+
+
+@app.get("/api/pay/handle-availability")
+async def payment_handle_availability(request: Request, handle: str = Query(..., min_length=1, max_length=25)):
+    await enforce_public_handle_rate_limit(request)
+    try:
+        clean_handle = db.validate_payment_handle(handle)
+    except ValueError as exc:
+        return {"ok": True, "valid": False, "available": False, "reason": str(exc)}
+    existing = await db.get_user_by_payment_handle(clean_handle)
+    return {"ok": True, "valid": True, "available": existing is None, "handle": clean_handle}
+
+
+@app.put("/api/profile/payment-handle")
+async def update_payment_identity(req: PaymentIdentityUpdateRequest, user: dict = Depends(get_current_user)):
+    if req.handle is None and req.profile_enabled is None:
+        raise HTTPException(400, "Indica un usuario o la visibilidad del perfil")
+    try:
+        identity = await db.update_user_payment_identity(
+            user["id"],
+            handle=req.handle,
+            enabled=req.profile_enabled,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    public_code = await db.ensure_user_public_code(user["id"])
+    identity["public_code"] = public_code
+    await audit_json(user["id"], "payment_identity.update", "user", user["id"], {
+        "handle_changed": req.handle is not None,
+        "profile_enabled": identity["payment_profile_enabled"],
+    })
+    return {"ok": True, "identity": payment_identity_payload(identity)}
+
+
+@app.get("/api/public/profiles/{handle}")
+async def public_payment_profile(handle: str, request: Request):
+    await enforce_public_handle_rate_limit(request)
+    try:
+        clean_handle = db.validate_payment_handle(handle)
+    except ValueError:
+        raise HTTPException(404, "Perfil no encontrado")
+    profile_data = await db.get_public_payment_profile(clean_handle)
+    if not profile_data:
+        raise HTTPException(404, "Perfil no encontrado")
+
+    user_id = profile_data["user_id"]
+    vip_info = (await db.get_user_vip_status(user_id)) or {}
+    kyc_info = (await db.get_user_kyc(user_id)) or {}
+    name = (profile_data.get("display_name") or profile_data.get("first_name") or "Usuario").strip()
+    base_url = str(request.base_url).rstrip("/")
+    return {
+        "ok": True,
+        "profile": {
+            "handle": profile_data["payment_handle"],
+            "public_code": profile_data.get("public_code"),
+            "name": name,
+            "photo_url": profile_data.get("photo_url") or "",
+            "is_verified": bool(kyc_info.get("is_verified", False)),
+            "is_gold": bool(vip_info.get("is_vip", False)),
+            "payment_url": f"{base_url}/pay/{profile_data['payment_handle']}",
+        },
+    }
+
+
 @app.get("/api/wallet/recipient")
 async def wallet_resolve_recipient(
     query: str = Query(..., min_length=2, max_length=120),
@@ -5746,6 +5840,10 @@ async def wallet_resolve_recipient(
         target_user = await db.get_user(int(clean_target))
     if not target_user and "@" in clean_target:
         target_user = await db.get_user_by_email(clean_target)
+    if not target_user and clean_target.upper().startswith("FS-"):
+        target_user = await db.get_user_by_public_code(clean_target)
+    if not target_user:
+        target_user = await db.get_user_by_payment_handle(clean_target)
     if not target_user:
         target_user = await db.get_user_by_username(clean_target)
     if not target_user:
@@ -5765,6 +5863,8 @@ async def wallet_resolve_recipient(
         "user_id": target_id,
         "display_name": display_name,
         "username": username or None,
+        "payment_handle": target_user.get("payment_handle") or None,
+        "public_code": target_user.get("public_code") or await db.ensure_user_public_code(target_id),
         "photo_url": target_user.get("photo_url") or "",
         "role": recipient_role,
         "is_vip": bool(recipient_vip.get("is_vip", False)),
@@ -5786,6 +5886,10 @@ async def wallet_transfer(req: WalletTransferRequest, user: dict = Depends(get_c
     target_user = None
     if clean_target.isdigit() or (clean_target.startswith("-") and clean_target[1:].isdigit()):
         target_user = await db.get_user(int(clean_target))
+    if not target_user and clean_target.upper().startswith("FS-"):
+        target_user = await db.get_user_by_public_code(clean_target)
+    if not target_user:
+        target_user = await db.get_user_by_payment_handle(clean_target)
     if not target_user:
         target_user = await db.get_user_by_username(clean_target)
     if not target_user:
@@ -13127,6 +13231,9 @@ async def profile(user: dict = Depends(get_current_user)):
     if not u:
         await db.upsert_user(user_id, user.get("username"), user.get("first_name"))
         u = await db.get_user(user_id)
+    public_code = await db.ensure_user_public_code(user_id)
+    if u is not None:
+        u["public_code"] = public_code
 
     # Stats de órdenes combinadas (catálogo + FZR + SMS + SMM)
     all_orders = await db.get_user_orders(user_id, limit=10000)
@@ -13208,6 +13315,9 @@ async def profile(user: dict = Depends(get_current_user)):
         "photo_url": u.get("photo_url") or "",
         "telegram_id": user_id,
         "auth_method": u.get("auth_method", "telegram"),
+        "public_code": public_code,
+        "payment_handle": u.get("payment_handle") or None,
+        "payment_profile_enabled": bool(u.get("payment_profile_enabled")),
 
         # Email/web
         "email": u.get("email"),

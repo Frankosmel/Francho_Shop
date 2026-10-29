@@ -16,6 +16,8 @@ Incluye:
 """
 import json
 import logging
+import re
+import secrets
 import time
 import uuid
 
@@ -25,6 +27,31 @@ import config
 
 log = logging.getLogger(__name__)
 DB = config.DB_PATH
+
+PUBLIC_CODE_PREFIX = "FS-323"
+PAYMENT_HANDLE_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{2,22}[a-z0-9]$")
+RESERVED_PAYMENT_HANDLES = {
+    "admin", "api", "b2b", "francho", "franchoshop", "help", "login", "pay",
+    "perfil", "profile", "registro", "soporte", "support", "wallet",
+}
+
+
+def _generate_public_code() -> str:
+    """Genera una referencia visible no secuencial para cuentas de usuario."""
+    return f"{PUBLIC_CODE_PREFIX}-{secrets.randbelow(1_000_000):06d}"
+
+
+def normalize_payment_handle(value: str) -> str:
+    return str(value or "").strip().lstrip("@").lower()
+
+
+def validate_payment_handle(value: str) -> str:
+    handle = normalize_payment_handle(value)
+    if not PAYMENT_HANDLE_RE.fullmatch(handle):
+        raise ValueError("El usuario debe tener entre 4 y 24 caracteres y usar solo letras, números, _ o -")
+    if handle in RESERVED_PAYMENT_HANDLES or handle.startswith("fs-"):
+        raise ValueError("Ese usuario está reservado")
+    return handle
 
 
 async def init_db():
@@ -678,6 +705,39 @@ async def init_db():
         await db.execute("CREATE INDEX IF NOT EXISTS idx_users_google ON users(google_id)")
         await db.commit()
 
+        # Identidad pública de Francho Shop. No reutilizar username: ese campo
+        # pertenece a Telegram y puede cambiar fuera de la plataforma.
+        public_identity_cols = [
+            ("public_code", "TEXT"),
+            ("payment_handle", "TEXT"),
+            ("payment_profile_enabled", "INTEGER NOT NULL DEFAULT 0"),
+            ("payment_handle_changed_at", "REAL"),
+            ("payment_profile_updated_at", "REAL"),
+        ]
+        async with db.execute("PRAGMA table_info(users)") as c:
+            user_cols = {r[1] for r in await c.fetchall()}
+        for col, defn in public_identity_cols:
+            if col not in user_cols:
+                await db.execute(f"ALTER TABLE users ADD COLUMN {col} {defn}")
+
+        await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_public_code ON users(public_code)")
+        await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_payment_handle_ci ON users(lower(payment_handle)) WHERE payment_handle IS NOT NULL")
+
+        # Asignar una referencia no secuencial a las cuentas existentes. El valor
+        # interno user_id sigue siendo la clave de relaciones y nunca se expone.
+        async with db.execute("SELECT user_id FROM users WHERE public_code IS NULL OR trim(public_code) = ''") as c:
+            missing_public_codes = [row[0] for row in await c.fetchall()]
+        for existing_user_id in missing_public_codes:
+            for _ in range(100):
+                public_code = _generate_public_code()
+                async with db.execute("SELECT 1 FROM users WHERE public_code = ?", (public_code,)) as c:
+                    if not await c.fetchone():
+                        await db.execute("UPDATE users SET public_code = ? WHERE user_id = ?", (public_code, existing_user_id))
+                        break
+            else:
+                raise RuntimeError("No se pudo generar un identificador público único")
+        await db.commit()
+
         async with db.execute("PRAGMA table_info(orders)") as c:
             order_cols = {r[1] for r in await c.fetchall()}
         for col, defn in [("seller_id", "INTEGER"), ("sales_channel", "TEXT DEFAULT 'direct'")]:
@@ -761,6 +821,7 @@ async def upsert_user(user_id: int, username: str = None, first_name: str = None
                 last_seen = excluded.last_seen
         """, (user_id, username, first_name, time.time()))
         await db.commit()
+    await ensure_user_public_code(user_id)
 
 
 async def get_user(user_id: int) -> dict | None:
@@ -773,6 +834,125 @@ async def get_user(user_id: int) -> dict | None:
         async with db.execute("SELECT * FROM users WHERE user_id=?", (user_id,)) as c:
             r = await c.fetchone()
             return dict(r) if r else None
+
+
+async def ensure_user_public_code(user_id: int) -> str | None:
+    """Obtiene o asigna el código público de una cuenta sin revelar su user_id."""
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("BEGIN IMMEDIATE")
+        async with db.execute("SELECT public_code FROM users WHERE user_id = ?", (user_id,)) as c:
+            row = await c.fetchone()
+        if not row:
+            await db.rollback()
+            return None
+        if row[0]:
+            await db.commit()
+            return row[0]
+        for _ in range(100):
+            public_code = _generate_public_code()
+            async with db.execute("SELECT 1 FROM users WHERE public_code = ?", (public_code,)) as c:
+                if await c.fetchone():
+                    continue
+            await db.execute("UPDATE users SET public_code = ? WHERE user_id = ?", (public_code, user_id))
+            await db.commit()
+            return public_code
+        await db.rollback()
+        raise RuntimeError("No se pudo generar un identificador público único")
+
+
+async def get_user_by_payment_handle(handle: str) -> dict | None:
+    clean_handle = normalize_payment_handle(handle)
+    if not clean_handle:
+        return None
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM users WHERE lower(payment_handle) = lower(?)", (clean_handle,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+
+async def get_user_by_public_code(public_code: str) -> dict | None:
+    clean_code = str(public_code or "").strip().upper()
+    if not clean_code:
+        return None
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("SELECT * FROM users WHERE upper(public_code) = ?", (clean_code,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
+
+
+async def update_user_payment_identity(user_id: int, handle: str | None = None, enabled: bool | None = None) -> dict:
+    """Actualiza el handle propio y la visibilidad del perfil de cobro.
+
+    El handle no tiene relación con el username de Telegram. Se limita el cambio
+    de un handle ya reclamado a uno cada 30 días para evitar suplantación y abuso.
+    """
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        await db.execute("BEGIN IMMEDIATE")
+        async with db.execute("SELECT payment_handle, payment_handle_changed_at, payment_profile_enabled FROM users WHERE user_id = ?", (user_id,)) as c:
+            current = await c.fetchone()
+        if not current:
+            await db.rollback()
+            raise ValueError("Usuario no encontrado")
+
+        current_handle = current["payment_handle"] or ""
+        new_handle = current_handle
+        values = []
+        fields = []
+
+        if handle is not None:
+            new_handle = validate_payment_handle(handle)
+            if new_handle != current_handle:
+                changed_at = float(current["payment_handle_changed_at"] or 0)
+                if current_handle and now - changed_at < 30 * 24 * 60 * 60:
+                    await db.rollback()
+                    raise ValueError("Puedes cambiar tu usuario nuevamente dentro de 30 días")
+                async with db.execute("SELECT user_id FROM users WHERE lower(payment_handle) = lower(?) AND user_id <> ?", (new_handle, user_id)) as c:
+                    if await c.fetchone():
+                        await db.rollback()
+                        raise ValueError("Ese usuario ya está en uso")
+                fields.extend(["payment_handle = ?", "payment_handle_changed_at = ?"])
+                values.extend([new_handle, now])
+
+        new_enabled = bool(current["payment_profile_enabled"])
+        if enabled is not None:
+            new_enabled = bool(enabled)
+            if new_enabled and not new_handle:
+                await db.rollback()
+                raise ValueError("Primero reclama un usuario para activar tu perfil público")
+            fields.extend(["payment_profile_enabled = ?", "payment_profile_updated_at = ?"])
+            values.extend([1 if new_enabled else 0, now])
+
+        if fields:
+            values.append(user_id)
+            await db.execute(f"UPDATE users SET {', '.join(fields)} WHERE user_id = ?", values)
+        await db.commit()
+        return {
+            "payment_handle": new_handle or None,
+            "payment_profile_enabled": new_enabled,
+            "payment_handle_changed_at": now if handle is not None and new_handle != current_handle else current["payment_handle_changed_at"],
+            "payment_profile_updated_at": now if enabled is not None else current["payment_profile_updated_at"] if "payment_profile_updated_at" in current.keys() else None,
+        }
+
+
+async def get_public_payment_profile(handle: str) -> dict | None:
+    clean_handle = normalize_payment_handle(handle)
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT user_id, public_code, payment_handle, display_name, first_name, photo_url,
+                   payment_profile_enabled, is_banned
+            FROM users
+            WHERE lower(payment_handle) = lower(?)
+              AND payment_profile_enabled = 1
+              AND is_banned = 0
+            LIMIT 1
+        """, (clean_handle,)) as c:
+            row = await c.fetchone()
+            return dict(row) if row else None
 
 
 async def update_user_photo(user_id: int, photo_url: str):
@@ -1734,7 +1914,8 @@ async def create_web_user(email: str, password_hash: str, name: str = None) -> i
             VALUES (?, ?, ?, ?, 'email', 'user')
         """, (new_id, email.lower(), password_hash, name or email.split("@")[0]))
         await db.commit()
-        return new_id
+    await ensure_user_public_code(new_id)
+    return new_id
 
 
 async def set_user_password(user_id: int, password_hash: str):

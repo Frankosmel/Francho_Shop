@@ -1,6 +1,7 @@
 // build:1781971166
 import { useState, useEffect, useRef, useMemo, Component } from 'react'
 import { QRCodeSVG } from 'qrcode.react'
+import QRCodeStyling from 'qr-code-styling'
 import {
   AlertTriangle, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ArrowUpRight, BadgeCheck, Ban, BookOpen, BriefcaseBusiness, Check, Compass,
   CircleCheck, CircleHelp, CircleX, ClipboardList, Clock, Copy, CreditCard, Crown, DollarSign, ExternalLink, Paperclip,
@@ -34,6 +35,41 @@ import { FranchoFMark } from './FranchoFMark'
 
 const iconClass = 'h-5 w-5 flex-shrink-0'
 const bigIconClass = 'h-12 w-12 flex-shrink-0'
+const FRANCHO_QR_MARK = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 432 432%22%3E%3Cpath fill=%22%230ba96b%22 d=%22M116 84 360 50 320 113 207 127 135 263 116 190 150 116Z%22/%3E%3Cpath fill=%22%230ba96b%22 d=%22m220 151 108-15-39 58-44 4-35 64-93 61Z%22/%3E%3C/svg%3E'
+
+function FranchoPaymentQr({ value }) {
+  const mountRef = useRef(null)
+  const qrRef = useRef(null)
+
+  useEffect(() => {
+    const qr = new QRCodeStyling({
+      width: 210,
+      height: 210,
+      type: 'svg',
+      data: value,
+      margin: 5,
+      qrOptions: { errorCorrectionLevel: 'H' },
+      dotsOptions: { color: '#0b1415', type: 'rounded' },
+      cornersSquareOptions: { color: '#0b1415', type: 'extra-rounded' },
+      cornersDotOptions: { color: '#0ba96b', type: 'dot' },
+      backgroundOptions: { color: '#ffffff' },
+      image: FRANCHO_QR_MARK,
+      imageOptions: { hideBackgroundDots: true, imageSize: 0.15, margin: 2, crossOrigin: 'anonymous' }
+    })
+    qrRef.current = qr
+    qr.append(mountRef.current)
+    return () => {
+      qrRef.current = null
+      if (mountRef.current) mountRef.current.replaceChildren()
+    }
+  }, [])
+
+  useEffect(() => {
+    qrRef.current?.update({ data: value })
+  }, [value])
+
+  return <div ref={mountRef} className="fs-public-pay-qr-svg" aria-label="Código QR de pago" />
+}
 
 function AccountStatusRing({ profile, children }) {
   const hasKyc = profile?.kyc_status === 'approved'
@@ -20753,32 +20789,58 @@ function PublicPaymentProfileScreen({ handle }) {
   }
 
   const profile = state.profile
+  const profileName = profile.name?.trim() || `@${profile.handle}`
+  const profileInitial = profileName[0]?.toUpperCase() || '?'
   return (
-    <main className="min-h-screen bg-bg px-4 py-8 text-white sm:py-12">
-      <section className="mx-auto w-full max-w-sm overflow-hidden rounded-2xl border border-white/10 bg-card shadow-2xl shadow-black/35">
-        <div className="h-1 bg-gradient-to-r from-emerald-400 via-accent to-cyan-400" />
-        <div className="p-5 text-center">
-          <div className="mx-auto flex h-16 w-16 items-center justify-center overflow-hidden rounded-full border-2 border-accent/60 bg-bg text-xl font-black text-accent shadow-lg shadow-accent/15">
-            {profile.photo_url ? <img src={storeAssetUrl(profile.photo_url)} alt="" className="h-full w-full object-cover" /> : (profile.name || '?')[0]?.toUpperCase()}
+    <main className="fs-public-pay-page min-h-screen px-4 py-6 text-white sm:py-10">
+      <section className="fs-public-pay-card mx-auto w-full max-w-sm overflow-hidden rounded-[22px]">
+        <div className="fs-public-pay-accent" aria-hidden="true" />
+        <header className="relative z-10 flex items-center justify-between px-5 pt-5">
+          <span className="inline-flex items-center gap-2 text-[11px] font-extrabold tracking-[0.14em] text-white/55 uppercase">
+            <FranchoFMark className="h-5 w-5 text-accent" title="Francho Shop" />
+            Francho Shop
+          </span>
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-300/15 bg-emerald-400/10 px-2.5 py-1 text-[9px] font-black tracking-[0.09em] text-emerald-200 uppercase">
+            <ShieldCheck className="h-3.5 w-3.5" /> Perfil de pago
+          </span>
+        </header>
+
+        <div className="relative z-10 px-5 pb-5 pt-7 text-center">
+          <div className="fs-public-pay-avatar mx-auto flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-full text-2xl font-black text-emerald-200">
+            {profile.photo_url
+              ? <img src={storeAssetUrl(profile.photo_url)} alt={`Foto de ${profileName}`} className="h-full w-full object-cover" />
+              : profileInitial}
           </div>
-          <div className="mt-3 flex items-center justify-center gap-1.5">
-            <h1 className="text-lg font-black">{profile.name}</h1>
+
+          <div className="mt-4 flex items-center justify-center gap-1.5">
+            <h1 className="max-w-[255px] truncate text-[21px] font-black leading-tight tracking-normal text-white">{profileName}</h1>
             <UserIdentityBadges profile={{ is_verified: profile.is_verified, is_vip: profile.is_gold }} />
           </div>
-          <p className="mt-1 text-sm font-bold text-accent">@{profile.handle}</p>
-          <p className="mt-1 text-[11px] text-white/40">{profile.public_code}</p>
+          <p className="mt-1 text-sm font-extrabold text-emerald-300">@{profile.handle}</p>
+          {profile.public_code && <p className="mt-1.5 font-data text-[10px] font-bold tracking-[0.16em] text-white/35">{profile.public_code}</p>}
 
-          <div className="mt-5 rounded-2xl border border-white/10 bg-white p-4 shadow-inner">
-            <QRCodeSVG value={paymentUrl} size={188} level="M" includeMargin className="mx-auto max-w-full" />
+          <div className="mt-6 flex justify-center">
+            <div className="fs-public-pay-qr relative rounded-[20px] p-[7px]">
+              <FranchoPaymentQr value={paymentUrl} />
+            </div>
           </div>
-          <p className="mt-3 text-xs leading-relaxed text-white/55">Escanea este código o usa el enlace para iniciar un pago a este perfil cuando Francho Pay esté habilitado.</p>
+          <p className="mx-auto mt-4 max-w-[270px] text-xs leading-relaxed text-white/50">
+            Escanea el código o comparte este enlace para recibir pagos cuando Francho Pay esté disponible.
+          </p>
 
-          <div className="mt-5 grid grid-cols-2 gap-2">
-            <button type="button" onClick={copyLink} className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-3 py-2.5 text-xs font-bold text-white active:scale-95"><Copy className="h-3.5 w-3.5" />{copied ? 'Copiado' : 'Copiar enlace'}</button>
-            <button type="button" onClick={shareLink} className="inline-flex items-center justify-center gap-1.5 rounded-xl bg-accent px-3 py-2.5 text-xs font-black text-bg active:scale-95"><Share2 className="h-3.5 w-3.5" />Compartir</button>
+          <div className="mt-6 grid grid-cols-2 gap-3">
+            <button type="button" onClick={copyLink} className="fs-public-pay-secondary inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-xs font-extrabold text-white transition active:translate-y-0.5">
+              <Copy className="h-4 w-4" />{copied ? 'Enlace copiado' : 'Copiar enlace'}
+            </button>
+            <button type="button" onClick={shareLink} className="fs-public-pay-primary inline-flex min-h-11 items-center justify-center gap-2 rounded-xl px-3 text-xs font-black transition active:translate-y-0.5">
+              <Share2 className="h-4 w-4" />Compartir
+            </button>
           </div>
         </div>
-        <div className="border-t border-white/5 px-5 py-3 text-center text-[10px] text-white/35">Francho Shop · Perfil de pagos verificado</div>
+        <footer className="relative z-10 flex items-center justify-center gap-2 border-t border-white/[0.06] bg-black/15 px-5 py-3.5 text-center text-[10px] font-semibold text-white/35">
+          <FranchoFMark className="h-3.5 w-3.5 text-emerald-300/50" title="Francho Shop" />
+          Enlace público de Francho Shop
+        </footer>
       </section>
     </main>
   )

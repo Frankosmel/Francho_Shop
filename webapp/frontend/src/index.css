@@ -21,8 +21,8 @@ html, body, #root {
 }
 
 html.light-theme, html.light-theme body, html.light-theme #root {
-  background-color: #F8FAFC !important;
-  color: #0f172a !important;
+  background-color: #FAF5FF !important;
+  color: #09090b !important;
 }
 
 body::before {
@@ -39,8 +39,12 @@ body::before {
 }
 
 html.light-theme body::before {
-  display: none !important;
-  opacity: 0 !important;
+  display: block !important;
+  opacity: 1 !important;
+  background-image:
+    radial-gradient(at 15% 15%, rgba(168, 85, 247, 0.12) 0px, transparent 50%),
+    radial-gradient(at 85% 12%, rgba(124, 58, 237, 0.09) 0px, transparent 45%),
+    radial-gradient(at 50% 90%, rgba(192, 132, 252, 0.08) 0px, transparent 55%) !important;
 }
 
 * { -webkit-tap-highlight-color: transparent; }
@@ -758,4 +762,262 @@ html { scroll-behavior: smooth; }
     0 0 0 1px #000000,
     0 0 4px 1px rgba(0, 0, 0, 0.95),
     0 2px 10px rgba(0, 0, 0, 0.75);
+}
+
+/* ==========================================================================
+   Modo Claro: Morado + Blanco Predominantes y Negro donde sea necesario
+   ========================================================================== */
+html.light-theme .bg-bg {
+  background-color: #FAF5FF !important;
+}
+
+html.light-theme .bg-bg\/95 {
+  background-color: rgba(250, 245, 255, 0.95) !important;
+}
+
+html.light-theme .bg-card {
+  background-color: #FFFFFF !important;
+  border-color: rgba(124, 58, 237, 0.14) !important;
+  box-shadow: 0 4px 20px -2px rgba(124, 58, 237, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+html.light-theme .card {
+  background-color: #FFFFFF !important;
+  border-color: rgba(124, 58, 237, 0.14) !important;
+  box-shadow: 0 4px 20px -2px rgba(124, 58, 237, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+html.light-theme .bg-cardHover:hover {
+  background-color: #F5F3FF !important;
+}
+
+/* Modales, Drawer Lateral y Paneles */
+html.light-theme aside,
+html.light-theme .bg-\[\#070a0f\],
+html.light-theme .bg-\[\#0b0f17\],
+html.light-theme .bg-\[\#0c101c\],
+html.light-theme .bg-\[\#0c101d\],
+html.light-theme .bg-\[\#0e1424\],
+html.light-theme .bg-\[\#11161a\],
+html.light-theme .bg-\[\#121829\],
+html.light-theme .bg-\[\#131a2e\],
+html.light-theme .bg-\[\#131c26\],
+html.light-theme .bg-\[\#182230\] {
+  background-color: #FFFFFF !important;
+  color: #09090b !important;
+}
+
+html.light-theme aside {
+  border-color: rgba(124, 58, 237, 0.16) !important;
+}
+
+/* Gradientes de tarjetas en Sidebar */
+html.light-theme .from-\[\#131a2e\] {
+  --tw-gradient-from: #FAF5FF !important;
+}
+html.light-theme .to-\[\#0c101c\] {
+  --tw-gradient-to: #F3E8FF !important;
+}
+
+/* Tipografía en Negro y Carbón para máxima nitidez y contraste */
+html.light-theme .text-white {
+  color: #09090b !important;
+}
+
+html.light-theme .text-white\/95,
+html.light-theme .text-white\/90 {
+  color: #18181b !important;
+}
+
+html.light-theme .text-white\/85,
+html.light-theme .text-white\/80,
+html.light-theme .text-white\/75,
+html.light-theme .text-white\/70 {
+  color: #27272a !important;
+}
+
+html.light-theme .text-white\/60,
+html.light-theme .text-white\/50 {
+  color: #52525b !important;
+}
+
+html.light-theme .text-white\/45,
+html.light-theme .text-white\/40,
+html.light-theme .text-white\/35,
+html.light-theme .text-white\/30,
+html.light-theme .text-white\/25,
+html.light-theme .text-white\/20 {
+  color: #71717a !important;
+}
+
+/* Bordes en Modo Claro con matiz morado */
+html.light-theme .border-white\/5,
+html.light-theme .border-white\/8,
+html.light-theme .border-white\/10,
+html.light-theme .border-white\/15,
+html.light-theme .border-white\/20,
+html.light-theme .border-white\/25,
+html.light-theme .border-white\/30 {
+  border-color: rgba(124, 58, 237, 0.16) !important;
+}
+
+/* Contenedores con transparencia */
+html.light-theme .bg-white\/5 {
+  background-color: rgba(124, 58, 237, 0.05) !important;
+}
+html.light-theme .bg-white\/10 {
+  background-color: rgba(124, 58, 237, 0.09) !important;
+}
+html.light-theme .bg-white\/15 {
+  background-color: rgba(124, 58, 237, 0.14) !important;
+}
+html.light-theme .hover\:bg-white\/5:hover {
+  background-color: rgba(124, 58, 237, 0.08) !important;
+}
+html.light-theme .hover\:bg-white\/10:hover {
+  background-color: rgba(124, 58, 237, 0.13) !important;
+}
+html.light-theme .bg-black\/15,
+html.light-theme .bg-black\/20,
+html.light-theme .bg-black\/30 {
+  background-color: rgba(243, 232, 255, 0.85) !important;
+}
+html.light-theme .bg-black\/50,
+html.light-theme .bg-black\/60 {
+  background-color: rgba(15, 23, 42, 0.45) !important;
+}
+
+/* Acentos en Morado Real */
+html.light-theme .text-accent {
+  color: #7C3AED !important;
+}
+
+html.light-theme .bg-accent {
+  background-color: #7C3AED !important;
+  color: #FFFFFF !important;
+}
+
+html.light-theme .bg-accent * {
+  color: #FFFFFF !important;
+}
+
+html.light-theme .bg-accent\/10 {
+  background-color: rgba(124, 58, 237, 0.08) !important;
+}
+
+html.light-theme .bg-accent\/15 {
+  background-color: rgba(124, 58, 237, 0.13) !important;
+}
+
+html.light-theme .bg-accent\/20 {
+  background-color: rgba(124, 58, 237, 0.18) !important;
+}
+
+html.light-theme .border-accent,
+html.light-theme .border-accent\/25,
+html.light-theme .border-accent\/30,
+html.light-theme .border-accent\/40 {
+  border-color: #7C3AED !important;
+}
+
+/* Botones principales con degradado morado vibrante */
+html.light-theme .btn-primary,
+html.light-theme .fs-btn-glossy {
+  background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 50%, #6D28D9 100%) !important;
+  color: #FFFFFF !important;
+  box-shadow: inset 0 2px 1px rgba(255, 255, 255, .38), 0 5px 0 #581C87, 0 12px 20px rgba(124, 58, 237, .28) !important;
+}
+
+html.light-theme .btn-primary:active,
+html.light-theme .fs-btn-glossy:active {
+  transform: translateY(4px);
+  box-shadow: inset 0 2px 1px rgba(255, 255, 255, .2), 0 1px 0 #581C87 !important;
+}
+
+/* Formularios, Inputs y Selects */
+html.light-theme input,
+html.light-theme select,
+html.light-theme textarea {
+  background-color: #FFFFFF !important;
+  color: #09090b !important;
+  border-color: rgba(124, 58, 237, 0.22) !important;
+}
+
+html.light-theme input:focus,
+html.light-theme select:focus,
+html.light-theme textarea:focus {
+  border-color: #7C3AED !important;
+  box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15) !important;
+  outline: none !important;
+}
+
+html.light-theme input::placeholder,
+html.light-theme textarea::placeholder {
+  color: #9ca3af !important;
+}
+
+/* Botón de saldo de cabecera */
+html.light-theme .fs-balance-depth {
+  background: #FFFFFF !important;
+  border-color: rgba(124, 58, 237, 0.3) !important;
+  box-shadow: 0 4px 14px rgba(124, 58, 237, 0.12), 0 1px 3px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Botones de navegación del panel en modo claro */
+html.light-theme .fs-admin-btn {
+  background: linear-gradient(180deg, #FFFFFF 0%, #FAF5FF 100%) !important;
+  border: 1px solid rgba(124, 58, 237, 0.18) !important;
+  border-left-width: 3.5px !important;
+  border-left-color: transparent !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    0 0 0 1px rgba(0, 0, 0, 0.14),
+    0 2px 6px 1px rgba(124, 58, 237, 0.08),
+    0 6px 18px 2px rgba(0, 0, 0, 0.04) !important;
+}
+
+html.light-theme .fs-admin-btn:hover {
+  background: linear-gradient(180deg, #FFFFFF 0%, #F3E8FF 100%) !important;
+  border-color: rgba(124, 58, 237, 0.38) !important;
+  border-left-color: rgba(124, 58, 237, 0.5) !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 1),
+    0 0 0 1px rgba(0, 0, 0, 0.20),
+    0 4px 12px 2px rgba(124, 58, 237, 0.14),
+    0 8px 22px 2px rgba(0, 0, 0, 0.06) !important;
+}
+
+html.light-theme .fs-admin-btn.is-active-accent {
+  background: linear-gradient(180deg, #F3E8FF 0%, #EDE9FE 100%) !important;
+  border-color: rgba(124, 58, 237, 0.55) !important;
+  border-left-color: #7C3AED !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 0 0 1px rgba(0, 0, 0, 0.22),
+    0 0 14px -1px rgba(124, 58, 237, 0.35),
+    0 4px 14px 2px rgba(124, 58, 237, 0.18) !important;
+}
+
+html.light-theme .fs-admin-btn.is-active-amber {
+  background: linear-gradient(180deg, #FEF3C7 0%, #FDE68A 100%) !important;
+  border-color: rgba(245, 158, 11, 0.55) !important;
+  border-left-color: #f59e0b !important;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 0 0 1px rgba(0, 0, 0, 0.22),
+    0 0 14px -1px rgba(245, 158, 11, 0.35),
+    0 4px 14px 2px rgba(245, 158, 11, 0.18) !important;
+}
+
+/* Tablas y listados en Modo Claro */
+html.light-theme table tr {
+  border-color: rgba(124, 58, 237, 0.12) !important;
+}
+html.light-theme table th {
+  background-color: #F5F3FF !important;
+  color: #09090b !important;
+  border-color: rgba(124, 58, 237, 0.18) !important;
+}
+html.light-theme table td {
+  color: #18181b !important;
 }

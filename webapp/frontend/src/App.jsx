@@ -11,7 +11,7 @@ import {
   ShieldCheck, ShoppingCart, Smile, Smartphone, Sparkles, Store, Trash2, Truck, User,
   WalletCards, Wrench, Zap, Eye, EyeOff, ChevronDown, ChevronRight, X, Bell, Star, Award, TrendingUp, Bot,
   Plus, Minus, LayoutDashboard, Boxes, ReceiptText, ArrowLeftRight,
-  Code2, Terminal, Megaphone, Moon, Tv, QrCode, Download
+  Code2, Terminal, Megaphone, Moon, Sun, Tv, QrCode, Download
 } from 'lucide-react'
 import AdminStreamingPanel from './AdminStreamingPanel'
 import { ResellerB2BDashboard, ResellerB2BCatalog, ResellerB2BOrders, ResellerB2BWallet, ResellerB2BAPI, ResellerB2BSettings, ResellerB2BSupport, OrderDetailModal } from './ResellerB2B'
@@ -654,6 +654,40 @@ function AppInner({ adminPortal = false }) {
   const [caseOrderId, setCaseOrderId] = useState(null)
   const [caseIsAdmin, setCaseIsAdmin] = useState(false)
   const [caseReviewOnOpen, setCaseReviewOnOpen] = useState(false)
+  const [theme, setTheme] = useState(() => {
+    try {
+      return localStorage.getItem('francho_theme') || 'dark'
+    } catch {
+      return 'dark'
+    }
+  })
+
+  useEffect(() => {
+    const isActAdmin = me?.role === 'admin' || me?.username === 'frankosmel' || me?.username === 'frankosme1'
+    try {
+      if (theme === 'light' && isActAdmin) {
+        document.documentElement.classList.add('light-theme')
+        document.documentElement.style.backgroundColor = '#FAF5FF'
+        document.body.style.backgroundColor = '#FAF5FF'
+        const meta = document.querySelector('meta[name="theme-color"]')
+        if (meta) meta.setAttribute('content', '#FAF5FF')
+        localStorage.setItem('francho_theme', 'light')
+      } else {
+        document.documentElement.classList.remove('light-theme')
+        document.documentElement.style.backgroundColor = '#070a0f'
+        document.body.style.backgroundColor = '#070a0f'
+        const meta = document.querySelector('meta[name="theme-color"]')
+        if (meta) meta.setAttribute('content', '#0f1419')
+        if (me && !isActAdmin) {
+          localStorage.removeItem('francho_theme')
+        } else if (isActAdmin) {
+          localStorage.setItem('francho_theme', 'dark')
+        }
+      }
+    } catch (err) {
+      console.error('Error toggling theme:', err)
+    }
+  }, [theme, me])
 
   useEffect(() => {
     const nativeAlert = window.alert
@@ -2057,6 +2091,11 @@ function AppInner({ adminPortal = false }) {
   const isGuest = !!me.is_guest
   const isActualAdmin = me?.role === 'admin' || me?.username === 'frankosmel' || me?.username === 'frankosme1'
 
+  const toggleTheme = () => {
+    if (!isActualAdmin) return
+    setTheme(prev => prev === 'light' ? 'dark' : 'light')
+  }
+
   const showCryptoFeatures = adminCryptoOverride === '1'
     ? true
     : adminCryptoOverride === '0'
@@ -2241,6 +2280,8 @@ function AppInner({ adminPortal = false }) {
           showCryptoFeatures={showCryptoFeatures}
           onToggleCryptoView={toggleCryptoView}
           isActualAdmin={isActualAdmin}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
       )}
 
@@ -2264,6 +2305,8 @@ function AppInner({ adminPortal = false }) {
           showCryptoFeatures={showCryptoFeatures}
           onToggleCryptoView={toggleCryptoView}
           isActualAdmin={isActualAdmin}
+          theme={theme}
+          onToggleTheme={toggleTheme}
         />
       )}
 
@@ -2295,6 +2338,9 @@ function AppInner({ adminPortal = false }) {
           <HomeScreen
             me={me}
             onUpdateMe={setMe}
+            isActualAdmin={isActualAdmin}
+            theme={theme}
+            onToggleTheme={toggleTheme}
             activeFilter={catalogFilter}
             onFilterChange={(newFilter) => {
               setCatalogFilter(newFilter)
@@ -2532,6 +2578,8 @@ function AppInner({ adminPortal = false }) {
           initialRole={panelReturnRole || 'admin'}
           initialTab={panelReturnTab || 'dashboard'}
           portalMode={isPrivatePortal}
+          theme={theme}
+          onToggleTheme={toggleTheme}
           onLogout={() => {
             api.clearSession()
             setMe(GUEST_USER)
@@ -2616,6 +2664,8 @@ function AppInner({ adminPortal = false }) {
             initialRole="seller"
             initialTab={panelReturnTab || "sales"}
             portalMode={isPrivatePortal}
+            theme={theme}
+            onToggleTheme={toggleTheme}
             onLogout={() => {
               api.clearSession()
               setMe(GUEST_USER)
@@ -8504,6 +8554,9 @@ function HomeScreen({
   onOpenStreamingProduct = null,
   activeWebStore = null,
   onOpenSidebar = null,
+  isActualAdmin = false,
+  theme = 'dark',
+  onToggleTheme = null,
 }) {
   const [games, setGames] = useState(() => _cachedHomeScreenGames || [])
   const [manualProducts, setManualProducts] = useState(() => _cachedHomeScreenManual || [])
@@ -8726,6 +8779,21 @@ function HomeScreen({
             )}
           </div>
           <div className="flex items-center gap-2">
+            {isActualAdmin && onToggleTheme && (
+              <button
+                type="button"
+                onClick={onToggleTheme}
+                title={theme === 'light' ? 'Cambiar a Modo Oscuro' : 'Cambiar a Modo Claro (Morado & Blanco)'}
+                className={`relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border transition active:scale-95 shadow-sm ${
+                  theme === 'light'
+                    ? 'bg-purple-600 border-purple-500 text-white shadow-purple-500/25'
+                    : 'bg-card border-purple-500/30 text-purple-400 hover:bg-purple-500/15'
+                }`}
+                aria-label="Alternar Modo Claro / Oscuro"
+              >
+                {theme === 'light' ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+              </button>
+            )}
             <AccountStatusRing profile={me}>
             <button
               type="button"
@@ -26625,7 +26693,7 @@ function AdminB2BCatalog() {
 }
 
 
-function PanelScreen({ me, setMe, onLogout, onHome, onOpenCase, onEditProduct, initialRole = null, initialTab = null, portalMode = false, onNav = null, onTopUp = null }) {
+function PanelScreen({ me, setMe, onLogout, onHome, onOpenCase, onEditProduct, initialRole = null, initialTab = null, portalMode = false, onNav = null, onTopUp = null, theme = 'dark', onToggleTheme = null }) {
   // Determinar roles disponibles
   const availableRoles = useMemo(() => {
     const roles = []
@@ -26999,7 +27067,22 @@ function PanelScreen({ me, setMe, onLogout, onHome, onOpenCase, onEditProduct, i
             <h1 className="text-sm font-black tracking-wide uppercase md:text-base">{tabs.find(t => t.id === activeTab)?.label || 'Panel'}</h1>
           </div>
           
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3 sm:gap-4">
+            {onToggleTheme && (
+              <button
+                type="button"
+                onClick={onToggleTheme}
+                title={theme === 'light' ? 'Cambiar a Modo Oscuro' : 'Cambiar a Modo Claro (Morado & Blanco)'}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[10px] font-black border transition active:scale-95 ${
+                  theme === 'light'
+                    ? 'bg-purple-600 text-white border-purple-500 shadow-sm'
+                    : 'bg-purple-500/15 border-purple-500/30 text-purple-300 hover:bg-purple-500/25'
+                }`}
+              >
+                {theme === 'light' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}
+                <span className="hidden xs:inline">{theme === 'light' ? 'Oscuro' : 'Modo Claro'}</span>
+              </button>
+            )}
             <div className="text-right">
               <span className="text-[10px] uppercase font-bold text-white/40 block leading-none mb-0.5">
                 {activeRole === 'seller' ? 'Saldo Vendedor' : 'Saldo USDT'}

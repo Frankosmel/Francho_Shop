@@ -3,7 +3,8 @@ import {
   Store, ArrowLeftRight, Zap, ShieldCheck, WalletCards, Package,
   Terminal, Headphones, User, X, Crown, ChevronRight, Plus,
   CreditCard, ExternalLink, Sparkles, Gamepad2, Smartphone, Globe2,
-  KeyRound, Gift, Phone, LogOut, CheckCircle2, MessageCircle, Send, Tv
+  KeyRound, Gift, Phone, LogOut, CheckCircle2, MessageCircle, Send, Tv,
+  Sun, Moon
 } from 'lucide-react'
 
 export function AppSidebar({
@@ -22,6 +23,8 @@ export function AppSidebar({
   showCryptoFeatures = true,
   onToggleCryptoView = null,
   isActualAdmin = false,
+  theme = 'dark',
+  onToggleTheme = null,
 }) {
   const [storeExpanded, setStoreExpanded] = useState(true)
 
@@ -251,6 +254,29 @@ export function AppSidebar({
             }`}
           >
             {showCryptoFeatures ? 'Ver Cliente' : 'Ver Cripto'}
+          </button>
+        </div>
+      )}
+
+      {/* Selector de Tema exclusivo para Administrador (Modo Claro Morado/Blanco/Negro) */}
+      {isActualAdmin && onToggleTheme && (
+        <div className="px-3 py-2 border-b border-white/10 bg-[#0c101d] flex items-center justify-between">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="text-xs">{theme === 'light' ? '☀️' : '🌙'}</span>
+            <span className="text-[10px] font-bold text-white/70 truncate">
+              {theme === 'light' ? 'Tema: Claro (Morado)' : 'Tema: Oscuro'}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onToggleTheme}
+            className={`px-2 py-1 rounded-lg text-[9px] font-black transition active:scale-95 uppercase tracking-wide border ${
+              theme === 'light'
+                ? 'bg-purple-600 text-white border-purple-500 hover:bg-purple-700 shadow-sm'
+                : 'bg-purple-500/20 text-purple-300 border-purple-500/40 hover:bg-purple-500/30'
+            }`}
+          >
+            {theme === 'light' ? 'Ver Oscuro' : 'Ver Claro'}
           </button>
         </div>
       )}

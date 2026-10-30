@@ -1681,29 +1681,36 @@ export default function ResellerWhiteLabelStore({
     obsidian: 'bg-[#080808] text-slate-100'
   }
 
-  const isWhiteTheme = bgStyle === 'clean_white' || bgStyle === 'white' || bgStyle === 'light'
-  const activeBgClass = bgStyles[bgStyle] || bgStyles.midnight
+  const isGlobalLight = typeof document !== 'undefined' && (document.documentElement.classList.contains('light-theme') || (typeof localStorage !== 'undefined' && localStorage.getItem('francho_theme') === 'light'))
+  const isWhiteTheme = isGlobalLight || bgStyle === 'clean_white' || bgStyle === 'white' || bgStyle === 'light'
+  const activeBgClass = isWhiteTheme ? 'bg-[#FAF5FF] text-slate-900' : (bgStyles[bgStyle] || bgStyles.midnight)
 
   // Sincronizar fondo del viewport del navegador (html, body y theme-color) para evitar pantallazos negros al scrollear
   useEffect(() => {
     if (typeof document === 'undefined') return
     if (isWhiteTheme) {
       document.documentElement.classList.add('light-theme')
-      document.documentElement.style.backgroundColor = '#F8FAFC'
-      document.body.style.backgroundColor = '#F8FAFC'
+      document.documentElement.style.backgroundColor = '#FAF5FF'
+      document.body.style.backgroundColor = '#FAF5FF'
       const meta = document.querySelector('meta[name="theme-color"]')
-      if (meta) meta.setAttribute('content', '#F8FAFC')
+      if (meta) meta.setAttribute('content', '#FAF5FF')
     } else {
-      document.documentElement.classList.remove('light-theme')
-      document.documentElement.style.backgroundColor = '#070a0f'
-      document.body.style.backgroundColor = '#070a0f'
-      const meta = document.querySelector('meta[name="theme-color"]')
-      if (meta) meta.setAttribute('content', '#070a0f')
+      const globalLight = typeof localStorage !== 'undefined' && localStorage.getItem('francho_theme') === 'light'
+      if (!globalLight) {
+        document.documentElement.classList.remove('light-theme')
+        document.documentElement.style.backgroundColor = '#070a0f'
+        document.body.style.backgroundColor = '#070a0f'
+        const meta = document.querySelector('meta[name="theme-color"]')
+        if (meta) meta.setAttribute('content', '#070a0f')
+      }
     }
     return () => {
-      document.documentElement.classList.remove('light-theme')
-      document.documentElement.style.backgroundColor = ''
-      document.body.style.backgroundColor = ''
+      const globalLight = typeof localStorage !== 'undefined' && localStorage.getItem('francho_theme') === 'light'
+      if (!globalLight) {
+        document.documentElement.classList.remove('light-theme')
+        document.documentElement.style.backgroundColor = ''
+        document.body.style.backgroundColor = ''
+      }
     }
   }, [isWhiteTheme])
 
@@ -1847,7 +1854,7 @@ export default function ResellerWhiteLabelStore({
         type="button"
         onClick={() => openSmsTab()}
         className="group relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#16181f]/90 text-left transition-all duration-300 active:scale-95 hover:-translate-y-0.5"
-        style={cardBg ? { backgroundColor: cardBg } : {}}
+        style={(!isWhiteTheme && cardBg) ? { backgroundColor: cardBg } : {}}
         onMouseEnter={(e) => {
           e.currentTarget.style.borderColor = `${primaryColor}cc`
           e.currentTarget.style.boxShadow = `0 4px 20px ${primaryColor}25`
@@ -1914,7 +1921,7 @@ export default function ResellerWhiteLabelStore({
             ? 'border-slate-200 bg-white shadow-sm hover:shadow-md'
             : 'border-white/10 bg-[#16181f]/90'
         }`}
-        style={cardBg ? { backgroundColor: cardBg } : {}}
+        style={(!isWhiteTheme && cardBg) ? { backgroundColor: cardBg } : {}}
         onMouseEnter={(e) => {
           e.currentTarget.style.borderColor = `${primaryColor}cc`
           e.currentTarget.style.boxShadow = `0 4px 20px ${primaryColor}25`

@@ -766,6 +766,7 @@ html { scroll-behavior: smooth; }
 
 /* ==========================================================================
    Modo Claro: Morado + Blanco Predominantes y Negro donde sea necesario
+   Diseño de Alto Contraste: Superficies Blancas + Botones Oscuros Elegantes
    ========================================================================== */
 html.light-theme .bg-bg {
   background-color: #FAF5FF !important;
@@ -775,72 +776,202 @@ html.light-theme .bg-bg\/95 {
   background-color: rgba(250, 245, 255, 0.95) !important;
 }
 
-html.light-theme .bg-card {
+/* Superficies principales, tarjetas y modales en Blanco Puro */
+html.light-theme .bg-card,
+html.light-theme .card,
+html.light-theme aside,
+html.light-theme aside > div,
+html.light-theme .fs-sidebar-surface,
+html.light-theme .bg-\[\#070a0f\],
+html.light-theme .bg-\[\#0b0f17\],
+html.light-theme .bg-\[\#0c101c\],
+html.light-theme .bg-\[\#0c101d\],
+html.light-theme .bg-\[\#0e1322\],
+html.light-theme .bg-\[\#0e1424\],
+html.light-theme .bg-\[\#11161a\],
+html.light-theme .bg-\[\#121829\],
+html.light-theme .bg-\[\#131a2e\],
+html.light-theme .bg-\[\#131c26\],
+html.light-theme .bg-\[\#182230\],
+html.light-theme .bg-\[\#0a0e19\],
+html.light-theme .bg-\[\#16181f\],
+html.light-theme .bg-\[\#16181f\]\/90,
+html.light-theme .bg-card\/90,
+html.light-theme .bg-card\/70,
+html.light-theme .bg-card\/40 {
   background-color: #FFFFFF !important;
+  color: #09090b !important;
   border-color: rgba(124, 58, 237, 0.14) !important;
-  box-shadow: 0 4px 20px -2px rgba(124, 58, 237, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04) !important;
 }
 
-html.light-theme .card {
+/* ==========================================================================
+   TARJETAS DEL CATÁLOGO EN MODO CLARO (Juegos, Streaming, Gift Cards, etc.)
+   Superficie blanca inmaculada con relieve, títulos oscuros y precio morado
+   ========================================================================== */
+html.light-theme .fs-catalog-card-3d {
   background-color: #FFFFFF !important;
-  border-color: rgba(124, 58, 237, 0.14) !important;
-  box-shadow: 0 4px 20px -2px rgba(124, 58, 237, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04) !important;
+  background-image: none !important;
+  border-color: rgba(124, 58, 237, 0.16) !important;
+  box-shadow:
+    0 4px 14px rgba(124, 58, 237, 0.05),
+    0 1px 3px rgba(0, 0, 0, 0.04) !important;
+}
+
+html.light-theme .fs-catalog-card-3d:hover {
+  background-color: #FFFFFF !important;
+  background-image: none !important;
+  border-color: #7C3AED !important;
+  box-shadow:
+    0 8px 24px rgba(124, 58, 237, 0.18),
+    0 2px 6px rgba(0, 0, 0, 0.06) !important;
+  transform: translateY(-2px) !important;
+}
+
+html.light-theme .fs-catalog-card-3d:active {
+  transform: translateY(0) scale(0.97) !important;
+  box-shadow: 0 2px 6px rgba(124, 58, 237, 0.1) !important;
+}
+
+/* Área de imagen de la tarjeta */
+html.light-theme .fs-catalog-card-3d .bg-\[\#101318\],
+html.light-theme .bg-\[\#101318\] {
+  background-color: #F8FAFC !important;
+}
+
+/* Degradado inferior sobre la portada */
+html.light-theme .fs-catalog-card-3d .from-\[\#16181f\],
+html.light-theme .from-\[\#16181f\] {
+  --tw-gradient-from: #FFFFFF !important;
+  --tw-gradient-to: transparent !important;
+  --tw-gradient-stops: #FFFFFF, transparent !important;
+}
+
+/* Textos de títulos en las tarjetas del catálogo */
+html.light-theme .fs-catalog-card-3d span.text-white,
+html.light-theme .fs-catalog-card-3d .text-white {
+  color: #0F172A !important;
+}
+html.light-theme .fs-catalog-card-3d:hover span.text-white,
+html.light-theme .fs-catalog-card-3d:hover .text-white {
+  color: #7C3AED !important;
+}
+
+/* Precios en tarjetas del catálogo: Morado vibrante de alta visibilidad en lugar de amarillo */
+html.light-theme .fs-catalog-card-3d .text-\[\#ffff00\],
+html.light-theme .fs-catalog-card-3d span.text-\[\#ffff00\],
+html.light-theme .fs-catalog-card-3d .group-hover\:text-\[\#ffff00\] {
+  color: #7C3AED !important;
+  font-weight: 800 !important;
+}
+
+/* Badges sobre la portada de las tarjetas (Top-Up, 30 días, etc.) */
+html.light-theme .fs-catalog-card-3d .bg-black\/90,
+html.light-theme .fs-catalog-card-3d .bg-black\/80 {
+  background-color: #0F172A !important;
+  border-color: rgba(124, 58, 237, 0.45) !important;
+  color: #FFFFFF !important;
+}
+html.light-theme .fs-catalog-card-3d .bg-black\/90 *,
+html.light-theme .fs-catalog-card-3d .bg-black\/80 * {
+  color: #FFFFFF !important;
+}
+
+/* Badges de stock/agotado */
+html.light-theme .fs-catalog-card-3d .bg-emerald-500\/90 {
+  background-color: #059669 !important;
+  color: #FFFFFF !important;
+}
+html.light-theme .fs-catalog-card-3d .bg-emerald-500\/90 * {
+  color: #FFFFFF !important;
+}
+
+/* Tarjeta de "Ver más" */
+html.light-theme .fs-catalog-card-3d .bg-white\/5 {
+  background-color: #FAF5FF !important;
+}
+html.light-theme .fs-catalog-card-3d .bg-\[\#ffff00\]\/10 {
+  background-color: rgba(124, 58, 237, 0.12) !important;
+  border-color: rgba(124, 58, 237, 0.3) !important;
+  color: #7C3AED !important;
+}
+html.light-theme .fs-catalog-card-3d .bg-\[\#ffff00\]\/10 * {
+  color: #7C3AED !important;
+}
+html.light-theme .fs-catalog-card-3d .text-white\/60,
+html.light-theme .fs-catalog-card-3d .text-white\/45 {
+  color: #64748B !important;
+}
+html.light-theme .fs-catalog-card-3d .text-white\/35 {
+  color: #94A3B8 !important;
+}
+
+/* Encabezados de sección del catálogo */
+html.light-theme section h3 .text-\[\#ffff00\],
+html.light-theme section h3 svg.text-\[\#ffff00\] {
+  color: #7C3AED !important;
+}
+html.light-theme section h3 span.bg-\[\#ffff00\]\/10,
+html.light-theme section h3 .border-\[\#ffff00\]\/25 {
+  background-color: rgba(124, 58, 237, 0.1) !important;
+  border-color: rgba(124, 58, 237, 0.25) !important;
+  color: #7C3AED !important;
+}
+html.light-theme section button.text-\[\#ffff00\] {
+  color: #7C3AED !important;
+}
+html.light-theme section button.text-\[\#ffff00\] * {
+  color: #7C3AED !important;
 }
 
 html.light-theme .bg-cardHover:hover {
   background-color: #F5F3FF !important;
 }
 
-/* Modales, Drawer Lateral y Paneles */
-html.light-theme aside,
-html.light-theme .bg-\[\#070a0f\],
-html.light-theme .bg-\[\#0b0f17\],
-html.light-theme .bg-\[\#0c101c\],
-html.light-theme .bg-\[\#0c101d\],
-html.light-theme .bg-\[\#0e1424\],
-html.light-theme .bg-\[\#11161a\],
-html.light-theme .bg-\[\#121829\],
-html.light-theme .bg-\[\#131a2e\],
-html.light-theme .bg-\[\#131c26\],
-html.light-theme .bg-\[\#182230\] {
+/* Encabezados y barras superiores */
+html.light-theme header {
   background-color: #FFFFFF !important;
+  border-color: rgba(124, 58, 237, 0.14) !important;
+}
+
+/* Tarjeta de Saldo en Sidebar */
+html.light-theme aside .from-\[\#131a2e\],
+html.light-theme aside .bg-gradient-to-b.from-\[\#131a2e\].to-\[\#0c101c\] {
+  background: linear-gradient(180deg, #FFFFFF 0%, #FAF5FF 100%) !important;
+  border-color: rgba(124, 58, 237, 0.15) !important;
+}
+
+/* Tarjeta de Descarga APK en Sidebar */
+html.light-theme aside a[href*="apk"] {
+  background: #FFFFFF !important;
+  border-color: rgba(16, 185, 129, 0.3) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05) !important;
+}
+html.light-theme aside a[href*="apk"] * {
   color: #09090b !important;
 }
-
-html.light-theme aside {
-  border-color: rgba(124, 58, 237, 0.16) !important;
+html.light-theme aside a[href*="apk"] span.bg-emerald-500 {
+  background-color: #10b981 !important;
+  color: #000000 !important;
 }
 
-/* Gradientes de tarjetas en Sidebar */
-html.light-theme .from-\[\#131a2e\] {
-  --tw-gradient-from: #FAF5FF !important;
-}
-html.light-theme .to-\[\#0c101c\] {
-  --tw-gradient-to: #F3E8FF !important;
-}
-
-/* Tipografía en Negro y Carbón para máxima nitidez y contraste */
+/* Tipografía de Alto Contraste: Negro Obsidiana para textos sobre blanco */
 html.light-theme .text-white {
   color: #09090b !important;
 }
-
 html.light-theme .text-white\/95,
 html.light-theme .text-white\/90 {
   color: #18181b !important;
 }
-
 html.light-theme .text-white\/85,
 html.light-theme .text-white\/80,
 html.light-theme .text-white\/75,
 html.light-theme .text-white\/70 {
   color: #27272a !important;
 }
-
 html.light-theme .text-white\/60,
 html.light-theme .text-white\/50 {
   color: #52525b !important;
 }
-
 html.light-theme .text-white\/45,
 html.light-theme .text-white\/40,
 html.light-theme .text-white\/35,
@@ -850,7 +981,7 @@ html.light-theme .text-white\/20 {
   color: #71717a !important;
 }
 
-/* Bordes en Modo Claro con matiz morado */
+/* Bordes en Modo Claro con sutil matiz morado */
 html.light-theme .border-white\/5,
 html.light-theme .border-white\/8,
 html.light-theme .border-white\/10,
@@ -861,63 +992,345 @@ html.light-theme .border-white\/30 {
   border-color: rgba(124, 58, 237, 0.16) !important;
 }
 
-/* Contenedores con transparencia */
-html.light-theme .bg-white\/5 {
-  background-color: rgba(124, 58, 237, 0.05) !important;
-}
-html.light-theme .bg-white\/10 {
-  background-color: rgba(124, 58, 237, 0.09) !important;
-}
-html.light-theme .bg-white\/15 {
-  background-color: rgba(124, 58, 237, 0.14) !important;
-}
-html.light-theme .hover\:bg-white\/5:hover {
-  background-color: rgba(124, 58, 237, 0.08) !important;
-}
-html.light-theme .hover\:bg-white\/10:hover {
-  background-color: rgba(124, 58, 237, 0.13) !important;
-}
+/* Filas, listas y tablas convertidas a Blanco y Lavanda */
 html.light-theme .bg-black\/15,
 html.light-theme .bg-black\/20,
+html.light-theme .bg-black\/25,
 html.light-theme .bg-black\/30 {
-  background-color: rgba(243, 232, 255, 0.85) !important;
+  background-color: #FAF5FF !important;
+  border-color: rgba(124, 58, 237, 0.12) !important;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03) !important;
+}
+html.light-theme .bg-black\/15 *,
+html.light-theme .bg-black\/20 *,
+html.light-theme .bg-black\/25 *,
+html.light-theme .bg-black\/30 * {
+  color: #09090b !important;
 }
 html.light-theme .bg-black\/50,
 html.light-theme .bg-black\/60 {
   background-color: rgba(15, 23, 42, 0.45) !important;
 }
 
-/* Acentos en Morado Real */
-html.light-theme .text-accent {
-  color: #7C3AED !important;
+/* Eliminar fondos oscuros de degradados de métricas (Ventas Hoy, 7d, 30d, Ranking) */
+html.light-theme .from-emerald-950\/20,
+html.light-theme .via-emerald-950\/20,
+html.light-theme .via-sky-950\/10,
+html.light-theme .via-purple-950\/10,
+html.light-theme .via-yellow-950\/15,
+html.light-theme .via-card,
+html.light-theme .to-card {
+  --tw-gradient-stops: #FFFFFF, #FFFFFF !important;
+}
+html.light-theme .from-emerald-500\/15,
+html.light-theme .from-sky-500\/10,
+html.light-theme .from-purple-500\/10,
+html.light-theme .from-yellow-500\/15 {
+  background: #FFFFFF !important;
 }
 
-html.light-theme .bg-accent {
-  background-color: #7C3AED !important;
+/* ==========================================================================
+   BOTONES OSCUROS EN MODO CLARO (Invertidos para Alto Contraste)
+   En vez de botones claros sobre fondo blanco, botones oscuros de lujo
+   con degradado y halo de sombra/profundidad exterior en negro
+   ========================================================================== */
+
+/* 1. Botones de navegación del Panel Admin/Vendedor (.fs-admin-btn) */
+html.light-theme .fs-admin-btn {
+  background: linear-gradient(180deg, #1e2233 0%, #121524 52%, #090b14 100%) !important;
+  border: 1px solid rgba(124, 58, 237, 0.28) !important;
+  border-left-width: 3.5px !important;
+  border-left-color: transparent !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.42),
+    0 3px 8px -1px rgba(0, 0, 0, 0.35),
+    0 6px 18px -2px rgba(0, 0, 0, 0.20),
+    0 12px 28px -4px rgba(0, 0, 0, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14) !important;
+}
+
+html.light-theme .fs-admin-btn:hover {
+  background: linear-gradient(180deg, #272d42 0%, #181d30 52%, #0e111d 100%) !important;
+  border-color: rgba(168, 85, 247, 0.45) !important;
+  box-shadow:
+    0 0 0 1px rgba(139, 92, 246, 0.4),
+    0 4px 12px -1px rgba(0, 0, 0, 0.40),
+    0 8px 24px -2px rgba(0, 0, 0, 0.26),
+    0 16px 36px -4px rgba(124, 58, 237, 0.16),
+    inset 0 1px 0 rgba(255, 255, 255, 0.20) !important;
+}
+
+html.light-theme .fs-admin-btn.is-active-accent {
+  background: linear-gradient(180deg, #33195e 0%, #200e3d 52%, #120726 100%) !important;
+  border-color: #8B5CF6 !important;
+  border-left-color: #A855F7 !important;
+  box-shadow:
+    0 0 0 1px rgba(168, 85, 247, 0.6),
+    0 0 20px -2px rgba(139, 92, 246, 0.45),
+    0 4px 14px rgba(0, 0, 0, 0.40),
+    0 10px 26px -3px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22) !important;
+}
+
+html.light-theme .fs-admin-btn.is-active-amber {
+  background: linear-gradient(180deg, #42260c 0%, #281604 52%, #160a01 100%) !important;
+  border-color: #f59e0b !important;
+  border-left-color: #fbbf24 !important;
+  box-shadow:
+    0 0 0 1px rgba(245, 158, 11, 0.5),
+    0 0 20px -2px rgba(245, 158, 11, 0.45),
+    0 4px 14px rgba(0, 0, 0, 0.40),
+    0 10px 26px -3px rgba(0, 0, 0, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22) !important;
+}
+
+/* 2. Botones de navegación del Menú Lateral (AppSidebar) */
+html.light-theme aside nav button,
+html.light-theme aside .space-y-1 > button {
+  position: relative !important;
+  background: linear-gradient(180deg, #1e2233 0%, #121524 52%, #090b14 100%) !important;
+  border: 1px solid rgba(124, 58, 237, 0.25) !important;
+  border-left-width: 3.5px !important;
+  border-left-color: transparent !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.38),
+    0 3px 8px -1px rgba(0, 0, 0, 0.30),
+    0 6px 18px -2px rgba(0, 0, 0, 0.18),
+    0 12px 28px -4px rgba(0, 0, 0, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+  margin-bottom: 6px !important;
+  border-radius: 14px !important;
+}
+
+html.light-theme aside nav button:hover,
+html.light-theme aside .space-y-1 > button:hover {
+  background: linear-gradient(180deg, #272d42 0%, #181d30 52%, #0e111d 100%) !important;
+  border-color: rgba(168, 85, 247, 0.45) !important;
+  border-left-color: rgba(168, 85, 247, 0.6) !important;
+  box-shadow:
+    0 0 0 1px rgba(139, 92, 246, 0.4),
+    0 4px 12px -1px rgba(0, 0, 0, 0.38),
+    0 8px 22px -2px rgba(0, 0, 0, 0.22),
+    0 16px 32px -4px rgba(124, 58, 237, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18) !important;
+}
+
+html.light-theme aside nav button.border-accent,
+html.light-theme aside .space-y-1 > button.border-accent {
+  background: linear-gradient(180deg, #33195e 0%, #200e3d 52%, #120726 100%) !important;
+  border-color: #8B5CF6 !important;
+  border-left-color: #A855F7 !important;
+  box-shadow:
+    0 0 0 1px rgba(168, 85, 247, 0.6),
+    0 0 18px -1px rgba(139, 92, 246, 0.45),
+    0 4px 14px rgba(0, 0, 0, 0.38),
+    0 10px 24px -3px rgba(0, 0, 0, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.20) !important;
+}
+
+/* 3. Botones de acción 'Depositar' y 'Billetera' dentro del widget de balance */
+html.light-theme aside [data-tour="sidebar-deposit"],
+html.light-theme aside .grid.grid-cols-2 button:first-child {
+  background: linear-gradient(180deg, #1e2233 0%, #101424 100%) !important;
+  border: 1px solid rgba(124, 58, 237, 0.4) !important;
+  color: #FFFFFF !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 3px 8px rgba(0, 0, 0, 0.20),
+    0 6px 16px rgba(0, 0, 0, 0.10) !important;
+}
+html.light-theme aside [data-tour="sidebar-deposit"] *,
+html.light-theme aside .grid.grid-cols-2 button:first-child * {
+  color: #C084FC !important;
+}
+
+html.light-theme aside .grid.grid-cols-2 button:last-child {
+  background: linear-gradient(180deg, #1e2233 0%, #101424 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  color: #FFFFFF !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 3px 8px rgba(0, 0, 0, 0.20),
+    0 6px 16px rgba(0, 0, 0, 0.10) !important;
+}
+html.light-theme aside .grid.grid-cols-2 button:last-child * {
   color: #FFFFFF !important;
 }
 
-html.light-theme .bg-accent * {
+/* 4. Botones selectores de Modo Cripto y Tema en sidebar */
+html.light-theme aside .border-b button {
+  background: linear-gradient(180deg, #1e2233 0%, #101424 100%) !important;
+  color: #FFFFFF !important;
+  border: 1px solid rgba(124, 58, 237, 0.35) !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.20) !important;
+}
+html.light-theme aside .border-b button * {
   color: #FFFFFF !important;
 }
 
-html.light-theme .bg-accent\/10 {
-  background-color: rgba(124, 58, 237, 0.08) !important;
+/* 5. Botones en Banners y Promociones */
+html.light-theme button.bg-black\/80,
+html.light-theme button.bg-black\/75 {
+  background: linear-gradient(180deg, #1e2233 0%, #0f172a 100%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.35) !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 4px 14px rgba(0, 0, 0, 0.35) !important;
+}
+html.light-theme button.bg-black\/80 *,
+html.light-theme button.bg-black\/75 * {
+  color: #FFFFFF !important;
 }
 
-html.light-theme .bg-accent\/15 {
-  background-color: rgba(124, 58, 237, 0.13) !important;
+/* 6. Botones de acción en Panel Admin ('Abrir tienda', 'Actualizar', 'Saldo y Retiros', etc.) */
+html.light-theme button.bg-blue-600,
+html.light-theme a.bg-blue-600,
+html.light-theme aside .border-t button.bg-accent,
+html.light-theme aside .border-t button {
+  background: linear-gradient(180deg, #1e2233 0%, #101424 100%) !important;
+  border: 1px solid rgba(124, 58, 237, 0.4) !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 4px 14px rgba(0, 0, 0, 0.25) !important;
+  color: #FFFFFF !important;
+}
+html.light-theme button.bg-blue-600 *,
+html.light-theme a.bg-blue-600 *,
+html.light-theme aside .border-t button.bg-accent *,
+html.light-theme aside .border-t button * {
+  color: #FFFFFF !important;
 }
 
-html.light-theme .bg-accent\/20 {
-  background-color: rgba(124, 58, 237, 0.18) !important;
+/* Botón Actualizar en Panel */
+html.light-theme button.border-white\/10.bg-card,
+html.light-theme button.border-white\/15.bg-card {
+  background: linear-gradient(180deg, #1e2233 0%, #101424 100%) !important;
+  border: 1px solid rgba(124, 58, 237, 0.3) !important;
+  color: #FFFFFF !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 3px 8px rgba(0, 0, 0, 0.18) !important;
+}
+html.light-theme button.border-white\/10.bg-card *,
+html.light-theme button.border-white\/15.bg-card * {
+  color: #FFFFFF !important;
+}
+html.light-theme button.border-white\/10.bg-card svg,
+html.light-theme button.border-white\/15.bg-card svg {
+  color: #A855F7 !important;
 }
 
-html.light-theme .border-accent,
-html.light-theme .border-accent\/25,
-html.light-theme .border-accent\/30,
-html.light-theme .border-accent\/40 {
-  border-color: #7C3AED !important;
+/* Botón Saldo y Retiros en Panel */
+html.light-theme button.border-emerald-500\/30.bg-emerald-500\/10 {
+  background: linear-gradient(180deg, #1e2233 0%, #101424 100%) !important;
+  border: 1px solid rgba(16, 185, 129, 0.45) !important;
+  color: #6EE7B7 !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 3px 8px rgba(0, 0, 0, 0.18) !important;
+}
+html.light-theme button.border-emerald-500\/30.bg-emerald-500\/10 * {
+  color: #6EE7B7 !important;
+}
+
+/* Botón Ver Desglose de Puntos */
+html.light-theme button.border-accent\/40.bg-accent\/15 {
+  background: linear-gradient(180deg, #1e2233 0%, #101424 100%) !important;
+  border: 1px solid rgba(124, 58, 237, 0.4) !important;
+  color: #FFFFFF !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 3px 8px rgba(0, 0, 0, 0.18) !important;
+}
+html.light-theme button.border-accent\/40.bg-accent\/15 * {
+  color: #C084FC !important;
+}
+
+/* Botón de Ranking del Mes en Home */
+html.light-theme button.border-yellow-500\/30,
+html.light-theme a.border-yellow-500\/30 {
+  background: linear-gradient(180deg, #1e2233 0%, #0f1424 100%) !important;
+  border: 1px solid rgba(245, 158, 11, 0.45) !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.35),
+    0 3px 8px rgba(0, 0, 0, 0.20) !important;
+  color: #FDE68A !important;
+}
+html.light-theme button.border-yellow-500\/30 *,
+html.light-theme a.border-yellow-500\/30 * {
+  color: #FDE68A !important;
+}
+
+/* ==========================================================================
+   ALTO CONTRASTE PARA BADGES, ESTADOS Y TEXTOS DE ALERTA EN MODO CLARO
+   Sustituir amarillos fluorescentes que se pierden en fondo blanco
+   por tonos ámbar y dorados profundos WCAG AAA
+   ========================================================================== */
+html.light-theme .text-yellow-300,
+html.light-theme .text-yellow-400,
+html.light-theme .text-yellow-500,
+html.light-theme .text-amber-300,
+html.light-theme .text-amber-400 {
+  color: #92400E !important;
+}
+
+html.light-theme .bg-yellow-500\/20,
+html.light-theme .bg-yellow-500\/15,
+html.light-theme .bg-amber-500\/20,
+html.light-theme .bg-amber-500\/15 {
+  background-color: #FEF3C7 !important;
+  border-color: rgba(245, 158, 11, 0.4) !important;
+  color: #92400E !important;
+}
+
+html.light-theme .text-red-300,
+html.light-theme .text-red-400 {
+  color: #991B1B !important;
+}
+
+html.light-theme .bg-red-500\/20,
+html.light-theme .bg-red-500\/15 {
+  background-color: #FEE2E2 !important;
+  border-color: rgba(239, 68, 68, 0.4) !important;
+  color: #991B1B !important;
+}
+
+html.light-theme .text-emerald-300 {
+  color: #065F46 !important;
+}
+
+html.light-theme .bg-emerald-500\/20,
+html.light-theme .bg-emerald-500\/15 {
+  background-color: #D1FAE5 !important;
+  border-color: rgba(16, 185, 129, 0.4) !important;
+  color: #065F46 !important;
+}
+
+/* Degradados en tarjetas de producto estrella y salud de tienda */
+html.light-theme .via-amber-950\/10,
+html.light-theme .via-red-950\/15,
+html.light-theme .via-emerald-950\/10 {
+  --tw-gradient-stops: #FFFFFF, #FFFFFF !important;
+}
+
+/* Garantizar que textos e iconos dentro de botones oscuros se mantengan BLANCOS */
+html.light-theme .fs-admin-btn *,
+html.light-theme aside nav button *,
+html.light-theme aside .space-y-1 > button * {
+  color: #FFFFFF !important;
+}
+
+html.light-theme .fs-admin-btn .text-white\/40,
+html.light-theme aside nav button .text-white\/40,
+html.light-theme aside .space-y-1 > button .text-white\/40 {
+  color: rgba(255, 255, 255, 0.68) !important;
+}
+
+/* Botones de acción rápida en panel y billetera */
+html.light-theme aside .space-y-1 button div.h-8.w-8,
+html.light-theme aside nav button div.h-8.w-8 {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: #FFFFFF !important;
 }
 
 /* Botones principales con degradado morado vibrante */
@@ -926,6 +1339,10 @@ html.light-theme .fs-btn-glossy {
   background: linear-gradient(135deg, #8B5CF6 0%, #7C3AED 50%, #6D28D9 100%) !important;
   color: #FFFFFF !important;
   box-shadow: inset 0 2px 1px rgba(255, 255, 255, .38), 0 5px 0 #581C87, 0 12px 20px rgba(124, 58, 237, .28) !important;
+}
+html.light-theme .btn-primary *,
+html.light-theme .fs-btn-glossy * {
+  color: #FFFFFF !important;
 }
 
 html.light-theme .btn-primary:active,
@@ -962,51 +1379,8 @@ html.light-theme .fs-balance-depth {
   border-color: rgba(124, 58, 237, 0.3) !important;
   box-shadow: 0 4px 14px rgba(124, 58, 237, 0.12), 0 1px 3px rgba(0, 0, 0, 0.06) !important;
 }
-
-/* Botones de navegación del panel en modo claro */
-html.light-theme .fs-admin-btn {
-  background: linear-gradient(180deg, #FFFFFF 0%, #FAF5FF 100%) !important;
-  border: 1px solid rgba(124, 58, 237, 0.18) !important;
-  border-left-width: 3.5px !important;
-  border-left-color: transparent !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 1),
-    0 0 0 1px rgba(0, 0, 0, 0.14),
-    0 2px 6px 1px rgba(124, 58, 237, 0.08),
-    0 6px 18px 2px rgba(0, 0, 0, 0.04) !important;
-}
-
-html.light-theme .fs-admin-btn:hover {
-  background: linear-gradient(180deg, #FFFFFF 0%, #F3E8FF 100%) !important;
-  border-color: rgba(124, 58, 237, 0.38) !important;
-  border-left-color: rgba(124, 58, 237, 0.5) !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 1),
-    0 0 0 1px rgba(0, 0, 0, 0.20),
-    0 4px 12px 2px rgba(124, 58, 237, 0.14),
-    0 8px 22px 2px rgba(0, 0, 0, 0.06) !important;
-}
-
-html.light-theme .fs-admin-btn.is-active-accent {
-  background: linear-gradient(180deg, #F3E8FF 0%, #EDE9FE 100%) !important;
-  border-color: rgba(124, 58, 237, 0.55) !important;
-  border-left-color: #7C3AED !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 0 0 1px rgba(0, 0, 0, 0.22),
-    0 0 14px -1px rgba(124, 58, 237, 0.35),
-    0 4px 14px 2px rgba(124, 58, 237, 0.18) !important;
-}
-
-html.light-theme .fs-admin-btn.is-active-amber {
-  background: linear-gradient(180deg, #FEF3C7 0%, #FDE68A 100%) !important;
-  border-color: rgba(245, 158, 11, 0.55) !important;
-  border-left-color: #f59e0b !important;
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.9),
-    0 0 0 1px rgba(0, 0, 0, 0.22),
-    0 0 14px -1px rgba(245, 158, 11, 0.35),
-    0 4px 14px 2px rgba(245, 158, 11, 0.18) !important;
+html.light-theme .fs-balance-depth * {
+  color: #09090b !important;
 }
 
 /* Tablas y listados en Modo Claro */

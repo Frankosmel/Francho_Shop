@@ -45,56 +45,42 @@ export function AppSidebar({
       id: 'home',
       label: 'Tienda Digital',
       icon: Store,
-      badge: 'Catálogo',
-      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
       sublabel: 'Juegos, Gift Cards, Telegram, SMS'
     },
     {
       id: 'streaming',
       label: 'Streaming & Cuentas',
       icon: Tv,
-      badge: 'AUTO',
-      badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
       sublabel: 'Netflix, Disney+, Spotify, HBO'
     },
     {
       id: 'vpn',
       label: 'VPN WireGuard',
       icon: ShieldCheck,
-      badge: 'BBR PRO',
-      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
       sublabel: 'Normal & Gaming Cuba'
     },
     {
       id: 'swap',
       label: 'Cripto Swap',
       icon: ArrowLeftRight,
-      badge: 'UnSwap DEX',
-      badgeColor: 'bg-pink-500/20 text-pink-300 border-pink-500/30',
       sublabel: 'Uniswap Multi-Chain & Bridge'
     },
     {
       id: 'energy',
       label: 'Energía TRON',
       icon: Zap,
-      badge: '0 Gas',
-      badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
       sublabel: 'Ahorra en USDT TRC20'
     },
     {
       id: 'p2p',
       label: 'Mercado P2P',
       icon: ShieldCheck,
-      badge: 'Escrow',
-      badgeColor: 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30',
       sublabel: 'FRC ⇄ CUP / MLC Cuba'
     },
     {
       id: 'wallet',
       label: 'Billetera FRC',
       icon: WalletCards,
-      badge: '1:1 USDT',
-      badgeColor: 'bg-accent/20 text-accent border-accent/30',
       sublabel: 'Depósitos, transferencias y balance'
     }
   ]
@@ -105,56 +91,42 @@ export function AppSidebar({
       id: 'orders',
       label: 'Mis Pedidos',
       icon: Package,
-      badge: 'Compras',
-      badgeColor: 'bg-white/10 text-white/80 border-white/15',
       sublabel: 'Historial y estado de compras'
     },
     {
       id: 'my-web-store',
       label: 'Mi Tienda Web & Mini App',
       icon: Globe2,
-      badge: 'TU TIENDA',
-      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
       sublabel: 'Negocio propio con Bot Telegram'
     },
     {
       id: 'api-docs',
       label: 'API Mayoristas B2B',
       icon: Terminal,
-      badge: 'B2B',
-      badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
       sublabel: 'Integración automática'
     },
     {
       id: 'support',
       label: 'Soporte 24/7',
       icon: Headphones,
-      badge: 'Online',
-      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
       sublabel: 'Chat de ayuda y reclamos'
     },
     {
       id: 'vip',
       label: 'Club VIP Francho',
       icon: Crown,
-      badge: me?.is_vip ? 'ACTIVO' : '0% FEE',
-      badgeColor: 'bg-amber-500/20 text-amber-300 border-amber-500/30',
       sublabel: 'Retiros sin comisión y beneficios'
     },
     {
       id: 'kyc',
       label: 'Verificación KYC',
       icon: ShieldCheck,
-      badge: me?.kyc_status === 'approved' ? 'VERIFICADO' : (me?.kyc_status === 'pending' ? 'EN REVISIÓN' : 'SEGURIDAD'),
-      badgeColor: me?.kyc_status === 'approved' ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' : (me?.kyc_status === 'pending' ? 'bg-blue-500/20 text-blue-300 border-blue-500/30' : 'bg-cyan-500/20 text-cyan-300 border-cyan-500/30'),
       sublabel: 'Validación de identidad y límites'
     },
     {
       id: 'profile',
       label: 'Mi Perfil',
       icon: User,
-      badge: 'Ajustes',
-      badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
       sublabel: 'Ajustes y referidos'
     }
   ]
@@ -165,56 +137,42 @@ export function AppSidebar({
       id: 'home',
       label: 'Tienda Digital',
       icon: Store,
-      badge: 'Catálogo',
-      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
       sublabel: 'Juegos, Gift Cards, Telegram, SMS'
     },
     {
       id: 'streaming',
       label: 'Streaming & Cuentas',
       icon: Tv,
-      badge: 'AUTO',
-      badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
       sublabel: 'Netflix, Disney+, Spotify, HBO'
     },
     {
       id: 'vpn',
       label: 'VPN WireGuard',
       icon: ShieldCheck,
-      badge: 'BBR PRO',
-      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
       sublabel: 'Normal & Gaming Cuba'
     },
     {
       id: 'my-web-store',
       label: 'Mi Tienda Web & Mini App',
       icon: Globe2,
-      badge: 'TU NEGOCIO',
-      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
       sublabel: 'Crea tu propia tienda online'
     },
     {
       id: 'orders',
       label: 'Mis Pedidos',
       icon: Package,
-      badge: 'Compras',
-      badgeColor: 'bg-white/10 text-white/80 border-white/15',
       sublabel: 'Historial y estado de compras'
     },
     {
       id: 'support',
       label: 'Soporte 24/7',
       icon: Headphones,
-      badge: 'Online',
-      badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
       sublabel: 'Chat de ayuda y reclamos'
     },
     {
       id: 'profile',
       label: 'Mi Perfil',
       icon: User,
-      badge: 'Ajustes',
-      badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/30',
       sublabel: 'Ajustes y referidos'
     }
   ]
@@ -223,8 +181,6 @@ export function AppSidebar({
       id: 'api-docs',
       label: 'API Mayoristas B2B',
       icon: Terminal,
-      badge: 'B2B',
-      badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30',
       sublabel: 'Endpoints y Webhooks'
     })
   }
@@ -433,7 +389,7 @@ export function AppSidebar({
                     key={item.id}
                     type="button"
                     onClick={() => handleNav(item.id)}
-                    className={`group flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left transition active:scale-[0.98] ${
+                    className={`group flex w-full items-center rounded-xl px-2.5 py-2 text-left transition active:scale-[0.98] ${
                       isSelected
                         ? 'bg-accent/15 border-l-[3px] border-accent text-white shadow-sm'
                         : 'border-l-[3px] border-transparent text-white/70 hover:bg-white/5 hover:border-white/20 hover:text-white'
@@ -454,12 +410,6 @@ export function AppSidebar({
                         </span>
                       </div>
                     </div>
-
-                    {item.badge && (
-                      <span className={`text-[9px] font-black px-1.5 py-0.2 rounded-md border shrink-0 ${item.badgeColor}`}>
-                        {item.badge}
-                      </span>
-                    )}
                   </button>
                 )
               })}
@@ -483,7 +433,7 @@ export function AppSidebar({
                       key={item.id}
                       type="button"
                       onClick={() => handleNav(item.id)}
-                      className={`group flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left transition active:scale-[0.98] ${
+                      className={`group flex w-full items-center rounded-xl px-2.5 py-2 text-left transition active:scale-[0.98] ${
                         isSelected
                           ? 'bg-accent/15 border-l-[3px] border-accent text-white shadow-sm'
                           : 'border-l-[3px] border-transparent text-white/70 hover:bg-white/5 hover:border-white/20 hover:text-white'
@@ -504,12 +454,6 @@ export function AppSidebar({
                           </span>
                         </div>
                       </div>
-
-                      {item.badge && (
-                        <span className={`text-[9px] font-black px-1.5 py-0.2 rounded-md border shrink-0 ${item.badgeColor}`}>
-                          {item.badge}
-                        </span>
-                      )}
                     </button>
                   )
                 })}
@@ -530,7 +474,7 @@ export function AppSidebar({
                       key={item.id}
                       type="button"
                       onClick={() => handleNav(item.id)}
-                      className={`group flex w-full items-center justify-between rounded-xl px-2.5 py-2 text-left transition active:scale-[0.98] ${
+                      className={`group flex w-full items-center rounded-xl px-2.5 py-2 text-left transition active:scale-[0.98] ${
                         isSelected
                           ? 'bg-accent/15 border-l-[3px] border-accent text-white shadow-sm'
                           : 'border-l-[3px] border-transparent text-white/70 hover:bg-white/5 hover:border-white/20 hover:text-white'
@@ -551,12 +495,6 @@ export function AppSidebar({
                           </span>
                         </div>
                       </div>
-
-                      {item.badge && (
-                        <span className={`text-[9px] font-black px-1.5 py-0.2 rounded-md border shrink-0 ${item.badgeColor}`}>
-                          {item.badge}
-                        </span>
-                      )}
                     </button>
                   )
                 })}

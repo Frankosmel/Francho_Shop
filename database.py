@@ -152,6 +152,7 @@ async def init_db():
                 recipient_user_id   INTEGER NOT NULL,
                 recipient_handle    TEXT NOT NULL,
                 payer_user_id       INTEGER,
+                payer_kind          TEXT NOT NULL DEFAULT 'external',
                 amount_usd          REAL NOT NULL,
                 requested_currency  TEXT NOT NULL,
                 requested_network   TEXT NOT NULL,
@@ -161,6 +162,11 @@ async def init_db():
                 provider_currency   TEXT,
                 provider_network    TEXT,
                 provider_payload    TEXT,
+                client_ip_hash      TEXT,
+                client_browser      TEXT,
+                client_platform     TEXT,
+                client_locale       TEXT,
+                client_timezone     TEXT,
                 status              TEXT NOT NULL DEFAULT 'pending',
                 expires_at          REAL,
                 paid_at             REAL,
@@ -170,6 +176,7 @@ async def init_db():
                 FOREIGN KEY (payer_user_id) REFERENCES users(user_id)
             );
             CREATE INDEX IF NOT EXISTS idx_public_payment_recipient ON public_payment_requests(recipient_user_id, created_at);
+            CREATE INDEX IF NOT EXISTS idx_public_payment_payer ON public_payment_requests(payer_user_id, created_at);
             CREATE INDEX IF NOT EXISTS idx_public_payment_status ON public_payment_requests(status, created_at);
 
             -- ═══════════════════════════════════════
@@ -752,6 +759,23 @@ async def init_db():
         await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_public_code ON users(public_code)")
         await db.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_payment_handle_ci ON users(lower(payment_handle)) WHERE payment_handle IS NOT NULL")
 
+        # Auditoría mínima de Francho Pay. No se guarda IP cruda ni ubicación GPS.
+        payment_audit_cols = [
+            ("payer_kind", "TEXT NOT NULL DEFAULT 'external'"),
+            ("client_ip_hash", "TEXT"),
+            ("client_browser", "TEXT"),
+            ("client_platform", "TEXT"),
+            ("client_locale", "TEXT"),
+            ("client_timezone", "TEXT"),
+        ]
+        async with db.execute("PRAGMA table_info(public_payment_requests)") as c:
+            payment_cols = {r[1] for r in await c.fetchall()}
+        for col, defn in payment_audit_cols:
+            if col not in payment_cols:
+                await db.execute(f"ALTER TABLE public_payment_requests ADD COLUMN {col} {defn}")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_public_payment_payer ON public_payment_requests(payer_user_id, created_at)")
+        await db.commit()
+
         # Asignar una referencia no secuencial a las cuentas existentes. El valor
         # interno user_id sigue siendo la clave de relaciones y nunca se expone.
         async with db.execute("SELECT user_id FROM users WHERE public_code IS NULL OR trim(public_code) = ''") as c:
@@ -1187,14 +1211,24 @@ async def add_balance(user_id: int, amount: float, tx_type: str, ref_id: str = "
 
 
 async def spend_balance(user_id: int, amount: float, ref_id: str = "", note: str = "") -> bool:
-    bal = await get_balance(user_id)
-    if bal < amount:
+    amount = round(float(amount), 2)
+    if amount <= 0:
         return False
     async with aiosqlite.connect(DB) as db:
-        await db.execute(
-            "UPDATE users SET balance = balance - ?, total_spent = total_spent + ? WHERE user_id=?",
-            (amount, amount, user_id),
+        # Reserva y descuenta dentro de la misma transaccion. Asi dos compras simultaneas
+        # no pueden usar el mismo saldo antes de que la otra termine.
+        await db.execute("BEGIN IMMEDIATE")
+        cursor = await db.execute(
+            """
+            UPDATE users
+            SET balance = balance - ?, total_spent = total_spent + ?
+            WHERE user_id = ? AND balance >= ?
+            """,
+            (amount, amount, user_id, amount),
         )
+        if cursor.rowcount != 1:
+            await db.rollback()
+            return False
         await db.execute(
             "INSERT INTO balance_log (user_id, amount, type, ref_id, note) VALUES (?,?,?,?,?)",
             (user_id, -amount, "purchase", ref_id, note),
@@ -1336,6 +1370,12 @@ async def create_public_payment_request(
     provider_payload: str = "",
     expires_at: float | None = None,
     payer_user_id: int | None = None,
+    payer_kind: str = "external",
+    client_ip_hash: str = "",
+    client_browser: str = "",
+    client_platform: str = "",
+    client_locale: str = "",
+    client_timezone: str = "",
 ) -> dict:
     now = time.time()
     async with aiosqlite.connect(DB) as db:
@@ -1343,23 +1383,76 @@ async def create_public_payment_request(
         await db.execute(
             """
             INSERT INTO public_payment_requests (
-                payment_id, recipient_user_id, recipient_handle, payer_user_id,
+                payment_id, recipient_user_id, recipient_handle, payer_user_id, payer_kind,
                 amount_usd, requested_currency, requested_network, provider_track_id,
                 payment_address, provider_amount, provider_currency, provider_network,
-                provider_payload, expires_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                provider_payload, client_ip_hash, client_browser, client_platform,
+                client_locale, client_timezone, expires_at, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                payment_id, recipient_user_id, recipient_handle, payer_user_id,
+                payment_id, recipient_user_id, recipient_handle, payer_user_id, payer_kind,
                 amount_usd, requested_currency, requested_network, provider_track_id,
                 payment_address, provider_amount, provider_currency, provider_network,
-                provider_payload, expires_at, now, now,
+                provider_payload, client_ip_hash, client_browser, client_platform,
+                client_locale, client_timezone, expires_at, now, now,
             ),
         )
         await db.commit()
         async with db.execute("SELECT * FROM public_payment_requests WHERE payment_id = ?", (payment_id,)) as c:
             row = await c.fetchone()
             return dict(row) if row else {}
+
+
+async def list_public_payments_for_user(user_id: int, direction: str = "all", limit: int = 50) -> list[dict]:
+    """Historial propio de Francho Pay; nunca revela datos del pagador externo."""
+    clean_direction = direction if direction in {"sent", "received", "all"} else "all"
+    safe_limit = max(1, min(int(limit), 100))
+    if clean_direction == "sent":
+        clause, params = "p.payer_user_id = ?", [user_id]
+    elif clean_direction == "received":
+        clause, params = "p.recipient_user_id = ?", [user_id]
+    else:
+        clause, params = "(p.payer_user_id = ? OR p.recipient_user_id = ?)", [user_id, user_id]
+    params.append(safe_limit)
+    query = f"""
+        SELECT p.payment_id, p.payer_user_id, p.payer_kind, p.recipient_user_id, p.recipient_handle,
+               p.amount_usd, p.provider_currency, p.provider_network, p.status,
+               p.expires_at, p.paid_at, p.created_at, p.updated_at
+        FROM public_payment_requests p
+        WHERE {clause}
+        ORDER BY p.created_at DESC
+        LIMIT ?
+    """
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(query, params) as c:
+            return [dict(row) for row in await c.fetchall()]
+
+
+async def list_public_payments_admin(status: str = "", limit: int = 100) -> list[dict]:
+    """Vista administrativa con señales de auditoría seudonimizadas."""
+    safe_limit = max(1, min(int(limit), 200))
+    params: list = []
+    where = ""
+    if status:
+        where = "WHERE p.status = ?"
+        params.append(status.lower())
+    params.append(safe_limit)
+    query = f"""
+        SELECT p.*, recipient.display_name AS recipient_name, recipient.email AS recipient_email,
+               payer.display_name AS payer_name, payer.email AS payer_email
+        FROM public_payment_requests p
+        LEFT JOIN users recipient ON recipient.user_id = p.recipient_user_id
+        LEFT JOIN users payer ON payer.user_id = p.payer_user_id
+        {where}
+        ORDER BY p.created_at DESC
+        LIMIT ?
+    """
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(query, params) as c:
+            return [dict(row) for row in await c.fetchall()]
 
 
 async def get_public_payment_by_track(provider_track_id: str) -> dict | None:
@@ -2146,6 +2239,16 @@ async def get_session(token: str) -> dict | None:
 async def delete_session(token: str):
     async with aiosqlite.connect(DB) as db:
         await db.execute("DELETE FROM web_sessions WHERE token=?", (token,))
+        await db.commit()
+
+
+async def delete_user_sessions(user_id: int, except_token: str | None = None):
+    """Cierra las sesiones de una cuenta despues de un cambio de credenciales."""
+    async with aiosqlite.connect(DB) as db:
+        if except_token:
+            await db.execute("DELETE FROM web_sessions WHERE user_id=? AND token<>?", (user_id, except_token))
+        else:
+            await db.execute("DELETE FROM web_sessions WHERE user_id=?", (user_id,))
         await db.commit()
 
 
@@ -5632,8 +5735,43 @@ async def refund_order_balance(merchant_order_id: str, user_id: int, amount: flo
 # ══════════════════════════════════════════════════════════════════════════════
 
 VIP_PLANS = {
-    "vip_standard": {"id": "vip_standard", "name": "VIP Francho", "price_usd": 4.99, "badge": "⭐ VIP", "fee_discount": 0.50, "priority_support": True},
-    "vip_pro": {"id": "vip_pro", "name": "VIP Pro", "price_usd": 9.99, "badge": "👑 VIP Pro", "fee_discount": 1.00, "priority_support": True},
+    "vip_standard": {
+        "id": "vip_standard",
+        "name": "Francho Gold",
+        "title": "Francho Gold",
+        "price": 4.99,
+        "price_usd": 4.99,
+        "duration_days": 30,
+        "badge": "⭐ GOLD",
+        "fee_discount": 1.00,
+        "priority_support": True,
+        "features": [
+            "0% comisión en todos tus retiros (USDT / FC)",
+            "Insignia GOLD exclusiva en tu perfil y P2P",
+            "Límite diario de retiros y operaciones ampliado a $2,500 FC",
+            "Prioridad máxima en órdenes de soporte y reclamos",
+            "Acceso anticipado a promociones y ofertas relámpago"
+        ]
+    },
+    "vip_pro": {
+        "id": "vip_pro",
+        "name": "Francho Gold Pro",
+        "title": "Francho Gold Pro",
+        "price": 9.99,
+        "price_usd": 9.99,
+        "duration_days": 30,
+        "badge": "👑 GOLD Pro",
+        "fee_discount": 1.00,
+        "priority_support": True,
+        "features": [
+            "0% comisión en todos tus retiros (USDT / FC)",
+            "Insignia 👑 GOLD Pro exclusiva con máxima reputación",
+            "Límite diario de retiros ampliado a $10,000 FC",
+            "Canal directo con el Administrador y Soporte VIP",
+            "Prioridad máxima en emparejamiento de órdenes P2P",
+            "Tarifas mayoristas preferenciales en servicios selectos"
+        ]
+    },
 }
 
 async def get_user_vip_status(user_id: int) -> dict:
@@ -5650,16 +5788,26 @@ async def get_user_vip_status(user_id: int) -> dict:
                 d = dict(row)
                 d["is_vip"] = True
                 d["days_remaining"] = max(0, int((d["expires_at"] - now) // 86400))
+                pid = d.get("plan_id")
+                if pid in VIP_PLANS:
+                    d["badge"] = VIP_PLANS[pid].get("badge", "⭐ GOLD")
+                    d["plan_name"] = VIP_PLANS[pid].get("title", "Francho Gold")
+                elif not d.get("badge"):
+                    d["badge"] = "⭐ GOLD"
+                    d["plan_name"] = "Francho Gold"
                 return d
             return {"is_vip": False, "plan_id": None, "badge": None, "expires_at": None, "days_remaining": 0}
 
 async def subscribe_user_vip(user_id: int, plan_id: str, months: int = 1) -> dict:
+    if plan_id == "vip_monthly":
+        plan_id = "vip_standard"
     if plan_id not in VIP_PLANS:
         raise ValueError("Plan VIP inválido")
     plan = VIP_PLANS[plan_id]
-    cost = round(plan["price_usd"] * max(1, months), 2)
+    cost = round(plan.get("price", plan.get("price_usd", 4.99)) * max(1, months), 2)
     now = time.time()
-    duration_seconds = max(1, months) * 30 * 86400
+    duration_days = plan.get("duration_days", 30) * max(1, months)
+    duration_seconds = duration_days * 86400
 
     async with aiosqlite.connect(DB) as db:
         db.row_factory = aiosqlite.Row
@@ -5669,7 +5817,7 @@ async def subscribe_user_vip(user_id: int, plan_id: str, months: int = 1) -> dic
                 raise ValueError("Saldo insuficiente en tu monedero Francho")
 
         cur_status = await get_user_vip_status(user_id)
-        if cur_status["is_vip"]:
+        if cur_status["is_vip"] and cur_status.get("expires_at", 0) > now:
             new_expires = cur_status["expires_at"] + duration_seconds
         else:
             new_expires = now + duration_seconds
@@ -5678,14 +5826,21 @@ async def subscribe_user_vip(user_id: int, plan_id: str, months: int = 1) -> dic
         await db.execute("""
             INSERT INTO balance_log (user_id, amount, type, ref_id, note)
             VALUES (?, ?, 'vip_subscription', ?, ?)
-        """, (user_id, -cost, plan_id, f"Suscripción {plan['name']} ({months} mes(es))"))
+        """, (user_id, -cost, plan_id, f"Suscripción {plan.get('title') or plan.get('name')} ({months} mes(es))"))
 
         cursor = await db.execute("""
-            INSERT INTO user_vip_subscriptions (user_id, plan_id, price_paid, starts_at, expires_at, status, created_at)
-            VALUES (?, ?, ?, ?, ?, 'active', ?)
-        """, (user_id, plan_id, cost, now, new_expires, now))
+            INSERT INTO user_vip_subscriptions (user_id, plan_id, plan_title, price_paid, duration_days, starts_at, expires_at, status, created_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?)
+        """, (user_id, plan_id, plan.get("title") or plan.get("name"), cost, duration_days, now, new_expires, now))
         await db.commit()
-        return {"ok": True, "subscription_id": cursor.lastrowid, "plan_id": plan_id, "expires_at": new_expires}
+        return {
+            "ok": True,
+            "subscription_id": cursor.lastrowid,
+            "plan_id": plan_id,
+            "plan_title": plan.get("title") or plan.get("name"),
+            "price_paid": cost,
+            "expires_at": new_expires
+        }
 
 async def get_user_kyc(user_id: int) -> dict | None:
     async with aiosqlite.connect(DB) as db:

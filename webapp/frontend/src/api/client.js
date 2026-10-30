@@ -668,6 +668,7 @@ export const api = {
   getPublicPaymentOptions: (handle) => request(`/public/profiles/${encodeURIComponent(handle)}/payment-options`),
   createPublicPayment: (handle, data) => request(`/public/profiles/${encodeURIComponent(handle)}/payments`, { method: 'POST', body: JSON.stringify(data) }),
   getPublicPaymentStatus: (paymentId) => request(`/public/payments/${encodeURIComponent(paymentId)}`),
+  getMyPublicPayments: (direction = 'all', limit = 30) => request(`/payments/public?direction=${encodeURIComponent(direction)}&limit=${encodeURIComponent(limit)}`),
   getWalletWithdrawals: (limit = 50) => request(`/wallet/withdrawals?limit=${limit}`),
   requestWalletWithdrawal: (data) => request('/wallet/withdraw', { method: 'POST', body: JSON.stringify(data) }),
   adminListWalletWithdrawals: (status = '') => request(`/admin/wallet-withdrawals${status ? `?status=${encodeURIComponent(status)}` : ''}`),

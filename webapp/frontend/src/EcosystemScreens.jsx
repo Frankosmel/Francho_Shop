@@ -1778,8 +1778,8 @@ function walletProfileText(value, fallback = '') {
   return fallback
 }
 
-export function WalletScreen({ me, onBack, onTopUp, onNav }) {
-  const [walletTab, setWalletTab] = useState('transfer') // 'transfer' | 'withdraw' | 'movements'
+export function WalletScreen({ me, onBack, onTopUp, onNav, initialTab = 'transfer', onOpenPaymentProfile }) {
+  const [walletTab, setWalletTab] = useState('transfer') // 'transfer' | 'withdraw' | 'movements' | 'payments'
   // Transfer state
   const [recipient, setRecipient] = useState('')
   const [recipientProfile, setRecipientProfile] = useState(null)
@@ -1790,6 +1790,9 @@ export function WalletScreen({ me, onBack, onTopUp, onNav }) {
   const [transferSuccess, setTransferSuccess] = useState(null)
   const [realMovements, setRealMovements] = useState([])
   const [loadingMovements, setLoadingMovements] = useState(false)
+  const [publicPayments, setPublicPayments] = useState([])
+  const [paymentDirection, setPaymentDirection] = useState('all')
+  const [loadingPublicPayments, setLoadingPublicPayments] = useState(false)
 
   // Withdrawal state
   const [withdrawAmount, setWithdrawAmount] = useState('')
@@ -1818,6 +1821,12 @@ export function WalletScreen({ me, onBack, onTopUp, onNav }) {
   }
 
   useEffect(() => {
+    if (['transfer', 'payments', 'movements', 'withdraw'].includes(initialTab)) {
+      setWalletTab(initialTab)
+    }
+  }, [initialTab])
+
+  useEffect(() => {
     if (!isGuest) {
       setLoadingMovements(true)
       api.getWalletMovements(30)
@@ -1834,8 +1843,16 @@ export function WalletScreen({ me, onBack, onTopUp, onNav }) {
         })
         .catch(() => {})
         .finally(() => setLoadingWithdrawals(false))
+
+      setLoadingPublicPayments(true)
+      api.getMyPublicPayments(paymentDirection, 30)
+        .then((res) => {
+          if (res?.items) setPublicPayments(res.items)
+        })
+        .catch(() => {})
+        .finally(() => setLoadingPublicPayments(false))
     }
-  }, [isGuest])
+  }, [isGuest, paymentDirection])
 
   const handleRecipientLookup = async () => {
     const query = recipient.trim()
@@ -1987,23 +2004,23 @@ export function WalletScreen({ me, onBack, onTopUp, onNav }) {
             <button
               type="button"
               onClick={() => setWalletTab('transfer')}
-              className="flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-white/5 py-2.5 text-xs font-bold text-white/85 transition hover:bg-white/10 active:scale-95"
+              className="fs-wallet-button-slate flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-black text-white transition active:translate-y-[2px]"
             >
-              <Send className="h-4 w-4 text-accent" strokeWidth={3.35} />
+              <Send className="h-4 w-4 text-white" strokeWidth={3.35} />
               <span>Enviar FC</span>
             </button>
           </div>
         </div>
 
         {/* Acciones secundarias. Enviar FC ya está disponible arriba junto al saldo. */}
-        <div className="grid grid-cols-2 gap-2 text-[11px] font-bold">
+        <div className="grid grid-cols-3 gap-2 text-[10px] font-bold sm:text-[11px]">
           <button
             type="button"
             onClick={() => setWalletTab('withdraw')}
             className={`flex min-h-11 items-center justify-center gap-1 rounded-xl border px-1 py-2 transition active:translate-y-[2px] ${walletTabClass(walletTab === 'withdraw', 'amber')}`}
           >
             <Banknote className="h-3.5 w-3.5" strokeWidth={3.35} />
-            <span>Retirar USDT</span>
+            <span>Retirar</span>
           </button>
           <button
             type="button"
@@ -2012,6 +2029,14 @@ export function WalletScreen({ me, onBack, onTopUp, onNav }) {
           >
             <Clock className="h-3.5 w-3.5" strokeWidth={3.35} />
             <span>Historial</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setWalletTab('payments')}
+            className={`flex min-h-11 items-center justify-center gap-1 rounded-xl border px-1 py-2 transition active:translate-y-[2px] ${walletTabClass(walletTab === 'payments', 'accent')}`}
+          >
+            <CreditCard className="h-3.5 w-3.5" strokeWidth={3.35} />
+            <span>Pagos</span>
           </button>
         </div>
 
@@ -2321,18 +2346,120 @@ export function WalletScreen({ me, onBack, onTopUp, onNav }) {
             </div>
           )}
         </div>}
+
+        {/* 4. VISTA: FRANCHO PAY */}
+        {walletTab === 'payments' && <div className={`${walletPanelClass} space-y-3`}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h3 className="flex items-center gap-2 text-sm font-black text-white"><CreditCard className="h-4 w-4 text-accent" strokeWidth={3.35} /> Francho Pay</h3>
+              <p className="mt-0.5 text-[10px] text-white/45">Cobros y pagos realizados desde tu cuenta</p>
+            </div>
+            <span className="rounded-full border border-accent/20 bg-accent/10 px-2 py-1 text-[9px] font-black text-accent">Saldo FC</span>
+          </div>
+
+          <button
+            type="button"
+            onClick={onOpenPaymentProfile}
+            className="fs-wallet-button-primary flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-xs font-black transition active:translate-y-[2px]"
+          >
+            <QrCode className="h-4 w-4" strokeWidth={3.35} />
+            {me?.payment_handle && me?.payment_profile_enabled ? 'Ver mi QR y enlace de cobro' : 'Configurar mi perfil de cobro'}
+          </button>
+
+          <div className="grid grid-cols-3 gap-1.5 rounded-xl border border-white/5 bg-black/15 p-1">
+            {[
+              ['all', 'Todos'],
+              ['received', 'Recibidos'],
+              ['sent', 'Enviados'],
+            ].map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setPaymentDirection(value)}
+                className={`rounded-lg px-1 py-2 text-[10px] font-black transition ${paymentDirection === value ? 'bg-accent text-[#07110f] shadow-sm' : 'text-white/50 hover:bg-white/5 hover:text-white'}`}
+              >{label}</button>
+            ))}
+          </div>
+
+          {isGuest ? (
+            <div className="rounded-xl border border-white/5 bg-white/[.04] p-4 text-center text-xs text-white/50">Inicia sesión para ver tus pagos y cobros de Francho Pay.</div>
+          ) : loadingPublicPayments ? (
+            <div className="p-4 text-center text-xs text-white/40">Cargando pagos…</div>
+          ) : publicPayments.length ? (
+            <div className="space-y-2">
+              {publicPayments.map((payment) => {
+                const received = payment.direction === 'received'
+                const status = String(payment.status || 'pending').toLowerCase()
+                const statusLabel = ({ paid: 'Acreditado', pending: 'Esperando pago', paying: 'Confirmando', expired: 'Vencido', failed: 'Fallido', cancelled: 'Cancelado', canceled: 'Cancelado' })[status] || 'Pendiente'
+                const statusClass = status === 'paid' ? 'text-emerald-300 border-emerald-400/20 bg-emerald-400/10' : status === 'pending' || status === 'paying' ? 'text-amber-200 border-amber-300/20 bg-amber-300/10' : 'text-red-200 border-red-400/20 bg-red-400/10'
+                const date = payment.created_at ? new Date(payment.created_at * 1000).toLocaleString('es-ES', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'Reciente'
+                return (
+                  <div key={payment.payment_id} className="rounded-xl border border-white/5 bg-white/[.04] p-3 text-xs">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="truncate font-black text-white">{received ? 'Cobro recibido' : `Pago a @${payment.counterparty_handle || 'usuario'}`}</p>
+                        <p className="mt-0.5 font-mono text-[9px] text-white/40">{payment.payment_id}</p>
+                      </div>
+                      <span className={`shrink-0 font-black ${received ? 'text-emerald-300' : 'text-white'}`}>{received ? '+' : '-'}${Number(payment.amount || 0).toFixed(2)} FC</span>
+                    </div>
+                    <div className="mt-2 flex flex-wrap items-center justify-between gap-1.5 text-[10px] text-white/45">
+                      <span>{date}{payment.network ? ` · ${payment.network}` : ''}</span>
+                      <span className={`rounded-full border px-1.5 py-0.5 font-bold ${statusClass}`}>{statusLabel}</span>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="rounded-xl border border-white/5 bg-white/[.04] p-4 text-center text-xs text-white/50">Aún no hay pagos de Francho Pay en esta vista.</div>
+          )}
+        </div>}
       </div>
     </div>
   )
 }
 
 // ==========================================
-// 5. MEMBRESÍA & CLUB VIP (0% Retiros & Perks)
+// 5. FRANCHO GOLD
 // ==========================================
+const DEFAULT_GOLD_PLANS = [
+  {
+    id: 'vip_standard',
+    title: 'Francho Gold',
+    name: 'Francho Gold',
+    price: 4.99,
+    duration_days: 30,
+    badge: '⭐ GOLD',
+    features: [
+      '0% comisión en todos tus retiros (USDT / FC)',
+      'Insignia GOLD exclusiva en tu perfil y P2P',
+      'Límite diario de retiros y operaciones ampliado a $2,500 FC',
+      'Prioridad máxima en órdenes de soporte y reclamos',
+      'Acceso anticipado a promociones y ofertas relámpago'
+    ]
+  },
+  {
+    id: 'vip_pro',
+    title: 'Francho Gold Pro',
+    name: 'Francho Gold Pro',
+    price: 9.99,
+    duration_days: 30,
+    badge: '👑 GOLD Pro',
+    features: [
+      '0% comisión en todos tus retiros (USDT / FC)',
+      'Insignia 👑 GOLD Pro exclusiva con máxima reputación',
+      'Límite diario de retiros ampliado a $10,000 FC',
+      'Canal directo con el Administrador y Soporte VIP',
+      'Prioridad máxima en emparejamiento de órdenes P2P',
+      'Tarifas mayoristas preferenciales en servicios selectos'
+    ]
+  }
+]
+
 export function VipScreen({ me, onBack, onTopUp, onLoginRequired, onNav }) {
-  const [plans, setPlans] = useState([])
+  const [plans, setPlans] = useState(DEFAULT_GOLD_PLANS)
   const [loading, setLoading] = useState(true)
-  const [selectedPlanId, setSelectedPlanId] = useState('vip_monthly')
+  const [selectedPlanId, setSelectedPlanId] = useState('vip_standard')
   const [isSubscribing, setIsSubscribing] = useState(false)
   const [successMsg, setSuccessMsg] = useState(null)
   const [errorMsg, setErrorMsg] = useState(null)
@@ -2340,40 +2467,112 @@ export function VipScreen({ me, onBack, onTopUp, onLoginRequired, onNav }) {
   const isGuest = !me || me.is_guest
   const balance = Number(me?.balance || 0)
   const isVip = !!me?.is_vip
+  const goldText = (value = '') => String(value || '')
+    .replace(/VIP Club Francho|Club VIP Francho/gi, 'Francho Gold')
+    .replace(/VIP GOLD/gi, 'GOLD')
+    .replace(/\bVIP\b/gi, 'GOLD')
+    .replace(/\bFRC\b/g, 'FC')
+    .replace(/Badge/gi, 'Insignia')
+
+  const formatVipPlanName = (planId = '', badge = '') => {
+    const raw = String(planId || '').toLowerCase()
+    if (raw.includes('pro')) return 'FRANCHO GOLD PRO'
+    if (raw.includes('standard') || raw.includes('monthly') || raw.includes('vip') || raw.includes('gold')) {
+      return 'FRANCHO GOLD'
+    }
+    const cleanBadge = goldText(badge || '').trim()
+    if (cleanBadge) return cleanBadge.toUpperCase()
+    return 'FRANCHO GOLD'
+  }
+
+  const formatVipBadge = (badge = '', planId = '') => {
+    const clean = goldText(badge || '').trim()
+    if (clean && !clean.toLowerCase().includes('badge')) return clean
+    const raw = String(planId || '').toLowerCase()
+    if (raw.includes('pro')) return '👑 GOLD Pro'
+    return '⭐ GOLD'
+  }
 
   useEffect(() => {
     api.getVipPlans()
       .then((res) => {
         if (res?.plans && res.plans.length > 0) {
-          setPlans(res.plans)
-          setSelectedPlanId(res.plans[0].id)
+          const normalized = res.plans.map(p => {
+            const isPro = String(p.id || '').toLowerCase().includes('pro')
+            const priceVal = Number(p.price ?? p.price_usd ?? (isPro ? 9.99 : 4.99))
+            return {
+              ...p,
+              id: p.id,
+              title: p.title || p.name || (isPro ? 'Francho Gold Pro' : 'Francho Gold'),
+              price: Number.isFinite(priceVal) ? priceVal : (isPro ? 9.99 : 4.99),
+              duration_days: Number(p.duration_days) || 30,
+              badge: p.badge || (isPro ? '👑 GOLD Pro' : '⭐ GOLD'),
+              features: (Array.isArray(p.features) && p.features.length > 0)
+                ? p.features
+                : (isPro
+                    ? [
+                        '0% comisión en todos tus retiros (USDT / FC)',
+                        'Insignia 👑 GOLD Pro exclusiva con máxima reputación',
+                        'Límite diario de retiros ampliado a $10,000 FC',
+                        'Canal directo con el Administrador y Soporte VIP',
+                        'Prioridad máxima en emparejamiento de órdenes P2P',
+                        'Tarifas mayoristas preferenciales en servicios selectos'
+                      ]
+                    : [
+                        '0% comisión en todos tus retiros (USDT / FC)',
+                        'Insignia GOLD exclusiva en tu perfil y P2P',
+                        'Límite diario de retiros y operaciones ampliado a $2,500 FC',
+                        'Prioridad máxima en órdenes de soporte y reclamos',
+                        'Acceso anticipado a promociones y ofertas relámpago'
+                      ])
+            }
+          })
+          setPlans(normalized)
+          setSelectedPlanId(prev => (normalized.some(x => x.id === prev) ? prev : normalized[0].id))
         }
       })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
 
-  const selectedPlan = plans.find(p => p.id === selectedPlanId) || plans[0] || {
-    id: 'vip_monthly',
-    title: 'VIP Club Francho (Mensual)',
-    price: 4.99,
-    duration_days: 30,
-    badge: 'VIP GOLD',
-    features: [
-      '0% comisión en todos tus retiros (USDT / FRC)',
-      'Badge VIP Oro exclusivo en tu perfil y P2P',
-      'Límite diario de retiros y operaciones ampliado a $2,500 FRC',
-      'Prioridad máxima en órdenes de soporte y reclamos',
-      'Acceso anticipado a promociones y ofertas relámpago'
-    ]
-  }
+  const selectedPlan = useMemo(() => {
+    const list = plans && plans.length > 0 ? plans : DEFAULT_GOLD_PLANS
+    const found = list.find(p => p.id === selectedPlanId) || list[0]
+    const isPro = String(found?.id || '').toLowerCase().includes('pro')
+    const priceVal = Number(found?.price ?? found?.price_usd ?? (isPro ? 9.99 : 4.99))
+    return {
+      ...found,
+      id: found?.id || 'vip_standard',
+      title: found?.title || found?.name || (isPro ? 'Francho Gold Pro' : 'Francho Gold'),
+      price: Number.isFinite(priceVal) ? priceVal : (isPro ? 9.99 : 4.99),
+      duration_days: Number(found?.duration_days) || 30,
+      badge: found?.badge || (isPro ? '👑 GOLD Pro' : '⭐ GOLD'),
+      features: (Array.isArray(found?.features) && found.features.length > 0)
+        ? found.features
+        : (isPro
+            ? [
+                '0% comisión en todos tus retiros (USDT / FC)',
+                'Insignia 👑 GOLD Pro exclusiva con máxima reputación',
+                'Límite diario de retiros ampliado a $10,000 FC',
+                'Canal directo con el Administrador y Soporte VIP',
+                'Prioridad máxima en emparejamiento de órdenes P2P'
+              ]
+            : [
+                '0% comisión en todos tus retiros (USDT / FC)',
+                'Insignia GOLD exclusiva en tu perfil y P2P',
+                'Límite diario de retiros ampliado a $2,500 FC',
+                'Prioridad máxima en órdenes de soporte y reclamos'
+              ])
+    }
+  }, [plans, selectedPlanId])
 
   const handleSubscribe = async () => {
     if (isGuest) {
       if (onLoginRequired) onLoginRequired()
       return
     }
-    if (balance < selectedPlan.price) {
+    const cost = Number(selectedPlan.price || 4.99)
+    if (balance < cost) {
       if (onTopUp) onTopUp()
       return
     }
@@ -2384,7 +2583,9 @@ export function VipScreen({ me, onBack, onTopUp, onLoginRequired, onNav }) {
     try {
       const res = await api.subscribeVip(selectedPlan.id)
       setIsSubscribing(false)
-      setSuccessMsg(`¡Felicidades! Tu membresía ${res.plan_title} ha sido activada con éxito hasta el ${new Date(res.expires_at * 1000).toLocaleDateString()}.`)
+      const planName = res.plan_title || selectedPlan.title || 'Francho Gold'
+      const expiryText = res.expires_at ? new Date(res.expires_at * 1000).toLocaleDateString() : '30 días'
+      setSuccessMsg(`¡Felicidades! Tu membresía ${planName} ha sido ${isVip ? 'extendida' : 'activada'} con éxito hasta el ${expiryText}.`)
       try { window.dispatchEvent(new CustomEvent('franchoshop:refresh-me')) } catch {}
     } catch (e) {
       setIsSubscribing(false)
@@ -2397,28 +2598,28 @@ export function VipScreen({ me, onBack, onTopUp, onLoginRequired, onNav }) {
       <div className="max-w-xl mx-auto space-y-4">
         {/* Header */}
         <EcosystemHeader
-          title="Club VIP Francho"
-          badge="0% Comisión en Retiros"
+          title="Francho Gold"
+          badge="Membresía premium"
           badgeColor="bg-amber-500/20 text-amber-300 border-amber-500/30"
           subtitle="Beneficios exclusivos, retiros sin costo y atención preferencial"
           onBack={onBack}
         />
 
-        {/* Tarjeta de Estado VIP */}
+        {/* Estado de Francho Gold */}
         {isVip ? (
-          <div className="rounded-3xl border border-amber-500/40 bg-gradient-to-b from-amber-500/20 via-[#1a1508] to-[#0d121f] p-5 shadow-2xl relative overflow-hidden">
+          <div className="fs-gold-card rounded-3xl p-5 relative overflow-hidden">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-500/40 flex items-center justify-center text-amber-400 shrink-0 shadow-lg shadow-amber-500/20">
-                  <Crown className="h-6 w-6" />
+                  <FranchoFMark className="h-6 w-6" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <h2 className="text-base sm:text-lg font-black text-white">
-                      {me?.vip_plan ? me.vip_plan.toUpperCase() : 'MEMBRESÍA VIP ACTIVA'}
+                      {formatVipPlanName(me?.vip_plan, me?.vip_badge)}
                     </h2>
                     <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-amber-400 text-bg">
-                      {me?.vip_badge || 'VIP GOLD'}
+                      {formatVipBadge(me?.vip_badge, me?.vip_plan)}
                     </span>
                   </div>
                   <p className="text-xs text-amber-200/70 mt-0.5">
@@ -2435,7 +2636,7 @@ export function VipScreen({ me, onBack, onTopUp, onLoginRequired, onNav }) {
               </div>
               <div className="flex items-center gap-1.5 text-amber-300 font-bold">
                 <CheckCircle2 className="h-4 w-4 shrink-0 text-amber-400" />
-                <span>Badge VIP en Perfil & P2P</span>
+                <span>Insignia GOLD en Perfil y P2P</span>
               </div>
               <div className="flex items-center gap-1.5 text-amber-300 font-bold">
                 <CheckCircle2 className="h-4 w-4 shrink-0 text-amber-400" />
@@ -2448,17 +2649,17 @@ export function VipScreen({ me, onBack, onTopUp, onLoginRequired, onNav }) {
             </div>
           </div>
         ) : (
-          <div className="rounded-3xl border border-amber-500/30 bg-gradient-to-b from-amber-500/10 via-[#131722] to-[#0d121f] p-5 shadow-2xl relative overflow-hidden">
+          <div className="fs-gold-card rounded-3xl p-5 relative overflow-hidden">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-2xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400 shrink-0">
-                <Crown className="h-5 w-5" />
+                <FranchoFMark className="h-5 w-5" />
               </div>
               <div>
                 <h2 className="text-sm sm:text-base font-black text-white">
                   Desbloquea el Potencial Máximo de tu Cuenta
                 </h2>
                 <p className="text-xs text-white/60 mt-1 leading-snug">
-                  Los miembros del Club VIP disfrutan de <b>0% de comisión en todos sus retiros de fondos</b>, insignia de prestigio en el mercado P2P y límites operativos extendidos.
+                  Los miembros de Francho Gold disfrutan de <b>0% de comisión en todos sus retiros de fondos</b>, insignia de prestigio en el mercado P2P y límites operativos extendidos.
                 </p>
               </div>
             </div>
@@ -2468,37 +2669,42 @@ export function VipScreen({ me, onBack, onTopUp, onLoginRequired, onNav }) {
         {/* Planes Disponibles */}
         <div className="space-y-3">
           <h3 className="font-black text-xs sm:text-sm text-white px-1">Selecciona tu Plan de Membresía</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-            {plans.map((p) => {
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {(plans && plans.length > 0 ? plans : DEFAULT_GOLD_PLANS).map((p) => {
               const isSelected = selectedPlanId === p.id
+              const planPrice = Number(p.price ?? p.price_usd ?? 0)
+              const planDuration = p.duration_days || 30
+              const planBadge = p.badge || 'GOLD'
+              const planTitle = p.title || p.name || 'Francho Gold'
+
               return (
                 <div
                   key={p.id}
                   onClick={() => setSelectedPlanId(p.id)}
                   className={`rounded-2xl p-4 border cursor-pointer transition relative flex flex-col justify-between ${
                     isSelected
-                      ? 'border-amber-400 bg-amber-500/15 shadow-lg shadow-amber-500/10'
-                      : 'border-white/10 bg-[#121829] hover:border-white/20'
+                      ? 'fs-gold-plan-selected ring-2 ring-amber-400/50 bg-amber-500/10'
+                      : 'fs-gold-plan hover:border-amber-400/30'
                   }`}
                 >
                   <div>
                     <div className="flex items-start justify-between gap-1.5 mb-2">
-                      <h4 className="font-black text-xs sm:text-sm text-white leading-snug">{p.title}</h4>
-                      {p.badge && (
+                      <h4 className="font-black text-xs sm:text-sm text-white leading-snug">{goldText(planTitle)}</h4>
+                      {planBadge && (
                         <span className="shrink-0 text-[8px] sm:text-[9px] font-black px-1.5 py-0.5 rounded bg-amber-400/20 text-amber-300 border border-amber-400/30 whitespace-nowrap">
-                          {p.badge}
+                          {goldText(planBadge)}
                         </span>
                       )}
                     </div>
                     <div className="flex items-baseline gap-1 mt-1">
-                      <span className="text-2xl font-black text-white">${p.price}</span>
-                      <span className="text-xs font-bold text-amber-400">FRC</span>
-                      <span className="text-[10px] text-white/40 ml-1">/ {p.duration_days} días</span>
+                      <span className="text-2xl font-black text-white">${planPrice.toFixed(2)}</span>
+                      <span className="text-xs font-bold text-amber-400">FC</span>
+                      <span className="text-[10px] text-white/40 ml-1">/ {planDuration} días</span>
                     </div>
                   </div>
                   <div className="mt-3 pt-2.5 border-t border-white/5 flex items-center justify-between text-[11px]">
                     <span className="text-white/60">0% Comisión Retiro</span>
-                    <span className="font-bold text-emerald-400">Incluido ✓</span>
+                    <span className="font-bold text-emerald-400">Incluido</span>
                   </div>
                 </div>
               )
@@ -2508,15 +2714,15 @@ export function VipScreen({ me, onBack, onTopUp, onLoginRequired, onNav }) {
 
         {/* Detalle del Plan Seleccionado */}
         {selectedPlan && (
-          <div className="rounded-3xl border border-white/10 bg-[#121829] p-4 sm:p-5 space-y-4 shadow-xl">
+          <div className="fs-gold-card rounded-3xl p-4 sm:p-5 space-y-4">
             <div className="flex justify-between items-center pb-3 border-b border-white/10">
               <div>
-                <h3 className="font-black text-sm text-white">{selectedPlan.title}</h3>
+                <h3 className="font-black text-sm text-white">{goldText(selectedPlan.title)}</h3>
                 <p className="text-[11px] text-white/50">Beneficios garantizados durante la suscripción</p>
               </div>
               <div className="text-right">
-                <span className="text-xl font-black text-white">${selectedPlan.price}</span>
-                <span className="text-xs font-bold text-amber-400 ml-1">FRC</span>
+                <span className="text-xl font-black text-white">${selectedPlan.price.toFixed(2)}</span>
+                <span className="text-xs font-bold text-amber-400 ml-1">FC</span>
               </div>
             </div>
 
@@ -2524,7 +2730,7 @@ export function VipScreen({ me, onBack, onTopUp, onLoginRequired, onNav }) {
               {(selectedPlan.features || []).map((feat, idx) => (
                 <div key={idx} className="flex items-start gap-2.5 text-xs text-white/80">
                   <CheckCircle2 className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
-                  <span>{feat}</span>
+                  <span>{goldText(feat)}</span>
                 </div>
               ))}
             </div>
@@ -2532,8 +2738,8 @@ export function VipScreen({ me, onBack, onTopUp, onLoginRequired, onNav }) {
             {/* Saldo y CTA */}
             <div className="pt-2 border-t border-white/5 space-y-3">
               <div className="flex justify-between items-center text-xs">
-                <span className="text-white/60">Tu saldo en FranchoCoin:</span>
-                <span className="font-black text-white">${balance.toFixed(2)} FRC</span>
+                <span className="text-white/60">Tu saldo disponible:</span>
+                <span className="font-black text-white">${balance.toFixed(2)} FC</span>
               </div>
 
               {successMsg && (
@@ -2554,22 +2760,22 @@ export function VipScreen({ me, onBack, onTopUp, onLoginRequired, onNav }) {
                 <button
                   type="button"
                   onClick={onLoginRequired}
-                  className="w-full py-3.5 rounded-2xl bg-accent text-bg font-black text-xs hover:bg-accent/90 active:scale-[0.98] transition shadow-lg shadow-accent/20"
+                  className="fs-gold-button w-full py-3.5 rounded-2xl font-black text-xs active:scale-[0.98] transition cursor-pointer"
                 >
-                  Iniciar Sesión para Unirte al Club VIP
+                  Iniciar sesión para Francho Gold
                 </button>
               ) : balance < selectedPlan.price ? (
                 <div className="space-y-2">
                   <p className="text-[11px] text-amber-300/80 text-center">
-                    Te faltan ${(selectedPlan.price - balance).toFixed(2)} FRC para activar este plan.
+                    Te faltan ${(selectedPlan.price - balance).toFixed(2)} FC para activar este plan.
                   </p>
                   <button
                     type="button"
                     onClick={onTopUp}
-                    className="w-full py-3.5 rounded-2xl bg-accent text-bg font-black text-xs hover:bg-accent/90 active:scale-[0.98] transition shadow-lg shadow-accent/20 flex items-center justify-center gap-2"
+                    className="fs-gold-button w-full py-3.5 rounded-2xl font-black text-xs active:scale-[0.98] transition flex items-center justify-center gap-2 cursor-pointer"
                   >
                     <Plus className="h-4 w-4" />
-                    <span>Recargar Saldo FranchoCoin</span>
+                    <span>Recargar saldo FC</span>
                   </button>
                 </div>
               ) : (
@@ -2577,10 +2783,16 @@ export function VipScreen({ me, onBack, onTopUp, onLoginRequired, onNav }) {
                   type="button"
                   onClick={handleSubscribe}
                   disabled={isSubscribing}
-                  className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-400 text-bg font-black text-xs hover:opacity-95 active:scale-[0.98] transition shadow-lg shadow-amber-500/25 flex items-center justify-center gap-2 disabled:opacity-50"
+                  className="fs-gold-button w-full py-3.5 rounded-2xl font-black text-xs active:scale-[0.98] transition flex items-center justify-center gap-2 disabled:opacity-50 cursor-pointer"
                 >
-                  <Crown className="h-4 w-4 text-bg" />
-                  <span>{isSubscribing ? 'Activando Membresía...' : `Activar ${selectedPlan.title} ($${selectedPlan.price} FRC)`}</span>
+                  <FranchoFMark className="h-4 w-4 text-bg" />
+                  <span>
+                    {isSubscribing
+                      ? 'Procesando membresía...'
+                      : isVip
+                        ? `Extender ${goldText(selectedPlan.title)} ($${selectedPlan.price.toFixed(2)} FC)`
+                        : `Activar ${goldText(selectedPlan.title)} ($${selectedPlan.price.toFixed(2)} FC)`}
+                  </span>
                 </button>
               )}
             </div>

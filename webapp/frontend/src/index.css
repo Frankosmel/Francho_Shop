@@ -111,20 +111,46 @@ body {
   to { transform: rotate(360deg); }
 }
 .fs-account-ring-spin {
-  animation: fs-account-ring-spin 2.8s linear infinite;
+  animation: fs-account-ring-spin 11s linear infinite;
   will-change: transform;
 }
 .fs-account-ring-spin-admin {
-  animation: fs-account-ring-spin 2.1s linear infinite reverse;
+  animation: fs-account-ring-spin 3.7s linear infinite reverse;
   will-change: transform;
 }
 .fs-account-ring-3d {
-  border: 1px solid rgb(255 255 255 / 0.38);
-  box-shadow:
-    inset 0 1px 1px rgb(255 255 255 / 0.52),
-    inset 0 -1px 1px rgb(0 0 0 / 0.42),
-    0 1px 2px rgb(0 0 0 / 0.68),
-    0 0 7px rgb(34 197 94 / 0.42);
+  /* Halo fino: el gradiente gira, pero solo queda visible en el anillo. */
+  border: 0;
+  -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+  mask: radial-gradient(farthest-side, transparent calc(100% - 3px), #000 calc(100% - 2px));
+  filter: saturate(1.24) brightness(1.13) drop-shadow(0 0 4px rgb(74 222 128 / .62));
+}
+.fs-account-ring-verified {
+  background: conic-gradient(
+    #00dc77 0deg 85deg, #07130f 85deg 90deg,
+    #7bffb1 90deg 175deg, #07130f 175deg 180deg,
+    #00bfa5 180deg 265deg, #07130f 265deg 270deg,
+    #16a34a 270deg 355deg, #07130f 355deg 360deg
+  );
+}
+.fs-account-ring-gold {
+  background: conic-gradient(
+    #ffd21f 0deg 85deg, #07130f 85deg 90deg,
+    #ff9f1c 90deg 175deg, #07130f 175deg 180deg,
+    #ffe86b 180deg 265deg, #07130f 265deg 270deg,
+    #d89a00 270deg 355deg, #07130f 355deg 360deg
+  );
+}
+.fs-account-ring-verified-gold {
+  /* Seis piezas solidas, desplazadas para que sus uniones se lean inclinadas. */
+  background: conic-gradient(from 18deg,
+    #00ff88 0deg 60deg,
+    #fff000 60deg 120deg,
+    #00d85f 120deg 180deg,
+    #ffb800 180deg 240deg,
+    #7dff4d 240deg 300deg,
+    #ffe95c 300deg 360deg
+  );
 }
 
 /* Acciones principales de Wallet: volumen por luz y degradado, no por una franja inferior. */
@@ -568,4 +594,168 @@ html { scroll-behavior: smooth; }
     scroll-behavior: auto !important;
     transition-duration: 1ms !important;
   }
+}
+/* Chat de Franchito: globos con profundidad, sin bordes planos. */
+.fs-ai-bubble-assistant,
+.fs-ai-bubble-user {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border: 0;
+}
+
+.fs-ai-bubble-assistant::before,
+.fs-ai-bubble-user::before {
+  content: '';
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  right: 8%;
+  left: 8%;
+  height: 42%;
+  border-radius: 999px;
+  pointer-events: none;
+  filter: blur(8px);
+}
+
+.fs-ai-bubble-assistant {
+  background: linear-gradient(145deg, #314657 0%, #1d2e3c 43%, #101a23 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .16),
+    inset 0 -12px 18px rgba(1, 8, 13, .28),
+    0 9px 18px rgba(0, 0, 0, .28),
+    0 2px 0 rgba(3, 9, 13, .52);
+}
+
+.fs-ai-bubble-assistant::before {
+  background: rgba(202, 235, 255, .15);
+}
+
+.fs-ai-bubble-user {
+  background: linear-gradient(145deg, #46e1ad 0%, #19af7d 48%, #08704f 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .38),
+    inset 0 -12px 18px rgba(0, 59, 39, .26),
+    0 9px 18px rgba(0, 135, 89, .22),
+    0 2px 0 rgba(2, 64, 42, .64);
+}
+
+.fs-ai-bubble-user::before {
+  background: rgba(255, 255, 255, .23);
+}
+
+.fs-ai-bubble-assistant > *,
+.fs-ai-bubble-user > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Francho Gold: volumen sutil, propio de una membresia premium. */
+.fs-gold-card,
+.fs-gold-plan,
+.fs-gold-plan-selected {
+  border: 1px solid rgb(255 204 66 / .22);
+  background: linear-gradient(145deg, #232117 0%, #151714 52%, #0c1210 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 240 185 / .16),
+    inset 0 -12px 20px rgb(0 0 0 / .18),
+    0 7px 0 rgb(3 7 5 / .7),
+    0 14px 24px rgb(0 0 0 / .25);
+}
+.fs-gold-plan {
+  cursor: pointer;
+  transition: transform .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+.fs-gold-plan:hover { border-color: rgb(255 212 77 / .48); }
+.fs-gold-plan:active { transform: translateY(4px); box-shadow: inset 0 1px 0 rgb(255 240 185 / .1), 0 3px 0 rgb(3 7 5 / .7), 0 7px 14px rgb(0 0 0 / .2); }
+.fs-gold-plan-selected {
+  border-color: rgb(255 213 74 / .72);
+  background: linear-gradient(145deg, #4b3910 0%, #282314 50%, #101512 100%);
+  box-shadow:
+    inset 0 1px 0 rgb(255 244 190 / .26),
+    inset 0 -12px 20px rgb(75 45 0 / .22),
+    0 7px 0 rgb(34 22 2 / .78),
+    0 14px 24px rgb(0 0 0 / .3);
+}
+.fs-gold-button {
+  border: 0;
+  color: #191100;
+  background: linear-gradient(180deg, #fff19a 0%, #ffd23e 45%, #e29a05 100%);
+  box-shadow:
+    inset 0 1px 1px rgb(255 255 255 / .72),
+    inset 0 -9px 13px rgb(117 66 0 / .2),
+    0 5px 0 #805000,
+    0 12px 20px rgb(0 0 0 / .28);
+}
+.fs-gold-button:active { transform: translateY(4px); box-shadow: inset 0 1px 1px rgb(255 255 255 / .35), 0 1px 0 #805000, 0 5px 10px rgb(0 0 0 / .24); }
+.fs-gold-button:disabled { filter: grayscale(.35); opacity: .58; }
+
+/* ==========================================================================
+   Botones de Navegación del Panel Admin/Vendedor/Revendedor
+   Estilo refinado con profundidad perimetral degradada en negro hacia afuera
+   ========================================================================== */
+.fs-admin-btn {
+  position: relative;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05) 0%, rgba(18, 24, 38, 0.92) 50%, rgba(9, 13, 22, 0.98) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-left-width: 3.5px;
+  border-left-color: transparent;
+  /* Halo perimetral: negro profundo pegado al borde que degrada hacia afuera difuminándose en el fondo */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 0 1px #000000,
+    0 0 6px 1px rgba(0, 0, 0, 0.95),
+    0 0 14px 2px rgba(0, 0, 0, 0.82),
+    0 4px 22px 3px rgba(0, 0, 0, 0.65),
+    0 8px 36px 5px rgba(0, 0, 0, 0.35);
+  transition: all 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.fs-admin-btn:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.09) 0%, rgba(24, 32, 50, 0.95) 50%, rgba(11, 16, 27, 0.98) 100%);
+  border-color: rgba(255, 255, 255, 0.16);
+  border-left-color: rgba(255, 255, 255, 0.3);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 0 0 1px #000000,
+    0 0 8px 2px rgba(0, 0, 0, 0.98),
+    0 0 18px 3px rgba(0, 0, 0, 0.88),
+    0 6px 26px 4px rgba(0, 0, 0, 0.72),
+    0 10px 42px 6px rgba(0, 0, 0, 0.42);
+}
+
+.fs-admin-btn.is-active-accent {
+  background: linear-gradient(180deg, rgba(16, 185, 129, 0.20) 0%, rgba(11, 27, 26, 0.94) 52%, rgba(5, 15, 16, 0.98) 100%);
+  border-color: rgba(16, 185, 129, 0.38);
+  border-left-color: #00C26F;
+  box-shadow:
+    inset 0 1px 0 rgba(16, 185, 129, 0.25),
+    0 0 0 1px #000000,
+    0 0 16px -1px rgba(0, 194, 111, 0.32),
+    0 0 8px 2px rgba(0, 0, 0, 0.98),
+    0 0 18px 3px rgba(0, 0, 0, 0.88),
+    0 6px 26px 4px rgba(0, 0, 0, 0.70),
+    0 10px 40px 6px rgba(0, 0, 0, 0.40);
+}
+
+.fs-admin-btn.is-active-amber {
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.20) 0%, rgba(30, 22, 10, 0.94) 52%, rgba(15, 11, 6, 0.98) 100%);
+  border-color: rgba(245, 158, 11, 0.38);
+  border-left-color: #f59e0b;
+  box-shadow:
+    inset 0 1px 0 rgba(245, 158, 11, 0.25),
+    0 0 0 1px #000000,
+    0 0 16px -1px rgba(245, 158, 11, 0.32),
+    0 0 8px 2px rgba(0, 0, 0, 0.98),
+    0 0 18px 3px rgba(0, 0, 0, 0.88),
+    0 6px 26px 4px rgba(0, 0, 0, 0.70),
+    0 10px 40px 6px rgba(0, 0, 0, 0.40);
+}
+
+.fs-admin-btn:active {
+  transform: scale(0.98);
+  box-shadow:
+    0 0 0 1px #000000,
+    0 0 4px 1px rgba(0, 0, 0, 0.95),
+    0 2px 10px rgba(0, 0, 0, 0.75);
 }

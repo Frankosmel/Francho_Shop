@@ -74,17 +74,10 @@ function FranchoPaymentQr({ value }) {
 function AccountStatusRing({ profile, children }) {
   const hasKyc = profile?.kyc_status === 'approved'
   const hasVip = !!(profile?.is_vip || profile?.vip_badge)
-  const isAdmin = profile?.role === 'admin' || !!profile?.is_primary_admin
-  const hasAdminVipRing = isAdmin && hasVip
-  if (!hasKyc && !hasAdminVipRing) return children
-  const ringColor = hasKyc && hasVip
-    ? 'bg-[conic-gradient(#22c55e,#86efac,#facc15,#fde047,#16a34a,#22c55e)]'
-    : hasKyc
-      ? 'bg-[conic-gradient(#16a34a,#86efac,#14b8a6,#4ade80,#22c55e,#16a34a)]'
-      : 'bg-[conic-gradient(#facc15,#fff7bf,#16a34a,#f59e0b,#fde047,#facc15)]'
+  if (!hasKyc && !hasVip) return children
   return (
     <span className="relative inline-flex shrink-0">
-      <span aria-hidden="true" className={`${hasAdminVipRing ? 'fs-account-ring-spin-admin' : 'fs-account-ring-spin'} fs-account-ring-3d pointer-events-none absolute -inset-[3px] rounded-full ${ringColor}`} />
+      <span aria-hidden="true" className="fs-account-ring-spin fs-account-ring-3d fs-account-ring-verified-gold pointer-events-none absolute -inset-[3px] rounded-full" />
       <span className="relative inline-flex rounded-full bg-bg p-px">{children}</span>
     </span>
   )
@@ -302,7 +295,8 @@ const ensureGoogleIdentity = () => {
   return true
 }
 const stripEmoji = (value = '') => String(value).replace(/^\s*[\p{Extended_Pictographic}\p{Emoji_Presentation}\p{Emoji}\uFE0F]+\s*/u, '').trim()
-const STORE_ORIGIN = 'https://franchoshop.com'
+// Debe coincidir con el dominio que realmente sirve /api/icons en la APK.
+const STORE_ORIGIN = import.meta.env.VITE_PUBLIC_ORIGIN || 'https://franchoshop.reenvioplusbot.xyz'
 const isNativeFranchoApp = () => {
   try { return Boolean(window.Capacitor?.isNativePlatform?.()) } catch { return false }
 }
@@ -645,6 +639,7 @@ function AppInner({ adminPortal = false }) {
   const [verificationEmail, setVerificationEmail] = useState('')
   const [googleWelcomeEmail, setGoogleWelcomeEmail] = useState(null)
   const [showTopUp, setShowTopUp] = useState(false)
+  const [walletInitialTab, setWalletInitialTab] = useState('transfer')
   const [topUpInitialAmount, setTopUpInitialAmount] = useState('25')
   const [showResellerPricing, setShowResellerPricing] = useState(false)
   const [sellerStoreSlug, setSellerStoreSlug] = useState('')
@@ -2074,9 +2069,9 @@ function AppInner({ adminPortal = false }) {
     setAdminCryptoOverride(nextVal)
   }
 
-  const handleNav = (target) => {
+  const handleNav = (target, options = {}) => {
     if (!target) return
-    if (!showCryptoFeatures && ['swap', 'energy', 'p2p', 'wallet', 'vip', 'kyc'].includes(target)) {
+    if (!showCryptoFeatures && ['swap', 'energy', 'p2p', 'vip', 'kyc'].includes(target)) {
       goHome()
       return
     }
@@ -2104,7 +2099,9 @@ function AppInner({ adminPortal = false }) {
       return
     }
     if (target === 'wallet') {
-      window.history.pushState({ screen: 'wallet' }, '', '/wallet')
+      const requestedTab = ['transfer', 'payments', 'movements', 'withdraw'].includes(options?.tab) ? options.tab : 'transfer'
+      setWalletInitialTab(requestedTab)
+      window.history.pushState({ screen: 'wallet', walletTab: requestedTab }, '', '/wallet')
       setScreen('wallet')
       return
     }
@@ -2695,12 +2692,20 @@ function AppInner({ adminPortal = false }) {
           onNav={handleNav}
         />
       )}
-      {screen === 'wallet' && showCryptoFeatures && (
+      {screen === 'wallet' && (
         <WalletScreen
           me={me}
           onBack={goBack}
           onTopUp={() => isGuest ? requireLogin() : setShowTopUp(true)}
           onNav={handleNav}
+          initialTab={walletInitialTab}
+          onOpenPaymentProfile={() => {
+            if (me?.payment_handle && me?.payment_profile_enabled) {
+              window.location.assign(`/pay/${encodeURIComponent(me.payment_handle)}`)
+            } else {
+              handleNav('profile')
+            }
+          }}
         />
       )}
       {screen === 'vip' && showCryptoFeatures && (
@@ -4440,8 +4445,8 @@ function AiSupportWidget({
                     <div key={m.id || idx} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                       <div className={`max-w-[88%] rounded-2xl px-4 py-3 leading-relaxed shadow-lg ${
                         mine 
-                          ? 'bg-gradient-to-r from-accent to-[#1fcfa4] text-[#07110f] font-semibold rounded-tr-sm shadow-accent/15' 
-                          : 'bg-[#131c26] text-[#eef3f6] border border-white/8 rounded-tl-sm shadow-black/40'
+                          ? 'fs-ai-bubble-user text-[#07110f] font-semibold rounded-tr-sm' 
+                          : 'fs-ai-bubble-assistant text-[#eef3f6] rounded-tl-sm'
                       }`}>
                         {!mine && (
                           <div className="flex items-center gap-1.5 mb-1.5 text-[10px] text-emerald-400 font-bold select-none">
@@ -4465,9 +4470,9 @@ function AiSupportWidget({
                     <div className="grid grid-cols-2 gap-1.5">
                       {[
                         { label: '👤 Mi Perfil', text: '¿Qué funciones y configuraciones puedo gestionar en mi perfil?' },
-                        { label: '🔔 Notificaciones', text: '¿Cómo funcionan las notificaciones y alertas en tiempo real?' },
+                        { label: '💳 Francho Pay', text: '¿Cómo recibo pagos con mi enlace y QR de Francho Pay?' },
                         { label: '📦 Mis Pedidos', text: '¿Cómo rastreo mis pedidos y dónde veo mis claves de entrega?' },
-                        { label: '⚡ Recargar Saldo', text: '¿Cuáles son los métodos para recargar saldo por Transfermóvil, EnZona o cripto?' },
+                        { label: '⚡ Recargar Saldo', text: '¿Qué métodos de recarga tengo habilitados en mi billetera?' },
                       ].map((chip, cIdx) => (
                         <button
                           key={cIdx}
@@ -4507,7 +4512,7 @@ function AiSupportWidget({
                 {/* Animación de pensando */}
                 {loading && (
                   <div className="flex justify-start animate-in fade-in">
-                    <div className="max-w-[88%] rounded-2xl px-3.5 py-2 bg-[#131c26] text-white/70 border border-white/8 flex items-center gap-2 rounded-tl-sm shadow-md">
+                    <div className="fs-ai-bubble-assistant max-w-[88%] rounded-2xl px-3.5 py-2 text-white/70 flex items-center gap-2 rounded-tl-sm">
                       <FranchitoAvatar size="xs" isThinking={true} />
                       <div className="flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-bounce" style={{ animationDelay: '0ms' }} />
@@ -4552,9 +4557,9 @@ function AiSupportWidget({
                     return (
                       <div key={m.id || idx} className={`flex ${mine ? 'justify-end' : 'justify-start'}`}>
                         <div className={`max-w-[88%] rounded-2xl px-4 py-3 leading-relaxed shadow-lg ${
-                          mine 
-                            ? 'bg-gradient-to-r from-accent to-[#1fcfa4] text-[#07110f] font-semibold rounded-tr-sm shadow-accent/15' 
-                            : 'bg-[#152232] text-white border border-accent/25 rounded-tl-sm shadow-black/40'
+                        mine 
+                            ? 'fs-ai-bubble-user text-[#07110f] font-semibold rounded-tr-sm' 
+                            : 'fs-ai-bubble-assistant text-white rounded-tl-sm'
                         }`}>
                           {!mine && (
                             <span className="text-[10px] text-accent font-bold block mb-1">
@@ -4598,7 +4603,7 @@ function AiSupportWidget({
                 }}
                 rows={1}
                 maxLength={1200}
-                placeholder={activeTab === 'human' ? 'Escribe tu mensaje para soporte humano...' : 'Pregúntale a Franchito sobre saldo, pedidos, VPN...'}
+                placeholder={activeTab === 'human' ? 'Escribe tu mensaje para soporte humano...' : 'Pregunta por saldo, pedidos, recargas o Francho Pay...'}
                 className="max-h-28 min-h-10 flex-1 resize-none bg-transparent px-3 py-2 text-sm text-white placeholder:text-white/35 outline-none"
               />
               <button 
@@ -8704,11 +8709,11 @@ function HomeScreen({
               <>
                 <button type="button" aria-label="Cerrar acciones de saldo" onClick={() => setBalanceMenuOpen(false)} className="fixed inset-0 z-10 cursor-default" />
                 <div className="absolute left-1/2 top-[calc(100%+10px)] z-20 flex w-[304px] -translate-x-1/2 gap-1.5 rounded-2xl border border-white/10 bg-[#11161a] p-2.5 shadow-[0_16px_34px_rgba(0,0,0,.5)]">
-                  <button type="button" onClick={() => { setBalanceMenuOpen(false); onNav?.('wallet') }} className="flex min-w-0 flex-1 flex-col items-center gap-2 py-1 text-[10px] font-black text-white/85 transition active:scale-95">
+                  <button type="button" onClick={() => { setBalanceMenuOpen(false); onNav?.('wallet', { tab: 'transfer' }) }} className="flex min-w-0 flex-1 flex-col items-center gap-2 py-1 text-[10px] font-black text-white/85 transition active:scale-95">
                     <span className="grid h-12 w-12 place-items-center rounded-full border border-white/10 bg-[#2a3339] text-white shadow-[inset_0_2px_1px_rgba(255,255,255,.16),0_5px_0_#07090b,0_12px_18px_rgba(0,0,0,.46)] transition active:translate-y-[4px] active:shadow-[inset_0_2px_1px_rgba(255,255,255,.12),0_1px_0_#07090b]"><ArrowUp className="h-6 w-6" strokeWidth={3.2} /></span>
                     Enviar
                   </button>
-                  <button type="button" onClick={() => { setBalanceMenuOpen(false); onNav?.('wallet') }} className="flex min-w-0 flex-1 flex-col items-center gap-2 py-1 text-[10px] font-black text-amber-200 transition active:scale-95">
+                  <button type="button" onClick={() => { setBalanceMenuOpen(false); onNav?.('wallet', { tab: 'payments' }) }} className="flex min-w-0 flex-1 flex-col items-center gap-2 py-1 text-[10px] font-black text-amber-200 transition active:scale-95">
                     <span className="grid h-12 w-12 place-items-center rounded-full border border-amber-300/50 bg-[#17120c] text-amber-200 shadow-[inset_0_2px_1px_rgba(255,235,160,.2),0_5px_0_#050403,0_12px_18px_rgba(0,0,0,.52),0_0_14px_rgba(250,204,21,.12)] transition active:translate-y-[4px] active:shadow-[inset_0_2px_1px_rgba(255,235,160,.14),0_1px_0_#050403]"><ArrowDown className="h-6 w-6" strokeWidth={3.2} /></span>
                     Recibir
                   </button>
@@ -8741,12 +8746,8 @@ function HomeScreen({
                   alt={me?.name || 'Usuario'}
                   className="h-full w-full object-cover"
                 />
-              ) : me?.name ? (
-                <span className="font-black text-xs text-accent">
-                  {me.name.slice(0, 1).toUpperCase()}
-                </span>
               ) : (
-                <User className="h-4 w-4 text-white/70" />
+                <FranchoFMark className="h-5 w-5 text-accent" title="Francho Shop" />
               )}
             </button>
             </AccountStatusRing>
@@ -20807,6 +20808,8 @@ function Linkify({ children, className }) {
 }
 
 const STORAGE_PROFILE_KEY = 'fs_profile_cache_v2'
+const PUBLIC_PAYMENT_CACHE_PREFIX = 'fs_public_payment_v1:'
+const PUBLIC_PAYMENT_CACHE_TTL_MS = 6 * 60 * 60 * 1000
 
 function readProfileCache() {
   try {
@@ -20827,17 +20830,50 @@ function writeProfileCache(data) {
 
 let _cachedProfileData = readProfileCache()
 
+function readPublicPaymentCache(handle) {
+  try {
+    const storageKey = `${PUBLIC_PAYMENT_CACHE_PREFIX}${String(handle || '').toLowerCase()}`
+    const raw = localStorage.getItem(storageKey)
+    if (!raw) return null
+    const cached = JSON.parse(raw)
+    const savedAt = Number(cached?.saved_at || 0)
+    if (!cached?.payment?.payment_id || !savedAt || Date.now() - savedAt > PUBLIC_PAYMENT_CACHE_TTL_MS) {
+      localStorage.removeItem(storageKey)
+      return null
+    }
+    return cached.payment
+  } catch {
+    return null
+  }
+}
+
+function writePublicPaymentCache(handle, payment) {
+  try {
+    if (!payment?.payment_id) return
+    localStorage.setItem(`${PUBLIC_PAYMENT_CACHE_PREFIX}${String(handle || '').toLowerCase()}`, JSON.stringify({
+      saved_at: Date.now(),
+      payment
+    }))
+  } catch {}
+}
+
+function clearPublicPaymentCache(handle) {
+  try {
+    localStorage.removeItem(`${PUBLIC_PAYMENT_CACHE_PREFIX}${String(handle || '').toLowerCase()}`)
+  } catch {}
+}
+
 function PublicPaymentProfileScreen({ handle }) {
   const [state, setState] = useState({ loading: true, profile: null, error: '' })
   const [copied, setCopied] = useState(false)
-  const [paymentOpen, setPaymentOpen] = useState(false)
+  const [paymentOpen, setPaymentOpen] = useState(() => Boolean(readPublicPaymentCache(handle)))
   const [paymentOptions, setPaymentOptions] = useState([])
   const [paymentOptionsError, setPaymentOptionsError] = useState('')
   const [paymentOptionsLoading, setPaymentOptionsLoading] = useState(false)
   const [paymentAmount, setPaymentAmount] = useState('10')
   const [paymentCurrency, setPaymentCurrency] = useState('')
   const [paymentNetwork, setPaymentNetwork] = useState('')
-  const [paymentInvoice, setPaymentInvoice] = useState(null)
+  const [paymentInvoice, setPaymentInvoice] = useState(() => readPublicPaymentCache(handle))
   const [paymentLoading, setPaymentLoading] = useState(false)
   const [paymentError, setPaymentError] = useState('')
   const [paymentCopied, setPaymentCopied] = useState(false)
@@ -20859,6 +20895,22 @@ function PublicPaymentProfileScreen({ handle }) {
       })
     return () => { cancelled = true }
   }, [handle])
+
+  useEffect(() => {
+    const cachedPayment = readPublicPaymentCache(handle)
+    setPaymentInvoice(cachedPayment)
+    setPaymentOpen(Boolean(cachedPayment))
+    setPaymentError('')
+    setPaymentCopied(false)
+  }, [handle])
+
+  useEffect(() => {
+    if (paymentInvoice?.payment_id) {
+      writePublicPaymentCache(handle, paymentInvoice)
+    } else {
+      clearPublicPaymentCache(handle)
+    }
+  }, [handle, paymentInvoice])
 
   const copyLink = async () => {
     try {
@@ -20905,13 +20957,28 @@ function PublicPaymentProfileScreen({ handle }) {
 
   useEffect(() => {
     if (!paymentInvoice?.payment_id || paymentInvoice.status === 'paid') return undefined
-    const timer = window.setInterval(async () => {
+    let cancelled = false
+    const refreshPayment = async () => {
       try {
         const result = await api.getPublicPaymentStatus(paymentInvoice.payment_id)
-        if (result?.payment) setPaymentInvoice((current) => current ? { ...current, ...result.payment } : current)
+        if (!cancelled && result?.payment) {
+          setPaymentInvoice((current) => current ? { ...current, ...result.payment } : current)
+        }
       } catch {}
-    }, 12000)
-    return () => window.clearInterval(timer)
+    }
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') refreshPayment()
+    }
+    refreshPayment()
+    const timer = window.setInterval(refreshPayment, 12000)
+    window.addEventListener('focus', refreshPayment)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      cancelled = true
+      window.clearInterval(timer)
+      window.removeEventListener('focus', refreshPayment)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
   }, [paymentInvoice?.payment_id, paymentInvoice?.status])
 
   async function createPublicPayment() {
@@ -20921,7 +20988,16 @@ function PublicPaymentProfileScreen({ handle }) {
     setPaymentLoading(true)
     setPaymentError('')
     try {
-      const response = await api.createPublicPayment(handle, { amount, pay_currency: paymentCurrency, network: paymentNetwork })
+      const clientTimezone = (() => {
+        try { return Intl.DateTimeFormat().resolvedOptions().timeZone || '' } catch { return '' }
+      })()
+      const response = await api.createPublicPayment(handle, {
+        amount,
+        pay_currency: paymentCurrency,
+        network: paymentNetwork,
+        client_locale: navigator.language || '',
+        client_timezone: clientTimezone,
+      })
       if (!response?.payment) throw new Error('No se pudo preparar el pago')
       setPaymentInvoice(response.payment)
     } catch (err) {
@@ -20949,7 +21025,6 @@ function PublicPaymentProfileScreen({ handle }) {
 
   const profile = state.profile
   const profileName = profile.name?.trim() || `@${profile.handle}`
-  const profileInitial = profileName[0]?.toUpperCase() || '?'
   return (
     <main className="fs-public-pay-page min-h-screen px-4 py-6 text-white sm:py-10">
       <section className="fs-public-pay-card mx-auto w-full max-w-sm overflow-hidden rounded-[22px]">
@@ -20968,7 +21043,7 @@ function PublicPaymentProfileScreen({ handle }) {
           <div className="fs-public-pay-avatar mx-auto flex h-[76px] w-[76px] items-center justify-center overflow-hidden rounded-full text-2xl font-black text-emerald-200">
             {profile.photo_url
               ? <img src={storeAssetUrl(profile.photo_url)} alt={`Foto de ${profileName}`} className="h-full w-full object-cover" />
-              : profileInitial}
+              : <FranchoFMark className="h-9 w-9 text-emerald-300" title="Francho Shop" />}
           </div>
 
           <div className="mt-4 flex items-center justify-center gap-1.5">
@@ -21122,6 +21197,7 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
   const profileParams = typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null
   const profileModal = profileParams?.get('modal')
   const [editProfile, setEditProfile] = useState(() => profileModal === 'edit')
+  const [editProfileTab, setEditProfileTab] = useState('profile')
   const [profileName, setProfileName] = useState(() => initialProfile?.display_name || initialProfile?.name || '')
   const [profileEmail, setProfileEmail] = useState(() => initialProfile?.email || '')
   const [profileMsg, setProfileMsg] = useState(null)
@@ -21244,26 +21320,19 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
   const hasEmail = !!profile.email
   const hasTelegram = profile.telegram_id > 0
   const roleMeta = {
-    admin: { label: profile.role_label || 'Admin', Icon: Crown, ring: 'ring-yellow-400/80 border-yellow-300/60', badge: 'border-yellow-400/25 bg-yellow-400/10 text-yellow-200', avatarBadge: 'border-yellow-300 bg-bg text-yellow-300 shadow-yellow-400/25', icon: 'text-yellow-300' },
-    seller: { label: profile.role_label || 'Vendedor', Icon: Store, ring: 'ring-cyan-300/80 border-cyan-300/60', badge: 'border-cyan-300/25 bg-cyan-300/10 text-cyan-100', avatarBadge: 'border-cyan-300 bg-bg text-cyan-200 shadow-cyan-300/25', icon: 'text-cyan-200' },
-    account_seller: { label: profile.role_label || 'Vendedor de cuentas', Icon: BriefcaseBusiness, ring: 'ring-fuchsia-300/80 border-fuchsia-300/60', badge: 'border-fuchsia-300/25 bg-fuchsia-300/10 text-fuchsia-100', avatarBadge: 'border-fuchsia-300 bg-bg text-fuchsia-200 shadow-fuchsia-300/25', icon: 'text-fuchsia-200' },
-    reseller: { label: profile.role_label || 'Revendedor', Icon: Sparkles, ring: 'ring-emerald-300/80 border-emerald-300/60', badge: 'border-emerald-300/25 bg-emerald-300/10 text-emerald-100', avatarBadge: 'border-emerald-300 bg-bg text-emerald-200 shadow-emerald-300/25', icon: 'text-emerald-200' },
-    guest: { label: profile.role_label || 'Visitante', Icon: User, ring: 'ring-white/25 border-white/20', badge: 'border-white/10 bg-white/5 text-white/60', avatarBadge: 'border-white/35 bg-bg text-white/70 shadow-white/10', icon: 'text-white/50' },
-    user: { label: profile.role_label || 'Cliente', Icon: ShieldCheck, ring: 'ring-accent/70 border-accent/50', badge: 'border-accent/20 bg-accent/10 text-accent', avatarBadge: 'border-accent bg-bg text-accent shadow-accent/25', icon: 'text-accent' }
+    admin: { label: profile.role_label || 'Admin', Icon: Crown, ring: 'border-yellow-300/60', badge: 'border-yellow-400/25 bg-yellow-400/10 text-yellow-200', avatarBadge: 'border-yellow-300 bg-bg text-yellow-300 shadow-yellow-400/25', icon: 'text-yellow-300' },
+    seller: { label: profile.role_label || 'Vendedor', Icon: Store, ring: 'border-cyan-300/60', badge: 'border-cyan-300/25 bg-cyan-300/10 text-cyan-100', avatarBadge: 'border-cyan-300 bg-bg text-cyan-200 shadow-cyan-300/25', icon: 'text-cyan-200' },
+    account_seller: { label: profile.role_label || 'Vendedor de cuentas', Icon: BriefcaseBusiness, ring: 'border-fuchsia-300/60', badge: 'border-fuchsia-300/25 bg-fuchsia-300/10 text-fuchsia-100', avatarBadge: 'border-fuchsia-300 bg-bg text-fuchsia-200 shadow-fuchsia-300/25', icon: 'text-fuchsia-200' },
+    reseller: { label: profile.role_label || 'Revendedor', Icon: Sparkles, ring: 'border-emerald-300/60', badge: 'border-emerald-300/25 bg-emerald-300/10 text-emerald-100', avatarBadge: 'border-emerald-300 bg-bg text-emerald-200 shadow-emerald-300/25', icon: 'text-emerald-200' },
+    guest: { label: profile.role_label || 'Visitante', Icon: User, ring: 'border-white/20', badge: 'border-white/10 bg-white/5 text-white/60', avatarBadge: 'border-white/35 bg-bg text-white/70 shadow-white/10', icon: 'text-white/50' },
+    user: { label: profile.role_label || 'Cliente', Icon: ShieldCheck, ring: 'border-accent/50', badge: 'border-accent/20 bg-accent/10 text-accent', avatarBadge: 'border-accent bg-bg text-accent shadow-accent/25', icon: 'text-accent' }
   }
   const activeRole = roleMeta[profile.role] || roleMeta.user
   const RoleIcon = activeRole.Icon
   const activeRoleLabel = stripEmoji(activeRole.label)
   const profileMsgIsError = profileMsg && /^(No se pudo|Error|Mínimo|Invalid|Fallo)/i.test(profileMsg)
   const displayName = profile.display_name || profile.name || 'Usuario'
-  const hasProfileKyc = profile.kyc_status === 'approved'
-  const hasProfileAdminVip = profile.role === 'admin' && !!(profile.is_vip || profile.vip_badge)
-  const showProfileRing = hasProfileKyc || hasProfileAdminVip
-  const profileRingColor = hasProfileKyc && (profile.is_vip || profile.vip_badge)
-    ? 'bg-[conic-gradient(#22c55e,#86efac,#facc15,#fde047,#16a34a,#22c55e)]'
-    : hasProfileKyc
-      ? 'bg-[conic-gradient(#16a34a,#86efac,#14b8a6,#4ade80,#22c55e,#16a34a)]'
-      : 'bg-[conic-gradient(#facc15,#fff7bf,#16a34a,#f59e0b,#fde047,#facc15)]'
+  const showProfileRing = profile.kyc_status === 'approved' || !!(profile.is_vip || profile.vip_badge)
   const paymentProfileUrl = profile.payment_handle && typeof window !== 'undefined'
     ? `${window.location.origin}/pay/${profile.payment_handle}`
     : ''
@@ -21376,6 +21445,7 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
             setPaymentHandleInput(profile.payment_handle || '')
             setPaymentProfileEnabled(!!profile.payment_profile_enabled)
             setProfileMsg(null)
+            setEditProfileTab('profile')
             setEditProfile(true)
           }}
           className="absolute z-20 top-3.5 right-3.5 inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 px-2.5 py-1 text-xs font-bold text-white/80 hover:text-white active:scale-95 transition"
@@ -21386,13 +21456,13 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
 
         <div className="relative flex items-center gap-3.5 pr-20">
           <div className="relative h-16 w-16 sm:h-20 sm:w-20 flex-shrink-0">
-            {showProfileRing && <span aria-hidden="true" className={`${hasProfileAdminVip ? 'fs-account-ring-spin-admin' : 'fs-account-ring-spin'} fs-account-ring-3d pointer-events-none absolute -inset-[3px] rounded-full ${profileRingColor}`} />}
-            <div className={`relative z-[1] h-16 w-16 sm:h-20 sm:w-20 overflow-hidden rounded-full border-2 bg-black/25 ring-2 ${activeRole.ring}`}>
+            {showProfileRing && <span aria-hidden="true" className="fs-account-ring-spin fs-account-ring-3d fs-account-ring-verified-gold pointer-events-none absolute -inset-[3px] rounded-full" />}
+            <div className={`relative z-[1] h-16 w-16 sm:h-20 sm:w-20 overflow-hidden rounded-full border-2 bg-black/25 ${activeRole.ring}`}>
               {profile.photo_url ? (
                 <img src={storeAssetUrl(profile.photo_url)} alt="" className="h-full w-full object-cover" />
               ) : (
-                <div className="flex h-full w-full items-center justify-center text-2xl sm:text-3xl font-black text-white">
-                  {displayName[0]?.toUpperCase() || '?'}
+                <div className="flex h-full w-full items-center justify-center bg-[#0c1714]">
+                  <FranchoFMark className="h-8 w-8 sm:h-10 sm:w-10 text-accent" title="Francho Shop" />
                 </div>
               )}
             </div>
@@ -21448,7 +21518,20 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
               </div>
               <button type="button" onClick={() => setEditProfile(false)} aria-label="Cerrar" className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/5 text-white/60 active:scale-95"><X className="h-4 w-4" /></button>
             </div>
+            <div className="mb-4 grid grid-cols-3 rounded-xl border border-white/10 bg-black/20 p-1">
+              {[
+                { id: 'profile', label: 'Perfil', Icon: User },
+                { id: 'payments', label: 'Cobros', Icon: QrCode },
+                { id: 'security', label: 'Seguridad', Icon: ShieldCheck },
+              ].map(({ id, label, Icon }) => (
+                <button key={id} type="button" onClick={() => setEditProfileTab(id)} className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-2 text-[11px] font-black transition ${editProfileTab === id ? 'bg-accent text-bg shadow-[0_3px_0_#057544]' : 'text-white/50 hover:text-white'}`}>
+                  <Icon className="h-3.5 w-3.5" strokeWidth={2.8} />
+                  {label}
+                </button>
+              ))}
+            </div>
             <div className="space-y-3">
+              {editProfileTab === 'profile' && <>
               <div className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-3">
                 <div className="min-w-0">
                   <p className="text-xs font-bold text-white">Imagen de perfil</p>
@@ -21482,6 +21565,8 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
                   placeholder="correo@ejemplo.com" maxLength={120} />
                 <p className="mt-1 text-[10px] text-white/35">Si cambias el email, quedará pendiente de verificación.</p>
               </div>
+              </>}
+              {editProfileTab === 'payments' && <>
               <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-white/10 bg-black/20 p-3">
                 <span><span className="block text-xs font-bold text-white">Perfil público y QR</span><span className="mt-0.5 block text-[10px] text-white/45">Permite compartir tu enlace de pagos.</span></span>
                 <input type="checkbox" checked={paymentProfileEnabled} onChange={(e) => setPaymentProfileEnabled(e.target.checked)} className="h-4 w-4 accent-emerald-400" />
@@ -21493,7 +21578,34 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
                   <button type="button" onClick={async () => { try { await navigator.clipboard.writeText(paymentProfileUrl); setProfileMsg('Enlace de perfil copiado.') } catch {} }} className="mt-2 inline-flex items-center gap-1.5 text-xs font-bold text-emerald-300"><Copy className="h-3.5 w-3.5" />Copiar enlace</button>
                 </div>
               )}
-              <div className="grid grid-cols-2 gap-2 pt-1">
+              </>}
+              {editProfileTab === 'security' && <>
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-accent/20 bg-accent/10 text-accent"><LinkIcon className="h-4 w-4" /></div>
+                      <div className="min-w-0"><p className="text-xs font-bold text-white">Cuentas vinculadas</p><p className="truncate text-[10px] text-white/40">{hasTelegram && hasEmail ? 'Telegram + Email' : hasTelegram ? 'Telegram' : hasEmail ? 'Email' : 'Sin vincular'}</p></div>
+                    </div>
+                    <button type="button" onClick={() => { setEditProfile(false); setShowLinkedAccountsModal(true) }} className="rounded-lg bg-white/8 px-2.5 py-1.5 text-[11px] font-bold text-white/80 active:scale-95">Gestionar</button>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/20 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-amber-500/20 bg-amber-500/10 text-amber-400"><KeyRound className="h-4 w-4" /></div>
+                      <div className="min-w-0"><p className="text-xs font-bold text-white">Contraseña de acceso</p><p className="text-[10px] text-white/40">{profile.has_password ? 'Configurada' : 'Sin configurar'}</p></div>
+                    </div>
+                    <button type="button" onClick={() => { setEditProfile(false); setShowPwdModal(true) }} className="rounded-lg bg-white/8 px-2.5 py-1.5 text-[11px] font-bold text-white/80 active:scale-95">Gestionar</button>
+                  </div>
+                </div>
+                {!isTg && <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-3">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-2"><div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg border border-red-500/20 bg-red-500/10 text-red-400"><LogOut className="h-4 w-4" /></div><div><p className="text-xs font-bold text-white">Sesión activa</p><p className="text-[10px] text-white/40">Vía Email</p></div></div>
+                    <button type="button" onClick={async () => { await api.logout(); location.reload() }} className="rounded-lg bg-red-500/15 px-2.5 py-1.5 text-[11px] font-bold text-red-300 active:scale-95">Cerrar sesión</button>
+                  </div>
+                </div>}
+              </>}
+              {editProfileTab !== 'security' && <div className="grid grid-cols-2 gap-2 pt-1">
                 <button type="button" onClick={() => setEditProfile(false)}
                   className="rounded-xl border border-white/10 bg-white/5 py-2.5 text-xs font-bold text-white/60 active:scale-95">
                   Cancelar
@@ -21502,7 +21614,7 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
                   className="rounded-xl bg-accent py-2.5 text-xs font-black text-bg active:scale-95 disabled:opacity-50">
                   {profileSaving ? <Loader2 className="mx-auto h-4 w-4 animate-spin" /> : 'Guardar'}
                 </button>
-              </div>
+              </div>}
             </div>
           </div>
         </div>
@@ -21619,46 +21731,6 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
           </button>
         )}
 
-        {/* Cuentas vinculadas */}
-        <button
-          data-tour="profile-linked-accounts"
-          onClick={() => setShowLinkedAccountsModal(true)}
-          className="card px-3.5 py-2.5 w-full flex items-center justify-between border-white/5 hover:border-accent/30 bg-card active:scale-[0.99] transition"
-        >
-          <span className="flex items-center gap-3 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-accent/10 border border-accent/20 flex items-center justify-center flex-shrink-0 text-accent">
-              <LinkIcon className="h-4 w-4" />
-            </div>
-            <span className="text-left font-bold text-xs sm:text-sm text-white truncate">Cuentas vinculadas</span>
-          </span>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="text-[11px] text-white/40">
-              {hasTelegram && hasEmail ? 'Telegram + Email' : hasTelegram ? 'Telegram' : hasEmail ? 'Email' : 'Sin vincular'}
-            </span>
-            <ChevronRight className="h-4 w-4 text-white/30" />
-          </div>
-        </button>
-
-        {/* Contraseña web */}
-        <button
-          data-tour="profile-password"
-          onClick={() => setShowPwdModal(true)}
-          className="card px-3.5 py-2.5 w-full flex items-center justify-between border-white/5 hover:border-amber-400/30 bg-card active:scale-[0.99] transition"
-        >
-          <span className="flex items-center gap-3 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/20 flex items-center justify-center flex-shrink-0 text-amber-400">
-              <KeyRound className="h-4 w-4" />
-            </div>
-            <span className="text-left font-bold text-xs sm:text-sm text-white truncate">Contraseña de acceso</span>
-          </span>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="text-[11px] text-white/40">
-              {profile.has_password ? 'Configurada' : 'Sin configurar'}
-            </span>
-            <ChevronRight className="h-4 w-4 text-white/30" />
-          </div>
-        </button>
-
         {/* Precios para revendedores según recarga USDT */}
         <button
           onClick={() => window.dispatchEvent(new CustomEvent('open-reseller-pricing'))}
@@ -21744,27 +21816,6 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
           </div>
         )}
 
-        {/* Sesión activa y Cerrar sesión */}
-        <div className="card px-3.5 py-2.5 flex items-center justify-between border-white/5 bg-card/60">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-white/5 border border-white/10 flex items-center justify-center flex-shrink-0 text-white/50">
-              <LockKeyhole className="h-4 w-4" />
-            </div>
-            <div className="text-left min-w-0">
-              <p className="font-bold text-xs text-white truncate">Sesión activa</p>
-              <p className="text-[10px] text-white/40 truncate">Vía {isTg ? 'Telegram' : 'Email'}</p>
-            </div>
-          </div>
-          {!isTg && (
-            <button
-              onClick={async () => { await api.logout(); location.reload() }}
-              className="rounded-lg bg-red-500/10 border border-red-500/25 px-2.5 py-1 text-xs font-bold text-red-400 hover:bg-red-500/20 active:scale-95 transition-all flex items-center gap-1.5 flex-shrink-0"
-            >
-              <LogOut className="h-3.5 w-3.5" />
-              <span>Cerrar sesión</span>
-            </button>
-          )}
-        </div>
       </div>
 
       {/* Modal Programa de Referidos */}
@@ -26652,55 +26703,55 @@ function PanelScreen({ me, setMe, onLogout, onHome, onOpenCase, onEditProduct, i
   const tabs = useMemo(() => {
     if (activeRole === 'admin') {
       return [
-        { id: 'dashboard', label: 'Resumen', icon: Home },
-        { id: 'products', label: 'Productos', icon: Package },
-        { id: 'master-catalog', label: 'Catálogo Maestro & IA', icon: Boxes },
-        { id: 'orders', label: 'Pedidos', icon: ClipboardList },
-        { id: 'cases', label: 'Bandeja & Soporte', icon: Headphones },
-        { id: 'recharges', label: 'Mis recargas', icon: Smartphone },
-        { id: 'pricing', label: 'Ganancias', icon: DollarSign },
-        { id: 'sms', label: 'Números SMS', icon: Smartphone },
-        { id: 'smm', label: 'Servicios SMM', icon: Share2 },
-        { id: 'fzr', label: 'FZR Cards', icon: Sparkles },
-        { id: 'streaming', label: 'Streaming & Proveedor', icon: Tv, badge: 'StreamZone' },
-        { id: 'b2b-api', label: 'API B2B', icon: Code2 },
-        { id: 'sellers', label: 'Vendedores', icon: BriefcaseBusiness },
-        { id: 'withdrawals', label: 'Retiros', icon: WalletCards },
-        { id: 'users', label: 'Clientes', icon: User },
-        { id: 'reviews', label: 'Valoraciones', icon: BadgeCheck },
-        { id: 'audit', label: 'Auditoría', icon: ShieldCheck },
-        { id: 'seller-permissions', label: 'Permisos Categorías GG', icon: Award },
-        { id: 'promotions', label: 'Banners Promocionales', icon: Megaphone },
-        { id: 'res-b2b-webstore', label: 'Mi Tienda Web', icon: Store },
+        { id: 'dashboard', label: 'Resumen', sublabel: 'Métricas y actividad global', icon: Home },
+        { id: 'products', label: 'Productos', sublabel: 'Catálogo de servicios y stock', icon: Package },
+        { id: 'master-catalog', label: 'Catálogo Maestro & IA', sublabel: 'Sincronización y scraper inteligente', icon: Boxes },
+        { id: 'orders', label: 'Pedidos', sublabel: 'Control de compras y entregas', icon: ClipboardList },
+        { id: 'cases', label: 'Bandeja & Soporte', sublabel: 'Casos y disputas activas', icon: Headphones },
+        { id: 'recharges', label: 'Mis recargas', sublabel: 'Líneas móviles y pines', icon: Smartphone },
+        { id: 'pricing', label: 'Ganancias', sublabel: 'Márgenes de ganancia y costos', icon: DollarSign },
+        { id: 'sms', label: 'Números SMS', sublabel: 'Activaciones temporales y virtuales', icon: Smartphone },
+        { id: 'smm', label: 'Servicios SMM', sublabel: 'Paneles y redes sociales', icon: Share2 },
+        { id: 'fzr', label: 'FZR Cards', sublabel: 'Tarjetas de regalo e inventario', icon: Sparkles },
+        { id: 'streaming', label: 'Streaming & Proveedor', sublabel: 'Cuentas y perfiles automatizados', icon: Tv },
+        { id: 'b2b-api', label: 'API B2B', sublabel: 'Gestión de clientes mayoristas', icon: Code2 },
+        { id: 'sellers', label: 'Vendedores', sublabel: 'Comercios afiliados y saldo', icon: BriefcaseBusiness },
+        { id: 'withdrawals', label: 'Retiros', sublabel: 'Solicitudes y pagos pendientes', icon: WalletCards },
+        { id: 'users', label: 'Clientes', sublabel: 'Gestión de cuentas y KYC', icon: User },
+        { id: 'reviews', label: 'Valoraciones', sublabel: 'Opiniones y calificaciones', icon: BadgeCheck },
+        { id: 'audit', label: 'Auditoría', sublabel: 'Registro de seguridad y eventos', icon: ShieldCheck },
+        { id: 'seller-permissions', label: 'Permisos Categorías GG', sublabel: 'Aprobación de categorías de venta', icon: Award },
+        { id: 'promotions', label: 'Banners Promocionales', sublabel: 'Campañas y anuncios destacados', icon: Megaphone },
+        { id: 'res-b2b-webstore', label: 'Mi Tienda Web', sublabel: 'Negocio propio con Bot Telegram', icon: Store },
       ]
     } else if (activeRole === 'seller') {
       return [
-        { id: 'sales', label: 'Rendimiento', icon: TrendingUp, badge: 'New', category: 'General' },
-        { id: 'orders', label: 'Pedidos del vendedor', icon: ClipboardList, category: 'Pedidos' },
-        { id: 'cases', label: 'Posventa', icon: Headphones, badge: 'New', category: 'Pedidos' },
-        { id: 'new-offer', label: 'Nueva oferta', icon: Sparkles, category: 'Ofertas' },
-        { id: 'products', label: 'Mis ofertas', icon: Package, category: 'Ofertas' },
-        { id: 'recharges', label: 'Recargas', icon: Smartphone, category: 'Ofertas' },
-        { id: 'chat-messages', label: 'Mensajes de chat', icon: MessageCircle, category: 'Mensaje' },
-        { id: 'auto-reply', label: 'Respuesta automática', icon: Bot, category: 'Mensaje' },
-        { id: 'seller-manager', label: 'Seller Manager - Ben', icon: User, badge: 'Ben', category: 'Mensaje' },
-        { id: 'withdrawals', label: 'Billetera', icon: WalletCards, category: 'Finanzas' },
-        { id: 'seller-tiers', label: 'Categorías & Nivel', icon: Award, category: 'Permisos' },
-        { id: 'seller-channels', label: 'Canales Oficiales', icon: Bell, category: 'Comunidad' },
-        { id: 'store', label: 'Configuración Tienda', icon: Store, category: 'Tienda' },
-        { id: 'help', label: 'Centro de ayuda', icon: BookOpen, category: 'Soporte' },
+        { id: 'sales', label: 'Rendimiento', sublabel: 'Métricas de ventas y balance', icon: TrendingUp, category: 'General' },
+        { id: 'orders', label: 'Pedidos del vendedor', sublabel: 'Historial de ventas y entregas', icon: ClipboardList, category: 'Pedidos' },
+        { id: 'cases', label: 'Posventa', sublabel: 'Atención a reclamos y chat', icon: Headphones, category: 'Pedidos' },
+        { id: 'new-offer', label: 'Nueva oferta', sublabel: 'Publicar producto en catálogo', icon: Sparkles, category: 'Ofertas' },
+        { id: 'products', label: 'Mis ofertas', sublabel: 'Inventario activo y pausado', icon: Package, category: 'Ofertas' },
+        { id: 'recharges', label: 'Recargas', sublabel: 'Líneas móviles procesadas', icon: Smartphone, category: 'Ofertas' },
+        { id: 'chat-messages', label: 'Mensajes de chat', sublabel: 'Conversaciones con compradores', icon: MessageCircle, category: 'Mensaje' },
+        { id: 'auto-reply', label: 'Respuesta automática', sublabel: 'Mensajes predefinidos y bienvenida', icon: Bot, category: 'Mensaje' },
+        { id: 'seller-manager', label: 'Seller Manager - Ben', sublabel: 'Asesor IA y optimización de ventas', icon: User, category: 'Mensaje' },
+        { id: 'withdrawals', label: 'Billetera', sublabel: 'Fondos y cobro de ganancias', icon: WalletCards, category: 'Finanzas' },
+        { id: 'seller-tiers', label: 'Categorías & Nivel', sublabel: 'Reputación y límites autorizados', icon: Award, category: 'Permisos' },
+        { id: 'seller-channels', label: 'Canales Oficiales', sublabel: 'Notificaciones y comunidad', icon: Bell, category: 'Comunidad' },
+        { id: 'store', label: 'Configuración Tienda', sublabel: 'Perfil público, banner y horario', icon: Store, category: 'Tienda' },
+        { id: 'help', label: 'Centro de ayuda', sublabel: 'Guías para vendedores y soporte', icon: BookOpen, category: 'Soporte' },
       ]
     } else if (activeRole === 'reseller') {
       const resellerTabs = [
-        { id: 'res-b2b-dashboard', label: 'Resumen B2B', icon: LayoutDashboard },
-        { id: 'res-b2b-catalog', label: 'Catálogo B2B', icon: Boxes },
-        { id: 'res-b2b-orders', label: 'Mis Pedidos', icon: ReceiptText },
-        { id: 'res-b2b-wallet', label: 'Mi Saldo', icon: WalletCards },
-        { id: 'res-b2b-api', label: 'API y Webhooks', icon: Wrench },
-        { id: 'res-b2b-settings', label: 'Configuración', icon: User },
-        { id: 'res-b2b-support', label: 'Soporte VIP', icon: Smile },
+        { id: 'res-b2b-dashboard', label: 'Resumen B2B', sublabel: 'Balance y consumo de API', icon: LayoutDashboard },
+        { id: 'res-b2b-catalog', label: 'Catálogo B2B', sublabel: 'Precios mayoristas y stock', icon: Boxes },
+        { id: 'res-b2b-orders', label: 'Mis Pedidos', sublabel: 'Historial de compras mayoristas', icon: ReceiptText },
+        { id: 'res-b2b-wallet', label: 'Mi Saldo', sublabel: 'Fondos y recarga de saldo', icon: WalletCards },
+        { id: 'res-b2b-api', label: 'API y Webhooks', sublabel: 'Claves de acceso y eventos', icon: Wrench },
+        { id: 'res-b2b-settings', label: 'Configuración', sublabel: 'Ajustes de cuenta mayorista', icon: User },
+        { id: 'res-b2b-support', label: 'Soporte VIP', sublabel: 'Asistencia prioritaria 24/7', icon: Smile },
       ]
-      resellerTabs.splice(1, 0, { id: 'res-b2b-webstore', label: 'Mi Tienda Web', icon: Store, badge: 'PRO' })
+      resellerTabs.splice(1, 0, { id: 'res-b2b-webstore', label: 'Mi Tienda Web', sublabel: 'Negocio propio con Bot Telegram', icon: Store })
       return resellerTabs
     }
     return []
@@ -26858,34 +26909,51 @@ function PanelScreen({ me, setMe, onLogout, onHome, onOpenCase, onEditProduct, i
         )}
 
         {/* Listado de pestañas */}
-        <nav className="flex-1 overflow-y-auto p-3 space-y-1">
+        <nav className="flex-1 overflow-y-auto p-3 space-y-2.5">
           {tabs.map(item => {
             const Icon = item.icon
             const selected = item.id === activeTab
             return (
               <button
                 key={item.id}
+                type="button"
                 onClick={() => {
                   setActiveTab(item.id)
                   setMenuOpen(false)
                 }}
-                className={`flex w-full items-center justify-between gap-2 rounded-xl px-3.5 py-2.5 text-xs font-bold transition active:scale-[0.98] ${
+                className={`fs-admin-btn group flex w-full items-center rounded-2xl px-3 py-2.5 text-left active:scale-[0.98] ${
                   selected
-                    ? 'bg-accent/15 text-white border-l-2 border-accent'
-                    : 'text-white/60 hover:bg-white/5 hover:text-white'
+                    ? (activeRole === 'seller' ? 'is-active-amber text-white' : 'is-active-accent text-white')
+                    : 'text-white/75 hover:text-white'
                 }`}
               >
-                <div className="flex items-center gap-2.5 min-w-0">
-                  <Icon className={`h-4 w-4 flex-shrink-0 ${selected ? 'text-accent' : 'text-white/40'}`} />
-                  <span className="truncate">{item.label}</span>
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <div
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-all duration-200 ${
+                      selected
+                        ? (activeRole === 'seller'
+                            ? 'bg-amber-400 text-[#120e06] shadow-md shadow-amber-400/30'
+                            : 'bg-accent text-[#041d13] shadow-md shadow-accent/30')
+                        : 'bg-white/5 text-white/50 group-hover:bg-white/10 group-hover:text-white'
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <span
+                      className={`block truncate text-xs font-bold leading-tight ${
+                        selected ? 'text-white' : 'text-white/85 group-hover:text-white'
+                      }`}
+                    >
+                      {item.label}
+                    </span>
+                    {item.sublabel && (
+                      <span className="block truncate text-[10px] text-white/40 mt-0.5 leading-none font-medium">
+                        {item.sublabel}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                {item.badge && (
-                  <span className={`text-[9px] font-black px-1.5 py-0.2 rounded-md ${
-                    item.badge === 'New' ? 'bg-amber-500/20 text-amber-300' : 'bg-accent/20 text-accent'
-                  }`}>
-                    {item.badge}
-                  </span>
-                )}
               </button>
             )
           })}

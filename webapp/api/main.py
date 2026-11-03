@@ -26,7 +26,8 @@ import secrets
 import ipaddress
 import base64
 import socket
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+import math
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP, ROUND_CEILING
 from urllib.parse import urlparse
 _db_env = os.environ.get("DB_PATH", "")
 if not _db_env or not os.path.isabs(_db_env):
@@ -74,6 +75,11 @@ log = logging.getLogger("franchoshop")
 buffpin = BuffPinClient()
 oxapay = OxaPayClient()
 fivesim = FiveSimClient()
+try:
+    from webapp.api.stars_payment_client import StarsPaymentClient
+except ImportError:
+    from stars_payment_client import StarsPaymentClient
+stars_client = StarsPaymentClient()
 try:
     from webapp.api.streamzone_client import streamzone_client, StreamZoneError
 except ImportError:
@@ -653,6 +659,7 @@ async def lifespan(app: FastAPI):
     webhook_delivery_task = asyncio.create_task(reseller_webhook_delivery_loop())
     hold_release_task = asyncio.create_task(background_hold_release_loop())
     weekly_report_task = asyncio.create_task(background_weekly_report_loop())
+    rates_sync_task = asyncio.create_task(background_rates_sync_loop())
 
     # Crear tabla de iconos por juego (configurable desde admin)
     import aiosqlite
@@ -831,6 +838,7 @@ async def lifespan(app: FastAPI):
     webhook_delivery_task.cancel()
     hold_release_task.cancel()
     weekly_report_task.cancel()
+    rates_sync_task.cancel()
     try:
         await sms_sync_task
     except asyncio.CancelledError:
@@ -857,6 +865,10 @@ async def lifespan(app: FastAPI):
         pass
     try:
         await weekly_report_task
+    except asyncio.CancelledError:
+        pass
+    try:
+        await rates_sync_task
     except asyncio.CancelledError:
         pass
     await buffpin.close()
@@ -4015,6 +4027,24 @@ async def background_weekly_report_loop():
         await asyncio.sleep(900)
 
 
+async def background_rates_sync_loop():
+    """Bucle periódico en segundo plano para sincronizar las tasas de cambio de CUP y Saldo Móvil con QvaPay."""
+    log.info("Iniciando background_rates_sync_loop...")
+    await asyncio.sleep(20)
+    while True:
+        try:
+            auto_enabled = await settings.get_bool("cup_auto_rate_enabled", True)
+            if auto_enabled:
+                from qvapay_rates import sync_cup_rates_from_qvapay
+                await sync_cup_rates_from_qvapay(settings, force=False)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            log.warning("Error en background_rates_sync_loop: %s", e)
+
+        await asyncio.sleep(900)
+
+
 def build_order_ficha_html(
     title: str,
     order_id: int | str,
@@ -4184,11 +4214,41 @@ def strict_product_cost_to_usdt(product: dict) -> Decimal:
 
 async def get_cup_payment_settings(include_destinations: bool = False) -> dict:
     purchase_price = Decimal(str(await settings.get("cup_usdt_purchase_price", "1100")))
-    mobile_credit_value = Decimal(str(await settings.get("cup_mobile_credit_value", "1.96")))
+    mobile_credit_value = Decimal(str(await settings.get("cup_mobile_credit_value", "2.2")))
     if purchase_price <= 0 or mobile_credit_value <= 0:
         raise HTTPException(503, "La configuración de pago CUP no es válida")
-    transfer_rate = (purchase_price * CUP_TRANSFER_FACTOR).quantize(Decimal("0.00000001"), rounding=ROUND_HALF_UP)
-    mobile_rate = (transfer_rate / mobile_credit_value).quantize(Decimal("0.00000001"), rounding=ROUND_HALF_UP)
+
+    markup_type = await settings.get("cup_transfer_markup_type", "fixed")
+    markup_val = Decimal(str(await settings.get("cup_transfer_markup_val", "50")))
+    from decimal import ROUND_CEILING
+
+    if markup_type == "fixed":
+        raw_tr = purchase_price + markup_val
+    elif markup_type == "percent":
+        raw_tr = purchase_price * (Decimal("1") + (markup_val / Decimal("100")))
+    else:
+        raw_tr = purchase_price * CUP_TRANSFER_FACTOR
+
+    # Redondeo al alza a múltiplos de 5
+    transfer_rate = ((raw_tr / Decimal("5")).quantize(Decimal("1"), rounding=ROUND_CEILING) * Decimal("5")).quantize(Decimal("0.00000001"))
+    transfer_factor = (transfer_rate / purchase_price).quantize(Decimal("0.00000001"), rounding=ROUND_HALF_UP)
+
+    mobile_mode = await settings.get("cup_mobile_mode", "qvapay_direct")
+    mobile_markup_val = Decimal(str(await settings.get("cup_mobile_markup_val", "50")))
+    qvapay_raw_etecsa_str = await settings.get("cup_auto_qvapay_etecsa", "300.16")
+    try:
+        qvapay_etecsa_rate = Decimal(str(qvapay_raw_etecsa_str))
+    except Exception:
+        qvapay_etecsa_rate = Decimal("300.16")
+
+    if mobile_mode == "qvapay_direct" and qvapay_etecsa_rate > 0:
+        raw_mob = qvapay_etecsa_rate + mobile_markup_val
+    else:
+        raw_mob = transfer_rate / mobile_credit_value
+
+    # Redondeo al alza a múltiplos de 5
+    mobile_rate = ((raw_mob / Decimal("5")).quantize(Decimal("1"), rounding=ROUND_CEILING) * Decimal("5")).quantize(Decimal("0.00000001"))
+
     card_number = (await settings.get("cup_transfer_card_number", "")).strip()
     confirmation_number = (await settings.get("cup_transfer_confirmation_number", "")).strip()
     mobile_number = (await settings.get("cup_mobile_destination_number", "")).strip()
@@ -4200,6 +4260,18 @@ async def get_cup_payment_settings(include_destinations: bool = False) -> dict:
         "mobile_credit_value": str(mobile_credit_value),
         "transfer_rate": str(transfer_rate),
         "mobile_rate": str(mobile_rate),
+        "sale_factor": str(transfer_factor),
+        "auto_rate_enabled": await settings.get_bool("cup_auto_rate_enabled", True),
+        "transfer_markup_type": markup_type,
+        "transfer_markup_val": str(markup_val),
+        "mobile_mode": mobile_mode,
+        "mobile_markup_val": str(mobile_markup_val),
+        "auto_source": await settings.get("cup_rate_source", "qvapay"),
+        "auto_last_sync": await settings.get("cup_auto_last_sync", ""),
+        "qvapay_raw_cup": await settings.get("cup_auto_qvapay_cup", ""),
+        "qvapay_raw_etecsa": await settings.get("cup_auto_qvapay_etecsa", ""),
+        "qvapay_raw_mlc": await settings.get("cup_auto_qvapay_mlc", ""),
+        "auto_last_error": await settings.get("cup_auto_last_error", ""),
         "max_delivery_hours": await settings.get_int("cup_payment_max_delivery_hours", 24),
         "methods": {
             "cup_card_transfer": {"enabled": card_enabled, "label": "Transferencia CUP"},
@@ -4213,7 +4285,7 @@ async def get_cup_payment_settings(include_destinations: bool = False) -> dict:
     return payload
 
 
-async def calculate_cup_quote(product: dict, method: str) -> dict:
+async def calculate_cup_quote(product: dict, method: str, price_usdt: float | Decimal | None = None, user_role: str = "user") -> dict:
     if method not in CUP_PAYMENT_METHODS:
         raise HTTPException(400, "Método de pago CUP no válido")
     if product.get("custom_price"):
@@ -4221,49 +4293,60 @@ async def calculate_cup_quote(product: dict, method: str) -> dict:
     settings_data = await get_cup_payment_settings()
     if not settings_data["enabled"] or not settings_data["methods"][method]["enabled"]:
         raise HTTPException(409, "Este método de pago CUP no está disponible temporalmente")
+    
+    # Calcular en base al precio al cliente (con margen comercial), no al costo base del proveedor
+    if price_usdt is not None:
+        sell_price = Decimal(str(price_usdt))
+    else:
+        pricing = await calculate_product_price(product, user_role)
+        sell_price = Decimal(str(pricing["sell_price"]))
+        
     cost_usdt = strict_product_cost_to_usdt(product)
     rate = Decimal(settings_data["transfer_rate"] if method == "cup_card_transfer" else settings_data["mobile_rate"])
-    raw_amount = cost_usdt * rate
-    amount = int((raw_amount / Decimal("10")).quantize(Decimal("1"), rounding=ROUND_HALF_UP) * Decimal("10"))
+    raw_amount = sell_price * rate
+    amount = int(((raw_amount / Decimal("5")).quantize(Decimal("1"), rounding=ROUND_CEILING)) * Decimal("5"))
     if amount <= 0:
         raise HTTPException(409, "No se pudo cotizar este producto en CUP")
+    sale_factor = Decimal(str(settings_data.get("sale_factor") or CUP_TRANSFER_FACTOR))
     return {
         "method": method,
         "amount_cup": amount,
+        "sell_price_usdt": sell_price,
         "provider_cost_usdt": cost_usdt,
         "purchase_price_usdt_cup": Decimal(settings_data["purchase_price_usdt_cup"]),
-        "sale_factor": CUP_TRANSFER_FACTOR,
+        "sale_factor": sale_factor,
         "sale_rate": rate,
         "max_delivery_hours": int(settings_data["max_delivery_hours"]),
     }
 
 
-async def calculate_cup_quote_from_usdt_cost(cost_usdt: float | Decimal, method: str) -> dict:
-    """Cotiza CUP desde el costo real FZR, nunca desde el precio público en USDT."""
+async def calculate_cup_quote_from_usdt_cost(price_usdt: float | Decimal, method: str) -> dict:
+    """Cotiza CUP desde el precio de venta en USDT (precio al cliente)."""
     if method not in CUP_PAYMENT_METHODS:
         raise HTTPException(400, "Método de pago CUP no válido")
     settings_data = await get_cup_payment_settings()
     if not settings_data["enabled"] or not settings_data["methods"][method]["enabled"]:
         raise HTTPException(409, "Este método de pago CUP no está disponible temporalmente")
     try:
-        cost = Decimal(str(cost_usdt))
+        price = Decimal(str(price_usdt))
     except (InvalidOperation, ValueError):
-        raise HTTPException(409, "Este producto no tiene un costo válido para pago directo en CUP")
-    if cost <= 0:
+        raise HTTPException(409, "Este producto no tiene un precio válido para pago directo en CUP")
+    if price <= 0:
         raise HTTPException(409, "Este producto no está disponible para pago directo en CUP")
     rate = Decimal(settings_data["transfer_rate"] if method == "cup_card_transfer" else settings_data["mobile_rate"])
-    amount = int(((cost * rate) / Decimal("10")).quantize(Decimal("1"), rounding=ROUND_HALF_UP) * Decimal("10"))
+    amount = int((((price * rate) / Decimal("5")).quantize(Decimal("1"), rounding=ROUND_CEILING)) * Decimal("5"))
     if amount <= 0:
         raise HTTPException(409, "No se pudo cotizar este producto en CUP")
+    sale_factor = Decimal(str(settings_data.get("sale_factor") or CUP_TRANSFER_FACTOR))
     return {
-        "method": method, "amount_cup": amount, "provider_cost_usdt": cost,
+        "method": method, "amount_cup": amount, "provider_cost_usdt": price, "sell_price_usdt": price,
         "purchase_price_usdt_cup": Decimal(settings_data["purchase_price_usdt_cup"]),
-        "sale_factor": CUP_TRANSFER_FACTOR, "sale_rate": rate,
+        "sale_factor": sale_factor, "sale_rate": rate,
         "max_delivery_hours": int(settings_data["max_delivery_hours"]),
     }
 
 
-async def cup_checkout_options(product: dict) -> dict:
+async def cup_checkout_options(product: dict, price_usdt: float | Decimal | None = None, user_role: str = "user") -> dict:
     try:
         settings_data = await get_cup_payment_settings()
     except HTTPException:
@@ -4275,7 +4358,7 @@ async def cup_checkout_options(product: dict) -> dict:
         if not data["enabled"]:
             continue
         try:
-            quote = await calculate_cup_quote(product, method)
+            quote = await calculate_cup_quote(product, method, price_usdt=price_usdt, user_role=user_role)
             methods.append({"method": method, "label": data["label"], "amount_cup": quote["amount_cup"]})
         except HTTPException:
             continue
@@ -4317,6 +4400,12 @@ class CupPaymentSettingsUpdate(BaseModel):
     mobile_transfer_enabled: bool = True
     mobile_destination_number: str = ""
     max_delivery_hours: int = 24
+    auto_rate_enabled: Optional[bool] = None
+    transfer_markup_type: Optional[str] = None
+    transfer_markup_val: Optional[str] = None
+    mobile_mode: Optional[str] = None
+    mobile_markup_val: Optional[str] = None
+    auto_source: Optional[str] = None
 
 
 class CupPaymentRejectionRequest(BaseModel):
@@ -4350,11 +4439,12 @@ async def cup_payment_instructions(method: str, quote: dict) -> dict:
         "max_delivery_hours": max_hours,
         "submit_label": "Enviar pago para verificar",
         "after_payment": [
-            "⚡ Transfermóvil (Android): Pega tu Nro. de Transacción (ej: BR601E8LTI997) para acreditación 100% automática en segundos 24/7.",
-            "⚠️ EnZona o iPhone: Requieren verificación manual. Adjunta la captura completa de tu comprobante.",
-            "🕒 Horario recomendado de atención manual: Lunes a Viernes de 8:00 AM a 4:00 PM (fuera de este horario puede demorar según disponibilidad).",
+            "⚡ Transfermóvil (Android): Pega tu Nro. de Transacción obligatorio. Si el teléfono del admin recibe el SMS, se auto-acredita en segundos las 24 horas.",
+            "⚠️ EnZona o iPhone: Pasa a pago manual (EnZona no envía la tarjeta destino por seguridad, y en iPhone no se puede poner número a confirmar).",
+            "⚡ Si el admin está en apagón: El SMS del banco puede demorar en entrar hasta que regrese la corriente o señal; se verificará manualmente con tu comprobante.",
+            "🕒 Horario de atención manual: Lunes a Viernes de 8:00 AM a 4:00 PM (fuera de este horario se procesa según disponibilidad del equipo de soporte).",
         ],
-        "delivery_notice": f"Por la situación eléctrica o demoras de ETECSA, la recarga puede demorar hasta {max_hours} horas si requiere revisión manual.",
+        "delivery_notice": f"Por la situación energética o demoras de ETECSA, la recarga puede demorar hasta {max_hours} horas si requiere revisión manual.",
     }
     if method == "cup_card_transfer":
         return {
@@ -4365,9 +4455,11 @@ async def cup_payment_instructions(method: str, quote: dict) -> dict:
             "confirmation_number": cfg["confirmation_number"],
             "warnings": [
                 "Transfiere exactamente el importe indicado en CUP.",
-                "⚡ Transfermóvil: Acreditación automática inmediata 24/7 con tu Nro. de Transacción.",
-                "⚠️ EnZona o iPhone: Requiere verificación manual (horario recomendado: 8:00 AM a 4:00 PM, Lunes a Viernes).",
-                "El número a confirmar de la tarjeta receptora es obligatorio.",
+                "⚠️ Es OBLIGATORIO ingresar el Nro. de Transacción de tu comprobante.",
+                "⚡ Transfermóvil (Android): Acreditación automática si entra el SMS bancario con número a confirmar.",
+                "⚠️ EnZona o iPhone: Cae en pago manual (EnZona no indica tarjeta destino y en iPhone no se puede confirmar).",
+                "⚡ Si el receptor está en apagón: El SMS no entra de inmediato y se revisará manualmente con tu captura.",
+                "El número a confirmar de la tarjeta receptora es obligatorio si usas Transfermóvil.",
             ],
         }
     return {
@@ -4376,8 +4468,10 @@ async def cup_payment_instructions(method: str, quote: dict) -> dict:
         "title": "Pago por transferencia de saldo móvil",
         "mobile_destination_number": cfg["mobile_destination_number"],
         "warnings": [
-            "Envía una captura completa, sin recortar ni tachar, del SMS de confirmación de CUBACEL.",
+            "Por saldo móvil NO se necesita número de transacción.",
+            "Indica obligatoriamente el número desde donde envías el saldo (si envías desde otro teléfono, pon ese número).",
             "Usa únicamente Transferencia de Saldo mediante *234#.",
+            "⚡ Automático al recibir el SMS de Cubacel. Si el receptor está en apagón, se cotejará manualmente con tu captura.",
             "No uses Recarga desde Transfermóvil o Enzona hacia este número: ese dinero no podrá recuperarse.",
         ],
     }
@@ -4555,6 +4649,19 @@ class DepositCreateRequest(BaseModel):
     is_checkout: bool = False
     pay_currency: str = Field(default="USDT", min_length=2, max_length=16)
     network: str = Field(default="", max_length=80)
+
+
+class StarsDepositCreateRequest(BaseModel):
+    amount_usdt: Optional[float] = None
+    amount_stars: Optional[int] = None
+    is_checkout: bool = False
+    description: Optional[str] = None
+
+
+class StarsOrderInvoiceRequest(BaseModel):
+    product_id: int
+    option_id: Optional[int] = None
+    customer_data: Optional[dict] = Field(default_factory=dict)
 
 
 class PublicPaymentCreateRequest(BaseModel):
@@ -5187,7 +5294,7 @@ async def public_product_detail(product_id: int, region: str = None):
         "region": region,
         "price": float(price),
         "cost": convert_product_cost_to_usdt(p),
-        "cup_payment": await cup_checkout_options(p),
+        "cup_payment": await cup_checkout_options(p, price_usdt=float(price)),
         "icon_url": info_override.get("icon_url"),
         **merge_product_info_sections(p, game, info_override),
         "fields": fields,
@@ -5654,6 +5761,30 @@ async def check_web_deposit(track_id: str, user: dict = Depends(get_current_user
             "balance": float(await db.get_balance(user_id)),
         }
 
+    if str(track_id).startswith("inv_"):
+        try:
+            info = await stars_client.get_invoice(track_id)
+        except Exception as e:
+            log.warning("Error consultando Stars invoice %s: %s", track_id, e)
+            info = {}
+        stars_status = str(info.get("status") or "").upper()
+        if stars_status == "PAID":
+            await db.update_deposit(track_id, "paid", json.dumps(info, ensure_ascii=False))
+            amount = float(dep.get("amount_usd", 0))
+            await db.add_balance(user_id, amount, "deposit", track_id, f"Depósito Telegram Stars (${amount:.2f} USDT)")
+            return {
+                "ok": True,
+                "status": "paid",
+                "amount": amount,
+                "balance": float(await db.get_balance(user_id)),
+            }
+        return {
+            "ok": True,
+            "status": "pending",
+            "amount": float(dep.get("amount_usd", 0)),
+            "balance": float(await db.get_balance(user_id)),
+        }
+
     try:
         info = await oxapay.get_payment(track_id)
     except OxaPayError as e:
@@ -5829,6 +5960,402 @@ async def oxapay_deposit_callback(request: Request):
     return {"ok": True, "status": status, "credited": False}
 
 
+# ==============================================================================
+# ⭐ TELEGRAM STARS PAYMENT GATEWAY INTEGRATION
+# ==============================================================================
+
+@app.get("/api/stars/rates")
+async def api_stars_rates():
+    """Consulta las tasas oficiales de Telegram Stars vigentes."""
+    try:
+        rates = await stars_client.get_rates()
+        return {"ok": True, **rates}
+    except Exception as e:
+        log.error("Error obteniendo tasas de Stars: %s", e)
+        raise HTTPException(502, f"Error consultando gateway de Stars: {e}")
+
+
+@app.post("/api/deposits/stars")
+@app.post("/api/stars/create-invoice")
+async def api_create_stars_deposit(req: StarsDepositCreateRequest, user: dict = Depends(get_current_user)):
+    """Crea una factura de cobro con Telegram Stars ⭐ y devuelve el checkout_url."""
+    user_id = user["id"]
+    if await db.is_banned(user_id):
+        raise HTTPException(403, "Cuenta suspendida")
+
+    try:
+        rates = await stars_client.get_rates()
+    except Exception as e:
+        log.error("Error contactando Stars Gateway para tasas: %s", e)
+        rates = {"tasa_usdt": 0.004375, "tasa_cup": 3.5}
+
+    tasa_usdt = float(rates.get("tasa_usdt", 0.004375))
+    if tasa_usdt <= 0:
+        tasa_usdt = 0.004375
+
+    if req.amount_stars and req.amount_stars > 0:
+        amount_stars = int(req.amount_stars)
+        amount_usdt = round(amount_stars * tasa_usdt, 2)
+    elif req.amount_usdt and req.amount_usdt > 0:
+        amount_usdt = round(float(req.amount_usdt), 2)
+        amount_stars = max(1, math.ceil(amount_usdt / tasa_usdt))
+    else:
+        raise HTTPException(400, "Debe especificar amount_stars o amount_usdt")
+
+    min_dep = await settings.get_float("min_deposit", 1.0)
+    reseller_min = await get_reseller_min_deposit()
+    role = await get_user_role(user_id)
+    effective_min = reseller_min if role == "reseller" and not req.is_checkout else min_dep
+
+    import aiosqlite
+    async with aiosqlite.connect(config.DB_PATH) as conn:
+        async with conn.execute("SELECT COUNT(*) FROM reseller_api_keys WHERE user_id=? AND status='active'", (user_id,)) as cur:
+            has_active_api_keys = int((await cur.fetchone())[0]) > 0
+
+    if has_active_api_keys and not req.is_checkout and amount_usdt < 50.0:
+        raise HTTPException(400, "Tienes claves de API B2B activas. Para conservar tu acceso a la API, cada depósito debe ser de al menos 50.00 USDT (no acumulables).")
+
+    if not req.is_checkout and amount_usdt < effective_min:
+        if role == "reseller":
+            raise HTTPException(400, f"Para precios de revendedor debes recargar mínimo {reseller_min:.2f} USDT en una sola operación.")
+        raise HTTPException(400, f"Mínimo {effective_min:.2f} USDT")
+
+    if amount_usdt > 10000:
+        raise HTTPException(400, "Máximo 10,000 USDT")
+
+    dep_id = db.gen_deposit_id()
+    desc = req.description or f"Francho Shop - Recarga {amount_usdt:.2f} USDT ({amount_stars} ⭐)"
+
+    try:
+        inv = await stars_client.create_invoice(
+            amount_stars=amount_stars,
+            description=desc,
+            custom_order_id=dep_id,
+            title="Francho Shop Saldo",
+            photo_url="https://franchoshop.com/franchoshop-banner.png"
+        )
+    except Exception as e:
+        log.error("Error al generar factura Stars: %s", e)
+        raise HTTPException(502, f"Error al generar factura de Telegram Stars: {e}")
+
+    invoice_id = inv.get("invoice_id")
+    checkout_url = inv.get("checkout_url")
+    if not invoice_id or not checkout_url:
+        raise HTTPException(502, "El gateway de Stars no devolvió un enlace de factura válido")
+
+    await db.create_deposit(user_id, amount_usdt, invoice_id, checkout_url)
+
+    return {
+        "ok": True,
+        "deposit_id": dep_id,
+        "invoice_id": invoice_id,
+        "amount_stars": amount_stars,
+        "amount_usdt": amount_usdt,
+        "checkout_url": checkout_url,
+        "pay_link": checkout_url,
+        "status": "pending"
+    }
+
+
+@app.get("/api/stars/invoices/{invoice_id}")
+async def api_get_stars_invoice(invoice_id: str):
+    """Consulta el estado de una factura en Stars Gateway."""
+    try:
+        inv = await stars_client.get_invoice(invoice_id)
+        return {"ok": True, "invoice": inv}
+    except Exception as e:
+        raise HTTPException(502, f"Error consultando factura de Stars: {e}")
+
+
+@app.post("/api/stars/create-order-invoice")
+async def api_create_stars_order_invoice(req: StarsOrderInvoiceRequest, user: dict = Depends(get_current_user)):
+    """Crea una factura de cobro con Telegram Stars ⭐ directa para comprar un producto."""
+    user_id = user["id"]
+    if await db.is_banned(user_id):
+        raise HTTPException(403, "Cuenta suspendida")
+
+    product = await db.get_manual_product(req.product_id)
+    if not product or not product["is_active"]:
+        raise HTTPException(404, "Producto no disponible")
+
+    options = [o for o in product.get("options", []) if o.get("is_active", 1)]
+    selected_option = None
+    if options:
+        if req.option_id:
+            selected_option = next((o for o in options if o["id"] == req.option_id), None)
+        if not selected_option:
+            selected_option = options[0]
+        price_usdt = float(selected_option["price"])
+        opt_name = selected_option.get("name")
+    else:
+        price_usdt = float(product["price"])
+        opt_name = None
+
+    try:
+        rates = await stars_client.get_rates()
+        t_usdt = float(rates.get("tasa_usdt", 0.0065))
+    except Exception:
+        t_usdt = 0.0065
+
+    # Para producto de prueba 36 o precios <= 0.01 USDT, cobrar exactamente 1 estrella
+    if req.product_id == 36 or price_usdt <= 0.01:
+        amount_stars = 1
+    else:
+        amount_stars = max(1, math.ceil(price_usdt / t_usdt))
+
+    prod_label = f"{product['name']} - {opt_name}" if opt_name else product["name"]
+
+    order_id = await db.create_manual_order(
+        req.product_id,
+        user_id,
+        price_usdt,
+        option_id=selected_option.get("id") if selected_option else None,
+        option_name=opt_name,
+        customer_data=req.customer_data or {},
+        delivery_time=product.get("delivery_time") or "⚡ Instantáneo"
+    )
+
+    custom_order_id = f"FS-MO-{order_id}"
+    desc = f"Pago de {prod_label} en Francho Shop ({amount_stars} ⭐)"[:255]
+    title = f"{prod_label}"[:32]
+
+    try:
+        inv = await stars_client.create_invoice(
+            amount_stars=amount_stars,
+            description=desc,
+            custom_order_id=custom_order_id,
+            title=title,
+            photo_url="https://franchoshop.com/franchoshop-banner.png"
+        )
+    except Exception as e:
+        log.error("Error al generar factura Stars para orden manual: %s", e)
+        raise HTTPException(502, f"Error al generar factura de Telegram Stars: {e}")
+
+    checkout_url = inv.get("checkout_url")
+    return {
+        "ok": True,
+        "order_id": order_id,
+        "amount_stars": amount_stars,
+        "checkout_url": checkout_url,
+        "invoice_id": inv.get("invoice_id"),
+        "status": "pending_stars"
+    }
+
+
+@app.post("/api/stars/webhook")
+@app.post("/api/stars-webhook")
+async def stars_payment_webhook(request: Request):
+    """
+    Webhook oficial para notificaciones de Stars Exchange Payment Gateway.
+    Verifica firma digital HMAC-SHA256 (cabecera X-Stars-Signature) y liquida depósitos u órdenes.
+    """
+    raw_body = await request.body()
+    signature_header = (
+        request.headers.get("X-Stars-Signature")
+        or request.headers.get("x-stars-signature")
+        or ""
+    )
+
+    if not stars_client.verify_webhook_signature(raw_body, signature_header):
+        log.warning("Firma HMAC de Webhook Stars inválida: %s", signature_header)
+        raise HTTPException(403, "Firma HMAC de Webhook Stars inválida")
+
+    try:
+        payload = json.loads(raw_body.decode("utf-8") or "{}")
+    except Exception:
+        raise HTTPException(400, "JSON del webhook inválido")
+
+    event = payload.get("event")
+    if event == "invoice.test":
+        log.info("Stars webhook de prueba (invoice.test) recibido y verificado correctamente")
+        return {"ok": True, "event": "invoice.test", "status": "verified"}
+
+    if event != "invoice.paid":
+        return {"ok": True, "status": "ignored", "event": event}
+
+    data = payload.get("data") or {}
+    invoice_id = str(data.get("invoice_id") or "").strip()
+    custom_order_id = str(data.get("custom_order_id") or "").strip()
+    amount_stars = int(data.get("amount_stars") or 0)
+    amount_usdt = float(data.get("amount_usdt") or 0.0)
+    payer_user_id = data.get("payer_user_id")
+    telegram_charge_id = data.get("telegram_charge_id")
+
+    if not invoice_id and not custom_order_id:
+        raise HTTPException(400, "Webhook Stars sin invoice_id ni custom_order_id")
+
+    if custom_order_id.startswith("FS-MO-"):
+        try:
+            m_order_id = int(custom_order_id.replace("FS-MO-", ""))
+            import aiosqlite
+            async with aiosqlite.connect(config.DB_PATH) as conn:
+                conn.row_factory = aiosqlite.Row
+                async with conn.execute("SELECT * FROM manual_orders WHERE id=?", (m_order_id,)) as cur:
+                    mo = await cur.fetchone()
+            if mo and mo["status"] != "completed":
+                p = await db.get_manual_product(mo["product_id"])
+                delivery_data = ((p or {}).get("auto_delivery_text") or "✅ ¡Gracias por tu compra con Telegram Stars!").strip()
+                await db.complete_manual_order(m_order_id, delivery_data, f"Completado tras pago de {amount_stars} ⭐ (Stars Gateway)", completed_by=0, event_type="auto_completed")
+                
+                try:
+                    u_id = int(mo["user_id"])
+                    await db.create_notification(
+                        user_id=u_id,
+                        type="order_completed",
+                        title="¡Pedido Completado!",
+                        message=f"Tu compra de {(p or {}).get('name', 'producto')} con {amount_stars} ⭐ ha sido entregada.",
+                        related_order_id=m_order_id,
+                        url=f"/pedido/{m_order_id}/seguimiento"
+                    )
+                except Exception:
+                    pass
+
+                log.info("Orden manual %s auto-completada con éxito tras pago de %s Stars", m_order_id, amount_stars)
+                return {"ok": True, "status": "order_completed", "order_id": m_order_id, "stars": amount_stars}
+        except Exception as mo_err:
+            log.error("Error procesando pago Stars para orden manual %s: %s", custom_order_id, mo_err)
+
+    dep = None
+    if invoice_id:
+        dep = await db.get_deposit_by_track(invoice_id)
+    if not dep and custom_order_id:
+        dep = await db.get_deposit_by_dep_id(custom_order_id)
+        if not dep:
+            dep = await db.get_deposit_by_track(custom_order_id)
+
+    public_payment = None
+    if not dep:
+        if invoice_id:
+            public_payment = await db.get_public_payment_by_track(invoice_id)
+        if not public_payment and custom_order_id:
+            public_payment = await db.get_public_payment_by_track(custom_order_id)
+
+    if not dep and not public_payment:
+        log.warning("Stars webhook: no se encontró depósito ni pago público para inv=%s / order=%s", invoice_id, custom_order_id)
+        return {"ok": True, "status": "not_found", "invoice_id": invoice_id}
+
+    raw_callback = json.dumps({"webhook": payload}, ensure_ascii=False)
+
+    if public_payment:
+        settled, credited = await db.settle_public_payment_request(public_payment["provider_track_id"], raw_callback)
+        if settled and credited:
+            await notify_public_payment_received(settled, "stars_webhook")
+        return {"ok": True, "status": "paid", "credited": credited, "invoice_id": invoice_id}
+
+    track_id = dep.get("track_id") or invoice_id
+    if dep.get("status") != "paid":
+        amount = float(dep.get("amount_usd") or amount_usdt)
+        u_id = int(dep["user_id"])
+        await db.update_deposit(track_id, "paid", raw_callback)
+        await db.add_balance(u_id, amount, "deposit", track_id, f"Depósito Telegram Stars {amount_stars} ⭐ (${amount:.2f} USDT)")
+
+        reseller_min = await get_reseller_min_deposit()
+        if amount >= reseller_min or (await get_user_max_single_paid_deposit(u_id)) >= reseller_min:
+            if (await db.get_user_role(u_id)) == "user":
+                await db.set_user_role(u_id, "reseller")
+
+        await audit_json(0, "stars.deposit_webhook", "deposit", track_id, {
+            "status": "paid",
+            "amount": amount,
+            "amount_stars": amount_stars,
+            "invoice_id": invoice_id,
+            "user_id": u_id,
+            "payer_user_id": payer_user_id,
+            "charge_id": telegram_charge_id
+        })
+
+        try:
+            u = await db.get_user(u_id) or {}
+            u_name = u.get("display_name") or u.get("first_name") or u.get("username") or f"Usuario {u_id}"
+            u_email = u.get("email") or "N/A"
+            wa_text = (
+                f"⭐ *NUEVO DEPÓSITO TELEGRAM STARS ACREDITADO* ⭐\n\n"
+                f"• *Estrellas:* {amount_stars} ⭐\n"
+                f"• *Monto USDT:* ${amount:.2f} USD\n"
+                f"• *Cliente:* {u_name} ({u_email})\n"
+                f"• *Método:* Telegram Stars Gateway\n"
+                f"• *Invoice ID:* {invoice_id}\n"
+                f"• *Estado:* ✅ Acreditado en balance"
+            )
+            asyncio.create_task(notify_order_whatsapp(wa_text))
+        except Exception as ex:
+            log.warning("No se pudo disparar alerta WhatsApp Stars: %s", ex)
+
+        try:
+            bal = await db.get_balance(u_id)
+            admin_tg = (
+                f"⭐ <b>Nuevo depósito Telegram Stars</b>\n\n"
+                f"👤 <b>Cliente:</b> {html.escape(u_name)} (ID: <code>{u_id}</code>)\n"
+                f"⭐ <b>Estrellas:</b> {amount_stars} ⭐\n"
+                f"💵 <b>Monto USDT:</b> ${amount:.2f} USDT\n"
+                f"📊 <b>Balance ahora:</b> ${bal:.2f} USDT\n"
+                f"🧾 <b>Factura:</b> <code>{invoice_id}</code>"
+            )
+            asyncio.create_task(notify_admins(admin_tg))
+            for aid in config.ADMIN_IDS:
+                asyncio.create_task(db.create_notification(
+                    user_id=int(aid), type="admin_deposit",
+                    title="⭐ Nuevo depósito Stars",
+                    message=f"{u_name} depositó {amount_stars} ⭐ (${amount:.2f} USDT) vía Telegram Stars.",
+                    url="/admin?tab=deposits"
+                ))
+            if fcm:
+                asyncio.create_task(fcm.notify_new_admin_deposit(config.ADMIN_IDS, u_name, amount, "Telegram Stars"))
+        except Exception as ex_ad:
+            log.warning("No se pudo disparar alerta Telegram Admin Stars: %s", ex_ad)
+
+        if u_id > 0:
+            try:
+                bal = await db.get_balance(u_id)
+                user_tg = (
+                    f"⭐ <b>¡Depósito en Telegram Stars recibido!</b>\n\n"
+                    f"Hola <b>{html.escape(u_name)}</b>, tu pago de <b>{amount_stars} ⭐</b> ha sido confirmado exitosamente.\n\n"
+                    f"💵 <b>Monto acreditado:</b> +${amount:.2f} USD\n"
+                    f"📊 <b>Saldo actual:</b> ${bal:.2f} USD\n"
+                    f"🆔 <b>Factura:</b> <code>{html.escape(str(invoice_id))}</code>\n\n"
+                    f"<i>Ya puedes utilizar tu saldo para compras o recargas en Francho Shop.</i>"
+                )
+                asyncio.create_task(send_telegram_html(u_id, user_tg))
+                asyncio.create_task(db.create_notification(
+                    user_id=u_id, type="deposit",
+                    title="⭐ Depósito Stars acreditado",
+                    message=f"Se acreditaron ${amount:.2f} USDT ({amount_stars} ⭐) a tu saldo.",
+                    url="/billetera"
+                ))
+                if fcm:
+                    asyncio.create_task(fcm.notify_deposit_confirmed(u_id, amount))
+            except Exception as ex_u:
+                log.warning("No se pudo enviar notificaciones Stars a usuario: %s", ex_u)
+
+            try:
+                if u_email and "@" in u_email and u_email != "N/A":
+                    dep_body = (
+                        f"<p>Hola <strong>{html.escape(u_name)}</strong>,</p>"
+                        f"<p>Tu depósito de Telegram Stars ha sido confirmado y acreditado exitosamente en tu saldo de Francho Shop.</p>"
+                        f"<div style='background:#fdf4ff;border:1px solid #f0abfc;border-left:4px solid #c026d3;padding:16px;border-radius:6px;margin:16px 0;'>"
+                        f"<p style='margin:4px 0;'><strong>Estrellas:</strong> {amount_stars} ⭐</p>"
+                        f"<p style='margin:4px 0;'><strong>Monto Acreditado:</strong> ${amount:.2f} USD</p>"
+                        f"<p style='margin:4px 0;'><strong>Método:</strong> Telegram Stars Gateway</p>"
+                        f"<p style='margin:4px 0;'><strong>ID de Factura:</strong> #{html.escape(str(invoice_id))}</p>"
+                        f"<p style='margin:4px 0;'><strong>Estado:</strong> <span style='color:#c026d3;font-weight:bold;'>Acreditado / Disponible</span></p>"
+                        f"</div>"
+                        f"<p>Ya puedes utilizar tu saldo disponible para adquirir cualquiera de nuestros productos y servicios.</p>"
+                        f"<p>¡Gracias por confiar en Francho Shop!</p>"
+                    )
+                    dep_email_html = web_auth.email_template("Depósito Telegram Stars Acreditado", dep_body)
+                    asyncio.create_task(web_auth.send_email(
+                        to=u_email,
+                        subject=f"⭐ Depósito de {amount_stars} Estrellas (${amount:.2f} USD) Acreditado — Francho Shop",
+                        html_body=dep_email_html
+                    ))
+            except Exception as ex_e:
+                log.warning("No se pudo disparar email Stars: %s", ex_e)
+
+        return {"ok": True, "status": "paid", "credited": True, "invoice_id": invoice_id}
+
+    return {"ok": True, "status": "already_paid", "credited": False, "invoice_id": invoice_id}
+
+
 @app.get("/api/me")
 async def me(user: dict = Depends(get_current_user)):
     user_id = user["id"]
@@ -5842,14 +6369,20 @@ async def me(user: dict = Depends(get_current_user)):
     max_single_deposit = await get_user_max_single_paid_deposit(user_id)
     vip_info = (await db.get_user_vip_status(user_id)) or {}
     kyc_info = (await db.get_user_kyc(user_id)) or {}
+    is_admin = role == "admin" or user_id in config.ADMIN_IDS
+    has_verified = bool(kyc_info.get("is_verified", False)) or is_admin or kyc_info.get("status") == "approved"
+    has_gold = bool(vip_info.get("is_vip", False)) or is_admin or bool(vip_info.get("plan_id"))
     return {
         "user_id": user_id,
         "name": full.get("display_name") or full.get("first_name") or user.get("first_name", "Usuario"),
         "display_name": full.get("display_name") or "",
+        "username": full.get("username") or user.get("username") or full.get("payment_handle") or "",
         "telegram_username": full.get("username") or user.get("username") or "",
+        "telegram_id": full.get("telegram_id") or user.get("telegram_id") or 0,
         "email": full.get("email") or "",
         "has_password": bool(full.get("password_hash")),
         "photo_url": full.get("photo_url") or "",
+        "avatar_url": full.get("photo_url") or "",
         "balance": float(await db.get_balance(user_id)),
         "public_code": full.get("public_code") or "",
         "payment_handle": full.get("payment_handle") or "",
@@ -5864,13 +6397,14 @@ async def me(user: dict = Depends(get_current_user)):
         "reseller_tier": get_reseller_tier_info(max_single_deposit),
         "retail_markup": await settings.get_float("retail_markup"),
         "reseller_markup": await settings.get_float("reseller_markup"),
-        "is_vip": vip_info.get("is_vip", False),
-        "vip_plan": vip_info.get("plan_id"),
-        "vip_badge": vip_info.get("badge"),
+        "is_vip": has_gold,
+        "is_gold": has_gold,
+        "vip_plan": vip_info.get("plan_id") or ("admin" if is_admin else None),
+        "vip_badge": vip_info.get("badge") or ("⭐ GOLD" if has_gold else None),
         "vip_expires_at": vip_info.get("expires_at"),
         "vip_days_remaining": vip_info.get("days_remaining", 0),
-        "kyc_status": kyc_info.get("status", "unverified"),
-        "is_verified": kyc_info.get("is_verified", False),
+        "kyc_status": "approved" if has_verified else kyc_info.get("status", "unverified"),
+        "is_verified": has_verified,
         "kyc_tier": kyc_info.get("tier", 0),
     }
 
@@ -7247,6 +7781,7 @@ async def b2b_streaming_catalog(auth_ctx: dict = Depends(_get_b2b_or_session_use
                 "region": p.get("region") or "Global"
             })
 
+        b2b_items.sort(key=lambda x: (not x["inStock"], x["name"].lower()))
         return {
             "ok": True,
             "total": len(b2b_items),
@@ -7400,7 +7935,7 @@ async def client_streaming_catalog():
                 "badge": p.get("badge")
             })
 
-        items.sort(key=lambda x: x["name"].lower())
+        items.sort(key=lambda x: (not x["in_stock"], x["name"].lower()))
         return {"ok": True, "products": items}
     except Exception as e:
         return {"ok": False, "error": str(e), "products": []}
@@ -8295,14 +8830,14 @@ async def sync_fzr_order_status(order: dict) -> dict:
     previous_status = str(order.get("status") or "pending")
     if local_status != previous_status or provider_status != str(order.get("provider_status") or ""):
         raw_response = json.dumps(response, ensure_ascii=False, default=str)
-        await db.update_fzr_order_status(int(order["id"]), local_status, provider_status=provider_status, raw_response=raw_response)
-        order.update({"status": local_status, "provider_status": provider_status, "raw_response": raw_response})
         if local_status in {"failed", "refunded"} and previous_status not in {"failed", "refunded"}:
             try:
                 await db.refund_fzr_order(int(order["id"]), reason="Cancelada / Reembolsada por el proveedor")
             except Exception:
                 log.exception("Error al procesar reembolso automático de pedido FZR %s", provider_order_id)
-        elif local_status == "completed" and previous_status != "completed":
+        await db.update_fzr_order_status(int(order["id"]), local_status, provider_status=provider_status, raw_response=raw_response)
+        order.update({"status": local_status, "provider_status": provider_status, "raw_response": raw_response})
+        if local_status == "completed" and previous_status != "completed":
             try:
                 await db.create_notification(
                     user_id=int(order["user_id"]), type="order_status",
@@ -8357,7 +8892,7 @@ async def sync_fzr_order_status(order: dict) -> dict:
 
 async def sync_fzr_cup_order_status(order: dict) -> dict:
     """Sincroniza pedidos FZR pagados en CUP que viven en la tabla normal de pedidos."""
-    provider_order_id = str(order.get("provider_order_id") or "").strip()
+    provider_order_id = str(order.get("provider_order_id") or order.get("buffpin_order_id") or "").strip()
     if not provider_order_id:
         return order
     try:
@@ -8936,7 +9471,7 @@ async def fzr_catalog_cup_options(req: FzrCatalogOrderCreate, user: dict = Depen
             if not details["enabled"]:
                 continue
             try:
-                quote = await calculate_cup_quote_from_usdt_cost(context["cost_price"], method)
+                quote = await calculate_cup_quote_from_usdt_cost(context["sell_price"], method)
                 methods.append({"method": method, "label": details["label"], "amount_cup": quote["amount_cup"]})
             except HTTPException:
                 continue
@@ -8959,7 +9494,7 @@ async def create_fzr_catalog_cup_order(req: FzrCatalogCupOrderCreate, user: dict
     await prevent_duplicate_purchase(user_id, "fzr_cup", hash(f"{context['provider_type']}:{context['category_id']}:{context['offer_id']}"), {"fields": context["fields"], "payment_method": req.payment_method})
     if await fzr_provider_balance_amount() < context["cost_price"]:
         raise HTTPException(503, "No disponible temporalmente. El proveedor no tiene saldo suficiente.")
-    quote = await calculate_cup_quote_from_usdt_cost(context["cost_price"], req.payment_method)
+    quote = await calculate_cup_quote_from_usdt_cost(context["sell_price"], req.payment_method)
     pricing_role = await get_effective_pricing_role(user_id)
     items_to_save = [
         {"offer_id": it["offer_id"], "quantity": it["quantity"], "name": it["offer"]["name"], "cost_price": it["cost_price"], "sell_price": it["sell_price"]}
@@ -10670,7 +11205,7 @@ async def product_detail(product_id: int, region: str = None, user: dict = Depen
         "region": region,
         "price": float(price),
         "cost": convert_product_cost_to_usdt(p),
-        "cup_payment": await cup_checkout_options(p),
+        "cup_payment": await cup_checkout_options(p, price_usdt=float(price)),
         "icon_url": info_override.get("icon_url"),
         **merge_product_info_sections(p, game, info_override),
         "fields": fields,
@@ -10951,6 +11486,11 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: str
     password: str
+    totp_code: Optional[str] = None
+
+
+class Enable2FaRequest(BaseModel):
+    code: str
 
 
 class GoogleAuthRequest(BaseModel):
@@ -11011,6 +11551,26 @@ async def auth_login(req: LoginRequest, request: Request):
     if not ok:
         log.warning("[AUTH_LOGIN_FAILED] email=%r, reason=%r", req.email, msg)
         raise HTTPException(401, msg)
+
+    # Verificación de doble factor Google Authenticator (TOTP)
+    if user.get("totp_enabled") and user.get("totp_secret"):
+        if not req.totp_code:
+            return {
+                "ok": True,
+                "requires_2fa": True,
+                "message": "Introduce el código de 6 dígitos de Google Authenticator",
+            }
+        try:
+            import pyotp
+            totp = pyotp.TOTP(user["totp_secret"])
+            if not totp.verify(req.totp_code.strip()):
+                raise HTTPException(401, "Código de Google Authenticator incorrecto o expirado")
+        except HTTPException:
+            raise
+        except Exception as e:
+            log.error("Error validando TOTP: %s", e)
+            raise HTTPException(400, "Error al validar código 2FA")
+
     token = web_auth.generate_session_token()
     ip = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent", "")[:200]
@@ -11181,6 +11741,82 @@ async def telegram_check_token(token: str, request: Request):
     }
 
 
+# ══════════════════════════════════════════════════════════════════
+#   DOBLE FACTOR DE AUTENTICACIÓN (GOOGLE AUTHENTICATOR / TOTP)
+# ══════════════════════════════════════════════════════════════════
+
+@app.get("/api/auth/2fa/setup")
+async def auth_2fa_setup(user: dict = Depends(get_current_user)):
+    """Genera o recupera el secreto TOTP y el código QR para vincular Google Authenticator."""
+    user_id = user["id"]
+    u = await db.get_user(user_id)
+    if not u:
+        raise HTTPException(404, "Usuario no encontrado")
+
+    import pyotp
+    import qrcode
+    import io
+
+    secret = u.get("totp_secret")
+    if not secret:
+        secret = pyotp.random_base32()
+        await db.update_user_totp_secret(user_id, secret)
+
+    account_name = u.get("email") or u.get("username") or f"usuario_{user_id}"
+    totp = pyotp.TOTP(secret)
+    provisioning_uri = totp.provisioning_uri(name=account_name, issuer_name="Francho Shop")
+
+    qr = qrcode.QRCode(box_size=6, border=2)
+    qr.add_data(provisioning_uri)
+    qr.make(fit=True)
+    img = qr.make_image(fill_color="black", back_color="white")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    qr_base64 = "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("utf-8")
+
+    return {
+        "ok": True,
+        "secret": secret,
+        "provisioning_uri": provisioning_uri,
+        "qr_code": qr_base64,
+        "is_enabled": bool(u.get("totp_enabled"))
+    }
+
+
+@app.post("/api/auth/2fa/enable")
+async def auth_2fa_enable(req: Enable2FaRequest, user: dict = Depends(get_current_user)):
+    """Verifica el código de Google Authenticator y activa el doble factor."""
+    user_id = user["id"]
+    u = await db.get_user(user_id)
+    if not u or not u.get("totp_secret"):
+        raise HTTPException(400, "Debes solicitar primero el código de configuración de 2FA")
+
+    import pyotp
+    totp = pyotp.TOTP(u["totp_secret"])
+    if not totp.verify(req.code.strip()):
+        raise HTTPException(400, "Código de autenticación inválido o expirado. Verifica la hora de tu teléfono.")
+
+    await db.set_user_totp_enabled(user_id, True)
+    return {"ok": True, "message": "Autenticación en dos pasos de Google activada correctamente"}
+
+
+@app.post("/api/auth/2fa/disable")
+async def auth_2fa_disable(req: Enable2FaRequest, user: dict = Depends(get_current_user)):
+    """Desactiva el doble factor validando el código actual de Google Authenticator."""
+    user_id = user["id"]
+    u = await db.get_user(user_id)
+    if not u or not u.get("totp_enabled"):
+        return {"ok": True, "message": "2FA ya se encontraba desactivado"}
+
+    import pyotp
+    totp = pyotp.TOTP(u.get("totp_secret") or "")
+    if not totp.verify(req.code.strip()):
+        raise HTTPException(400, "Código de autenticación inválido. Introduce el código actual para desactivar.")
+
+    await db.set_user_totp_enabled(user_id, False)
+    return {"ok": True, "message": "Autenticación en dos pasos desactivada"}
+
+
 
 @app.post("/api/auth/logout")
 async def auth_logout(authorization: str = Header(None)):
@@ -11255,6 +11891,7 @@ async def auth_me(user: dict = Depends(get_current_user)):
         "vip_badge": vip_info.get("badge"),
         "vip_expires_at": vip_info.get("expires_at"),
         "vip_days_remaining": vip_info.get("days_remaining", 0),
+        "totp_enabled": bool(full.get("totp_enabled")),
     }
 
 
@@ -11511,11 +12148,11 @@ async def create_cup_order(req: CupOrderRequest, user: dict = Depends(get_curren
     if not product or product.get("is_hidden"):
         raise HTTPException(404, "Producto no disponible")
     await assert_reseller_can_use_auto_product(user_id, product)
-    quote = await calculate_cup_quote(product, req.payment_method)
-    filled = build_buffpin_recharge_config(product, req.fields)
-    recharge_config = json.dumps(filled, ensure_ascii=False, default=str)
     pricing_role = await get_effective_pricing_role(user_id)
     public_pricing = await calculate_product_price(product, pricing_role)
+    quote = await calculate_cup_quote(product, req.payment_method, price_usdt=public_pricing["sell_price"], user_role=pricing_role)
+    filled = build_buffpin_recharge_config(product, req.fields)
+    recharge_config = json.dumps(filled, ensure_ascii=False, default=str)
     order_id = await db.create_cup_order(
         user_id=user_id,
         user_role=pricing_role,
@@ -11762,6 +12399,15 @@ def parse_cuba_sms(sender: str, body: str) -> dict:
     sender = str(sender or "").upper().strip()
     body_clean = " ".join(str(body or "").split())
     upper_body = body_clean.upper()
+    m_out = re.search(r'Transferencia\s+fue\s+completada.*?Beneficiario:\s*([0-9X]+).*?Monto:\s*([\d.]+)\s*CUP.*?Nro\.?\s*Transaccion[:\s]+([A-Z0-9]+)', body_clean, re.I)
+    if m_out:
+        dest_raw = re.sub(r'\D', '', m_out.group(1))
+        if dest_raw.endswith("8161"):
+            return {
+                "status": "INCOMING", "provider": "transfermovil", "type": "TRANSFERMOVIL_SENDER_CONFIRMATION",
+                "destination_card": m_out.group(1), "amount_cup": float(m_out.group(2)),
+                "transaction_id": m_out.group(3).upper(), "sender_phone": None
+            }
     if any(k in upper_body for k in ["ORDENANTE:", "LA TRANSFERENCIA FUE COMPLETADA", "LA RECARGA SE REALIZO CON EXITO", "FALLO LA TRANSFERENCIA", "USTED HA CANCELADO"]):
         return {"status": "OUTGOING_IGNORED"}
     m1 = re.search(r'transferencia\s+a\s+la\s+cuenta\s+(\d{16})\s+de\s+([\d.]+)\s*CUP\.?\s+Nro\.?\s*Transaccion[:\s]+([A-Z0-9]+)', body_clean, re.I)
@@ -11799,7 +12445,9 @@ def parse_cuba_sms(sender: str, body: str) -> dict:
             "destination_card": None, "amount_cup": float(m5.group(1)),
             "transaction_id": m5.group(2), "sender_phone": None
         }
-    m6 = re.search(r'(?:ha\s+recibido|recibi[oó]|recibida).*?(?:transferencia(?:\s+de\s+saldo)?|saldo)\s+(?:de\s+)?([\d.]+)\s*CUP.*?del\s+n[uú]mero\s+(\d+)', body_clean, re.I)
+    m6 = re.search(r'(?:ha\s+recibido|recibi[oó]|recibida)\s+(?:una\s+recarga\s+(?:de\s+saldo\s+movil\s+)?por\s+un\s+monto\s+de\s+)?(?:transferencia(?:\s+de\s+saldo)?|saldo)?\s*(?:de\s+)?([\d.]+)\s*CUP.*?del\s+n[uú]mero\s+(\d+)', body_clean, re.I)
+    if not m6:
+        m6 = re.search(r'ha\s+recibido\s+([\d.]+)\s*CUP\s+del\s+n[uú]mero\s+(\d+)', body_clean, re.I)
     if not m6:
         m6 = re.search(r'transferencia\s+de\s+saldo.*?([\d.]+)\s*CUP.*?del\s+n[uú]mero\s+(\d+)', body_clean, re.I)
     if m6:
@@ -11862,7 +12510,7 @@ async def receive_cuba_sms_webhook(payload: SmsWebhookPayload):
         if card and valid_destinations:
             clean_dest = re.sub(r'\D', '', str(card))
             dest_matches = any(
-                clean_dest == d or clean_dest.endswith(d) or d.endswith(clean_dest)
+                clean_dest == d or clean_dest.endswith(d) or d.endswith(clean_dest) or (len(clean_dest) >= 4 and len(d) >= 4 and clean_dest[-4:] == d[-4:])
                 for d in valid_destinations
             )
             if not dest_matches:
@@ -11897,6 +12545,79 @@ async def receive_cuba_sms_webhook(payload: SmsWebhookPayload):
         "ok": True, "processed": processed, "auto_fulfilled": auto_fulfilled,
         "message": f"Procesados {processed} SMS ({auto_fulfilled} pedidos auto-entregados)"
     }
+
+
+class TransfermovilInspectorPairRequest(BaseModel):
+    code: str
+    device_name: str = "Inspector Android"
+
+
+def _transfermovil_inspector_token(authorization: str | None) -> str:
+    value = str(authorization or "").strip()
+    if not value.startswith("Inspector "):
+        raise HTTPException(401, "Dispositivo Inspector no autenticado")
+    token = value[len("Inspector "):].strip()
+    if len(token) < 24:
+        raise HTTPException(401, "Token Inspector inválido")
+    return token
+
+
+async def _require_transfermovil_inspector(authorization: str | None) -> dict:
+    token = _transfermovil_inspector_token(authorization)
+    device = await db.get_transfermovil_inspector_device(token)
+    if not device:
+        raise HTTPException(401, "Dispositivo Inspector no autorizado")
+    return device
+
+
+@app.post("/api/admin/transfermovil-inspector/pairing-code")
+async def create_transfermovil_inspector_pairing_code(user: dict = Depends(get_current_user)):
+    """Genera un código de un solo uso para emparejar la APK Inspector."""
+    role = await get_user_role(user["id"])
+    if role != "admin":
+        raise HTTPException(403, "Solo el administrador puede emparejar Inspector")
+    code = await db.create_transfermovil_inspector_pairing(user["id"], ttl_seconds=600)
+    await audit_json(user["id"], "transfermovil_inspector.pairing_code", "inspector", "pairing", {})
+    return {"ok": True, "code": code, "expires_in_seconds": 600}
+
+
+@app.post("/api/cup/inspector/pair")
+async def pair_transfermovil_inspector(req: TransfermovilInspectorPairRequest):
+    result = await db.pair_transfermovil_inspector(req.code.strip().upper(), req.device_name.strip())
+    if not result:
+        raise HTTPException(400, "Código de emparejamiento inválido o vencido")
+    token, device = result
+    return {"ok": True, "device": device, "device_token": token}
+
+
+@app.get("/api/cup/inspector/pending-alerts")
+async def get_transfermovil_inspector_pending_alerts(
+    authorization: str = Header(None),
+    limit: int = 20,
+):
+    await _require_transfermovil_inspector(authorization)
+    alerts = await db.list_transfermovil_inspector_alerts(limit)
+    return {
+        "ok": True,
+        "alerts": [
+            {
+                "id": int(alert["alert_id"]),
+                "order_id": str(alert["order_id"]),
+                "event_type": str(alert["event_type"]),
+                "product_name": str(alert.get("product_name") or "Pedido"),
+                "payment_method": str(alert.get("payment_method") or ""),
+                "amount_cup": int(float(alert.get("cup_amount_snapshot") or alert.get("payment_amount") or 0)),
+                "created_at": float(alert.get("alert_created_at") or 0),
+            }
+            for alert in alerts
+        ],
+    }
+
+
+@app.post("/api/cup/inspector/alerts/{alert_id}/ack")
+async def acknowledge_transfermovil_inspector_alert(alert_id: int, authorization: str = Header(None)):
+    await _require_transfermovil_inspector(authorization)
+    return {"ok": await db.acknowledge_transfermovil_inspector_alert(alert_id)}
 
 
 
@@ -12123,8 +12844,18 @@ async def notify_cup_payment_telegram_admins(order: dict, filename: str, referen
 
 @app.post("/api/cup-orders/{order_id}/proof")
 async def upload_cup_payment_proof(
-    order_id: str, reference: str = "", file: UploadFile = File(...), user: dict = Depends(get_current_user),
+    order_id: str,
+    file: UploadFile = File(...),
+    reference: str = Form(""),
+    user: dict = Depends(get_current_user),
+    request: Request = None,
 ):
+    clean_reference = (reference or "").strip()
+    if not clean_reference and request:
+        clean_reference = (request.query_params.get("reference") or "").strip()
+    if not clean_reference:
+        raise HTTPException(400, "El número de transacción o teléfono del remitente es obligatorio para validar el pago.")
+    reference = clean_reference
     order = await db.get_order(order_id)
     if not order or int(order.get("user_id") or 0) != int(user["id"]):
         raise HTTPException(404, "Pedido no encontrado")
@@ -12182,13 +12913,16 @@ async def upload_cup_payment_proof(
             related_order_id=order_id, url="/admin?tab=cup-payments",
         )
     await audit_json(user["id"], "cup_order.proof_submit", "order", order_id, {"size": len(raw), "content_type": content_type})
+    # Inspector recibe una alerta de revisión; nunca acredita por el comprobante.
+    # La acreditación automática continúa dependiendo exclusivamente del SMS bancario.
+    await db.enqueue_transfermovil_inspector_alert(order_id, "proof_submitted")
     asyncio.create_task(notify_cup_payment_whatsapp(updated, filename))
     asyncio.create_task(notify_cup_payment_telegram_admins(updated, filename, reference))
     return {
         "ok": True,
         "order_id": order_id,
         "payment_status": "pending_verification",
-        "message": "Comprobante recibido. Si pagaste por Transfermóvil o Saldo Móvil (Android), se acreditará automáticamente tan pronto se confirme la red. Para EnZona o iPhone, la atención manual recomendada es de Lunes a Viernes de 8:00 AM a 4:00 PM."
+        "message": "Comprobante recibido. Si pagaste por Transfermóvil (Android) con número a confirmar y el teléfono del receptor recibe el SMS, se acreditará automáticamente. Si pagaste por EnZona, iPhone o el receptor está en apagón, pasará a revisión manual por un administrador con tu comprobante."
     }
 
 
@@ -12247,10 +12981,48 @@ async def admin_update_cup_payment_settings(req: CupPaymentSettingsUpdate, user:
         "cup_mobile_destination_number": mobile_number,
         "cup_payment_max_delivery_hours": str(max(1, min(int(req.max_delivery_hours), 168))),
     }
+    if req.auto_rate_enabled is not None:
+        values["cup_auto_rate_enabled"] = "1" if req.auto_rate_enabled else "0"
+    if req.transfer_markup_type in ("fixed", "percent", "factor"):
+        values["cup_transfer_markup_type"] = req.transfer_markup_type
+    if req.transfer_markup_val is not None:
+        try:
+            m_val = float(req.transfer_markup_val)
+            values["cup_transfer_markup_val"] = str(round(m_val, 2))
+        except (ValueError, TypeError):
+            pass
+    if req.auto_source in ("qvapay", "eltoque", "manual"):
+        values["cup_rate_source"] = req.auto_source
+    if req.mobile_mode in ("qvapay_direct", "factor"):
+        values["cup_mobile_mode"] = req.mobile_mode
+    if req.mobile_markup_val is not None:
+        try:
+            mb_val = float(req.mobile_markup_val)
+            values["cup_mobile_markup_val"] = str(round(mb_val, 2))
+        except (ValueError, TypeError):
+            pass
+
     for key, value in values.items():
         await settings.set_value(key, value, user["id"])
     await audit_json(user["id"], "cup_payment.settings_update", "settings", "cup_payment", {**values, "cup_transfer_card_number": "configured" if card_number else "", "cup_transfer_confirmation_number": "configured" if confirmation_number else "", "cup_mobile_destination_number": "configured" if mobile_number else ""})
     return {"ok": True, **(await get_cup_payment_settings(include_destinations=True))}
+
+
+@app.post("/api/admin/cup-payment/sync-rates")
+async def admin_sync_cup_rates(user: dict = Depends(get_current_user)):
+    if user["id"] not in config.ADMIN_IDS:
+        raise HTTPException(403, "Solo admin")
+    try:
+        from qvapay_rates import sync_cup_rates_from_qvapay
+        res = await sync_cup_rates_from_qvapay(settings, force=True, admin_id=user["id"])
+        if not res.get("ok"):
+            raise HTTPException(502, res.get("reason", "No se pudo sincronizar con QvaPay"))
+        return {"ok": True, "sync": res, **(await get_cup_payment_settings(include_destinations=True))}
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log.exception("Error al sincronizar tasas con QvaPay")
+        raise HTTPException(502, f"Error al sincronizar con QvaPay: {str(exc)}")
 
 
 @app.get("/api/admin/cup-orders")
@@ -13710,14 +14482,16 @@ async def profile(user: dict = Depends(get_current_user)):
         "role": role,
         "role_label": role_label,
         "is_primary_admin": user_id in config.ADMIN_IDS,
-        "is_vip": bool(vip_info.get("is_vip", False)),
-        "vip_plan": vip_info.get("plan_id"),
-        "vip_badge": vip_info.get("badge"),
+        "is_vip": bool(vip_info.get("is_vip", False)) or role == "admin" or bool(vip_info.get("plan_id")),
+        "is_gold": bool(vip_info.get("is_vip", False)) or role == "admin" or bool(vip_info.get("plan_id")),
+        "totp_enabled": bool(u.get("totp_enabled")),
+        "vip_plan": vip_info.get("plan_id") or ("admin" if role == "admin" else None),
+        "vip_badge": vip_info.get("badge") or ("⭐ GOLD" if (role == "admin" or vip_info.get("is_vip")) else None),
         "vip_expires_at": vip_info.get("expires_at"),
         "vip_days_remaining": vip_info.get("days_remaining", 0),
-        "kyc_status": kyc_info.get("status", "unverified"),
-        "is_verified": bool(kyc_info.get("is_verified", False)),
-        "kyc_tier": kyc_info.get("tier", 0),
+        "kyc_status": "approved" if (role == "admin" or user_id in config.ADMIN_IDS or kyc_info.get("status") == "approved") else kyc_info.get("status", "unverified"),
+        "is_verified": bool(kyc_info.get("is_verified", False)) or role == "admin" or user_id in config.ADMIN_IDS or kyc_info.get("status") == "approved",
+        "kyc_tier": kyc_info.get("tier", 1 if (role == "admin" or user_id in config.ADMIN_IDS) else 0),
         "referral_code": str(u.get("referral_code") or user_id),
         "referred_by": int(u.get("referred_by") or 0),
         "has_referrer": bool(u.get("referred_by") and int(u.get("referred_by")) != 0),
@@ -14028,12 +14802,61 @@ async def admin_user_detail(target_user_id: int, user: dict = Depends(get_curren
     if not target:
         raise HTTPException(404, "Usuario no encontrado")
     regular_orders = await db.get_user_orders(target_user_id, limit=100)
+    try:
+        fzr_orders = await db.get_user_fzr_orders(target_user_id, limit=100)
+    except Exception:
+        fzr_orders = []
+    try:
+        sms_orders = await db.get_user_sms_orders(target_user_id, limit=50)
+    except Exception:
+        sms_orders = []
+    try:
+        smm_orders = await db.get_user_smm_orders(target_user_id, limit=50)
+    except Exception:
+        smm_orders = []
+    try:
+        streaming_orders = await db.get_streaming_orders(limit=50, user_id=target_user_id)
+    except Exception:
+        streaming_orders = []
+
     manual_orders = await db.get_manual_orders(user_id=target_user_id, limit=100)
     deposits = await db.get_user_deposits(target_user_id, limit=100)
     balance_log = await db.get_balance_history(target_user_id, limit=100)
     account_seller_profile = await db.get_account_seller_profile(user_id=target_user_id, active_only=False)
     target_role = await get_user_role(target_user_id)
     reseller_catalog_permissions = await get_reseller_catalog_permissions(target_user_id) if target_role == "reseller" else {"game": set(), "product": set(), "manual_product": set()}
+
+    status_code_map = {0: "pending", 1: "processing", 2: "completed", 3: "partial", 4: "failed"}
+    normalized_auto_orders = []
+    for ro in regular_orders:
+        p_status = str(ro.get("provider_status") or "").lower()
+        if p_status in {"completed", "complete", "delivered", "success"}:
+            st = "completed"
+        elif p_status in {"failed", "rejected", "cancelled", "canceled", "refunded", "refund"}:
+            st = "refunded" if "refund" in p_status else "failed"
+        else:
+            st = status_code_map.get(ro.get("order_status", 0), "pending")
+        normalized_auto_orders.append({
+            **ro,
+            "id": ro.get("merchant_order_id") or ro.get("id"),
+            "product_name": ro.get("product_name") or "Recarga Auto",
+            "sell_price": float(ro.get("sell_price") or 0.0),
+            "status": st,
+            "created_at": ro.get("created_at") or 0,
+            "source": "legacy_orders",
+        })
+    for fo in fzr_orders:
+        normalized_auto_orders.append({
+            **fo,
+            "id": fo.get("provider_order_id") or f"fzr_{fo.get('id')}",
+            "product_name": fo.get("product_name") or "Recarga FZR",
+            "sell_price": float(fo.get("sell_price") or 0.0),
+            "status": str(fo.get("status") or "pending"),
+            "created_at": fo.get("created_at") or 0,
+            "source": "fzr_orders",
+        })
+    normalized_auto_orders.sort(key=lambda x: x.get("created_at") or 0, reverse=True)
+
     return {
         "user": {
             **target,
@@ -14042,7 +14865,11 @@ async def admin_user_detail(target_user_id: int, user: dict = Depends(get_curren
             "is_banned": bool(target.get("is_banned", 0)),
             "account_seller_profile": account_seller_profile,
         },
-        "orders": regular_orders,
+        "orders": normalized_auto_orders,
+        "fzr_orders": fzr_orders,
+        "sms_orders": sms_orders,
+        "smm_orders": smm_orders,
+        "streaming_orders": streaming_orders,
         "manual_orders": manual_orders,
         "deposits": deposits,
         "balance_log": balance_log,
@@ -17222,6 +18049,26 @@ async def customer_manual_order_case(order_id: int, user: dict = Depends(get_cur
     await db.mark_case_read(case["id"], user["id"], "customer")
     messages = await db.get_manual_case_messages(case["id"], include_internal=False)
     return await public_case_payload(case, messages, include_internal=False)
+
+
+@app.get("/api/manual-orders/{order_id}/status")
+async def get_manual_order_status(order_id: int, user: dict = Depends(get_current_user)):
+    """Consulta rápida del estado de entrega de una orden manual."""
+    order = await db.get_manual_order_by_id(order_id)
+    if not order:
+        raise HTTPException(404, "Pedido no encontrado")
+    uid = int(user["id"])
+    is_owner = int(order.get("user_id") or 0) == uid
+    is_admin = (user.get("role") == "admin") or (uid in getattr(config, "ADMIN_IDS", []))
+    if not (is_owner or is_admin):
+        raise HTTPException(403, "No tienes permiso para consultar este pedido")
+    return {
+        "ok": True,
+        "order_id": order_id,
+        "status": order.get("status"),
+        "delivery_data": order.get("delivery_data"),
+        "product_name": order.get("product_name")
+    }
 
 
 @app.get("/api/manual-orders/{order_id}/qr")
@@ -21697,75 +22544,251 @@ from webapp.api.screenshot_uploader import router as screenshot_uploader_router
 app.include_router(screenshot_uploader_router)
 
 @app.post("/api/upload-tutorial-image")
-async def upload_tutorial_image(file: UploadFile = File(...)):
+async def upload_tutorial_image(file: UploadFile = File(...), target: str = Query("enzona")):
     raw = await file.read()
     if not raw or len(raw) > 15 * 1024 * 1024:
-        raise HTTPException(400, "Archivo inválido o demasiado grande")
-    pub_path = BOT_ROOT / "webapp" / "frontend" / "public" / "tutorial-transfermovil.jpg"
-    dist_path = BOT_ROOT / "webapp" / "frontend" / "dist" / "tutorial-transfermovil.jpg"
+        raise HTTPException(400, "Archivo inválido o demasiado grande (máx 15MB)")
+    filename = "tutorial-enzona.jpg" if str(target).lower() in ("enzona", "ez") else "tutorial-transfermovil.jpg"
+    pub_path = BOT_ROOT / "webapp" / "frontend" / "public" / filename
+    dist_path = BOT_ROOT / "webapp" / "frontend" / "dist" / filename
     pub_path.parent.mkdir(parents=True, exist_ok=True)
     dist_path.parent.mkdir(parents=True, exist_ok=True)
     pub_path.write_bytes(raw)
     dist_path.write_bytes(raw)
-    return {"ok": True, "size": len(raw), "url": "/tutorial-transfermovil.jpg", "message": "Imagen de tutorial subida con éxito"}
+    return {
+        "ok": True,
+        "size": len(raw),
+        "target": target,
+        "filename": filename,
+        "url": f"/{filename}",
+        "message": f"Captura guardada con éxito como {filename}"
+    }
 
 @app.get("/api/subir-tutorial", response_class=HTMLResponse)
-async def upload_tutorial_page():
-    return """<!DOCTYPE html>
+async def upload_tutorial_page(tipo: str = "enzona"):
+    is_ez = tipo.lower() in ("enzona", "ez")
+    return f"""<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Subir Tutorial Transfermóvil</title>
+    <title>Subir Tutorial · Francho Shop</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0b0f19; color: white; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 16px; }
-        .card { background: #131b2e; padding: 24px; border-radius: 20px; border: 1px solid #1e293b; max-width: 420px; width: 100%; box-shadow: 0 10px 25px rgba(0,0,0,0.5); text-align: center; }
-        h2 { margin: 0 0 8px 0; font-size: 20px; font-weight: 800; color: #10b981; }
-        p { color: #94a3b8; font-size: 13px; margin: 0 0 20px 0; }
-        input[type=file] { width: 100%; padding: 12px; margin-bottom: 16px; border: 1px dashed #334155; border-radius: 12px; background: #0b0f19; color: white; box-sizing: border-box; font-size: 13px; }
-        button { background: #10b981; color: white; border: none; padding: 14px 20px; font-size: 15px; font-weight: bold; border-radius: 12px; cursor: pointer; width: 100%; transition: background 0.2s; }
-        button:disabled { opacity: 0.5; }
-        #status { margin-top: 16px; font-size: 14px; font-weight: bold; }
+        * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+        body {{
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+            background: #090d16;
+            color: #f8fafc;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 16px;
+        }}
+        .card {{
+            background: #111726;
+            border: 1px solid #1e293b;
+            border-radius: 24px;
+            padding: 24px;
+            max-width: 440px;
+            width: 100%;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.6);
+            text-align: center;
+        }}
+        .badge {{
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            background: rgba(16, 185, 129, 0.15);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+            margin-bottom: 12px;
+        }}
+        h2 {{ font-size: 20px; font-weight: 900; margin-bottom: 6px; color: #ffffff; }}
+        p.subtitle {{ color: #94a3b8; font-size: 12px; margin-bottom: 20px; line-height: 1.4; }}
+        .tabs {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            background: #0b0f19;
+            padding: 4px;
+            border-radius: 14px;
+            margin-bottom: 20px;
+            border: 1px solid #1e293b;
+        }}
+        .tab-btn {{
+            padding: 10px 8px;
+            font-size: 12px;
+            font-weight: 700;
+            border: none;
+            border-radius: 10px;
+            background: transparent;
+            color: #94a3b8;
+            cursor: pointer;
+            transition: all 0.2s;
+        }}
+        .tab-btn.active {{
+            background: #10b981;
+            color: #032015;
+            font-weight: 800;
+            box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+        }}
+        .file-zone {{
+            border: 2px dashed #334155;
+            border-radius: 16px;
+            padding: 20px;
+            background: #0b0f19;
+            cursor: pointer;
+            transition: all 0.2s;
+            margin-bottom: 16px;
+            display: block;
+        }}
+        .file-zone:hover {{ border-color: #10b981; background: rgba(16, 185, 129, 0.03); }}
+        .file-zone input {{ display: none; }}
+        .file-icon {{ font-size: 32px; margin-bottom: 8px; }}
+        .file-label {{ font-size: 13px; font-weight: 700; color: #cbd5e1; }}
+        .file-hint {{ font-size: 11px; color: #64748b; margin-top: 4px; }}
+        #preview-box {{
+            display: none;
+            margin-bottom: 16px;
+            border-radius: 14px;
+            overflow: hidden;
+            border: 1px solid #1e293b;
+            background: #000;
+            max-height: 220px;
+        }}
+        #preview-img {{ width: 100%; max-height: 220px; object-fit: contain; }}
+        button.submit-btn {{
+            background: linear-gradient(135deg, #10b981, #059669);
+            color: #ffffff;
+            border: none;
+            padding: 14px 20px;
+            font-size: 14px;
+            font-weight: 800;
+            border-radius: 14px;
+            cursor: pointer;
+            width: 100%;
+            transition: transform 0.1s, opacity 0.2s;
+            box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+        }}
+        button.submit-btn:active {{ transform: scale(0.98); }}
+        button.submit-btn:disabled {{ opacity: 0.5; cursor: not-allowed; }}
+        #status {{ margin-top: 16px; font-size: 13px; font-weight: 700; padding: 10px; border-radius: 10px; display: none; }}
+        .current-notice {{
+            margin-top: 18px;
+            padding-top: 14px;
+            border-top: 1px solid #1e293b;
+            font-size: 11px;
+            color: #64748b;
+        }}
+        .current-notice a {{ color: #10b981; text-decoration: none; font-weight: 700; }}
     </style>
 </head>
 <body>
     <div class="card">
-        <h2>Subir Tutorial Transfermóvil</h2>
-        <p>Selecciona la imagen desde tu teléfono para guardarla en el servidor.</p>
+        <span class="badge">Gestor de Tutoriales CUP</span>
+        <h2>Subir Captura de Ejemplo</h2>
+        <p class="subtitle">Sube el comprobante de ejemplo que verán tus clientes en el modal de ayuda de pago CUP.</p>
+
+        <div class="tabs">
+            <button type="button" class="tab-btn {'active' if is_ez else ''}" onclick="selectTarget('enzona')">⚡ EnZona</button>
+            <button type="button" class="tab-btn {'' if is_ez else 'active'}" onclick="selectTarget('transfermovil')">📱 Transfermóvil</button>
+        </div>
+
         <form id="uploadForm">
-            <input type="file" id="fileInput" accept="image/*" required>
-            <button type="submit" id="btn">🚀 Subir Imagen Ahora</button>
+            <input type="hidden" id="targetInput" value="{'enzona' if is_ez else 'transfermovil'}">
+            
+            <label class="file-zone" for="fileInput">
+                <input type="file" id="fileInput" accept="image/*" required onchange="handleFileSelected(this)">
+                <div class="file-icon">📷</div>
+                <div class="file-label" id="fileLabel">Toca aquí para elegir la foto</div>
+                <div class="file-hint">JPG, PNG o WEBP (máx 15MB)</div>
+            </label>
+
+            <div id="preview-box">
+                <img id="preview-img" src="" alt="Vista previa">
+            </div>
+
+            <button type="submit" class="submit-btn" id="btn">🚀 Guardar y Publicar en la App</button>
         </form>
+
         <div id="status"></div>
+
+        <div class="current-notice">
+            <span>Destino activo: <b id="targetText" style="color:#e2e8f0">{'tutorial-enzona.jpg' if is_ez else 'tutorial-transfermovil.jpg'}</b></span>
+            <br>
+            <a href="/" target="_blank">← Volver a Francho Shop</a>
+        </div>
     </div>
+
     <script>
-        document.getElementById('uploadForm').onsubmit = async (e) => {
+        let currentTarget = '{'enzona' if is_ez else 'transfermovil'}';
+
+        function selectTarget(target) {{
+            currentTarget = target;
+            document.getElementById('targetInput').value = target;
+            const buttons = document.querySelectorAll('.tab-btn');
+            buttons[0].classList.toggle('active', target === 'enzona');
+            buttons[1].classList.toggle('active', target === 'transfermovil');
+            document.getElementById('targetText').textContent = target === 'enzona' ? 'tutorial-enzona.jpg' : 'tutorial-transfermovil.jpg';
+        }}
+
+        function handleFileSelected(input) {{
+            const file = input.files[0];
+            if (!file) return;
+            document.getElementById('fileLabel').textContent = file.name;
+            const reader = new FileReader();
+            reader.onload = (e) => {{
+                document.getElementById('preview-img').src = e.target.result;
+                document.getElementById('preview-box').style.display = 'block';
+            }};
+            reader.readAsDataURL(file);
+        }}
+
+        document.getElementById('uploadForm').onsubmit = async (e) => {{
             e.preventDefault();
             const f = document.getElementById('fileInput').files[0];
             if (!f) return;
             const btn = document.getElementById('btn');
             const st = document.getElementById('status');
             btn.disabled = true;
-            st.innerHTML = '⏳ Subiendo imagen...';
+            st.style.display = 'block';
+            st.innerHTML = '⏳ Subiendo captura al servidor...';
+            st.style.background = 'rgba(56, 189, 248, 0.15)';
             st.style.color = '#38bdf8';
+            st.style.border = '1px solid rgba(56, 189, 248, 0.3)';
+
             const fd = new FormData();
             fd.append('file', f);
-            try {
-                const res = await fetch('/api/upload-tutorial-image', { method: 'POST', body: fd });
+            try {{
+                const res = await fetch(`/api/upload-tutorial-image?target=${{encodeURIComponent(currentTarget)}}`, {{
+                    method: 'POST',
+                    body: fd
+                }});
                 const data = await res.json();
-                if (data.ok) {
-                    st.innerHTML = '✅ ¡Imagen subida y lista con éxito!';
+                if (data.ok) {{
+                    st.innerHTML = `✅ ¡Captura de ${{currentTarget === 'enzona' ? 'EnZona' : 'Transfermóvil'}} guardada con éxito!<br><span style="font-size:11px;font-weight:normal">Ya quedó visible en la app para todos los usuarios.</span>`;
+                    st.style.background = 'rgba(16, 185, 129, 0.15)';
                     st.style.color = '#34d399';
-                } else {
-                    st.innerHTML = '❌ Error: ' + (data.detail || 'Fallo');
+                    st.style.border = '1px solid rgba(16, 185, 129, 0.3)';
+                }} else {{
+                    st.innerHTML = '❌ Error: ' + (data.detail || 'No se pudo guardar la imagen');
+                    st.style.background = 'rgba(239, 68, 68, 0.15)';
                     st.style.color = '#f87171';
-                }
-            } catch (err) {
-                st.innerHTML = '❌ Error de red';
+                    st.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+                }}
+            }} catch (err) {{
+                st.innerHTML = '❌ Error de conexión al subir la imagen';
+                st.style.background = 'rgba(239, 68, 68, 0.15)';
                 st.style.color = '#f87171';
-            }
+                st.style.border = '1px solid rgba(239, 68, 68, 0.3)';
+            }}
             btn.disabled = false;
-        };
+        }};
     </script>
 </body>
 </html>"""

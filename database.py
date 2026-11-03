@@ -15,6 +15,7 @@ Incluye:
 - product_overrides (para ocultar/destacar/precio custom)
 """
 import json
+import hashlib
 import logging
 import re
 import secrets
@@ -774,6 +775,39 @@ async def init_db():
             if col not in payment_cols:
                 await db.execute(f"ALTER TABLE public_payment_requests ADD COLUMN {col} {defn}")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_public_payment_payer ON public_payment_requests(payer_user_id, created_at)")
+        await db.commit()
+
+        # Inspector Transfermóvil: dispositivos emparejados y alertas de pagos
+        # pendientes. Los tokens se guardan solo como hash y nunca en texto plano.
+        await db.executescript("""
+            CREATE TABLE IF NOT EXISTS transfermovil_inspector_pairings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                code_hash TEXT NOT NULL UNIQUE,
+                created_by INTEGER NOT NULL,
+                expires_at REAL NOT NULL,
+                used_at REAL,
+                created_at REAL NOT NULL DEFAULT (unixepoch())
+            );
+            CREATE TABLE IF NOT EXISTS transfermovil_inspector_devices (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                token_hash TEXT NOT NULL UNIQUE,
+                device_name TEXT NOT NULL,
+                paired_by INTEGER NOT NULL,
+                created_at REAL NOT NULL DEFAULT (unixepoch()),
+                last_seen_at REAL,
+                revoked_at REAL
+            );
+            CREATE TABLE IF NOT EXISTS transfermovil_inspector_alerts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                order_id TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                created_at REAL NOT NULL DEFAULT (unixepoch()),
+                acknowledged_at REAL,
+                UNIQUE(order_id, event_type)
+            );
+            CREATE INDEX IF NOT EXISTS idx_inspector_alerts_pending
+                ON transfermovil_inspector_alerts(acknowledged_at, created_at);
+        """)
         await db.commit()
 
         # Asignar una referencia no secuencial a las cuentas existentes. El valor
@@ -2193,6 +2227,18 @@ async def set_user_password(user_id: int, password_hash: str):
         await db.commit()
 
 
+async def update_user_totp_secret(user_id: int, secret: str):
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("UPDATE users SET totp_secret=? WHERE user_id=?", (secret, user_id))
+        await db.commit()
+
+
+async def set_user_totp_enabled(user_id: int, enabled: bool):
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("UPDATE users SET totp_enabled=? WHERE user_id=?", (1 if enabled else 0, user_id))
+        await db.commit()
+
+
 async def set_user_email(user_id: int, email: str, verified: bool = False):
     async with aiosqlite.connect(DB) as db:
         await db.execute(
@@ -2250,6 +2296,109 @@ async def delete_user_sessions(user_id: int, except_token: str | None = None):
         else:
             await db.execute("DELETE FROM web_sessions WHERE user_id=?", (user_id,))
         await db.commit()
+
+
+# ════════════════════════════════════════════════════════
+#   INSPECTOR TRANSFERMÓVIL
+# ════════════════════════════════════════════════════════
+
+def _inspector_token_hash(value: str) -> str:
+    return hashlib.sha256(str(value or "").encode("utf-8")).hexdigest()
+
+
+async def create_transfermovil_inspector_pairing(created_by: int, ttl_seconds: int = 600) -> str:
+    """Crea un código de un solo uso. Solo se almacena su hash."""
+    code = "-".join((secrets.token_hex(3).upper(), secrets.token_hex(3).upper()))
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("DELETE FROM transfermovil_inspector_pairings WHERE expires_at < ? OR used_at IS NOT NULL", (now,))
+        await db.execute(
+            "INSERT INTO transfermovil_inspector_pairings(code_hash, created_by, expires_at, created_at) VALUES (?, ?, ?, ?)",
+            (_inspector_token_hash(code), int(created_by), now + max(60, int(ttl_seconds)), now),
+        )
+        await db.commit()
+    return code
+
+
+async def pair_transfermovil_inspector(code: str, device_name: str) -> tuple[str, dict] | None:
+    """Consume un código temporal y devuelve el token crudo solo una vez."""
+    now = time.time()
+    code_hash = _inspector_token_hash(code)
+    safe_name = (device_name or "Inspector Android")[:100]
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        await db.execute("BEGIN IMMEDIATE")
+        async with db.execute(
+            "SELECT * FROM transfermovil_inspector_pairings WHERE code_hash=? AND used_at IS NULL AND expires_at > ?",
+            (code_hash, now),
+        ) as cursor:
+            pairing = await cursor.fetchone()
+        if not pairing:
+            await db.rollback()
+            return None
+        raw_token = secrets.token_urlsafe(32)
+        await db.execute("UPDATE transfermovil_inspector_pairings SET used_at=? WHERE id=?", (now, pairing["id"]))
+        cursor = await db.execute(
+            "INSERT INTO transfermovil_inspector_devices(token_hash, device_name, paired_by, created_at, last_seen_at) VALUES (?, ?, ?, ?, ?)",
+            (_inspector_token_hash(raw_token), safe_name, int(pairing["created_by"]), now, now),
+        )
+        await db.commit()
+        return raw_token, {"id": cursor.lastrowid, "device_name": safe_name}
+
+
+async def get_transfermovil_inspector_device(raw_token: str) -> dict | None:
+    if not raw_token:
+        return None
+    now = time.time()
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute(
+            "SELECT * FROM transfermovil_inspector_devices WHERE token_hash=? AND revoked_at IS NULL",
+            (_inspector_token_hash(raw_token),),
+        ) as cursor:
+            device = await cursor.fetchone()
+        if not device:
+            return None
+        await db.execute("UPDATE transfermovil_inspector_devices SET last_seen_at=? WHERE id=?", (now, device["id"]))
+        await db.commit()
+        return dict(device)
+
+
+async def enqueue_transfermovil_inspector_alert(order_id: str, event_type: str = "proof_submitted") -> None:
+    async with aiosqlite.connect(DB) as db:
+        await db.execute(
+            "INSERT OR IGNORE INTO transfermovil_inspector_alerts(order_id, event_type, created_at) VALUES (?, ?, ?)",
+            (str(order_id), str(event_type), time.time()),
+        )
+        await db.commit()
+
+
+async def list_transfermovil_inspector_alerts(limit: int = 20) -> list[dict]:
+    safe_limit = max(1, min(int(limit), 50))
+    async with aiosqlite.connect(DB) as db:
+        db.row_factory = aiosqlite.Row
+        async with db.execute("""
+            SELECT a.id AS alert_id, a.event_type, a.created_at AS alert_created_at,
+                   o.merchant_order_id AS order_id, o.product_name, o.payment_method,
+                   o.payment_status, o.cup_amount_snapshot, o.payment_amount, o.created_at AS order_created_at
+            FROM transfermovil_inspector_alerts a
+            JOIN orders o ON o.merchant_order_id = a.order_id
+            WHERE a.acknowledged_at IS NULL
+              AND o.payment_status IN ('awaiting_proof', 'pending_verification', 'verifying')
+            ORDER BY a.created_at ASC
+            LIMIT ?
+        """, (safe_limit,)) as cursor:
+            return [dict(row) for row in await cursor.fetchall()]
+
+
+async def acknowledge_transfermovil_inspector_alert(alert_id: int) -> bool:
+    async with aiosqlite.connect(DB) as db:
+        cursor = await db.execute(
+            "UPDATE transfermovil_inspector_alerts SET acknowledged_at=? WHERE id=? AND acknowledged_at IS NULL",
+            (time.time(), int(alert_id)),
+        )
+        await db.commit()
+        return cursor.rowcount > 0
 
 
 async def cleanup_expired_sessions():
@@ -5392,19 +5541,21 @@ async def upsert_fzr_catalog_mapping(provider_type: str, category_id: str, value
 
 async def refund_fzr_order(order_id: int, reason: str = "Cancelada / Reembolsada por el proveedor") -> bool:
     order = await get_fzr_order(order_id)
-    if not order or str(order.get("status") or "").lower() in {"refunded", "cancelled", "canceled"}:
+    if not order:
+        return False
+    if order.get("refunded_at"):
         return False
     user_id = order["user_id"]
     sell_price = float(order.get("sell_price") or 0.0)
     now = time.time()
     async with aiosqlite.connect(DB) as db:
         if sell_price > 0:
-            await db.execute("UPDATE users SET balance = balance + ? WHERE user_id = ?", (sell_price, user_id))
+            await db.execute("UPDATE users SET balance = balance + ?, total_spent = MAX(0.0, total_spent - ?) WHERE user_id = ?", (sell_price, sell_price, user_id))
             await db.execute("""
                 INSERT INTO balance_log (user_id, amount, type, ref_id, note)
                 VALUES (?, ?, 'refund', ?, ?)
             """, (user_id, sell_price, f"fzr_{order_id}", f"Reembolso FZR: {reason}"))
-        await db.execute("UPDATE fzr_orders SET status='refunded', error_message=?, updated_at=? WHERE id=?", (reason, now, order_id))
+        await db.execute("UPDATE fzr_orders SET status='refunded', refunded_at=?, error_message=?, updated_at=? WHERE id=?", (now, reason, now, order_id))
         await db.commit()
     try:
         await create_notification(user_id=user_id, type="refund", title="Reembolso de Pedido", message=f"Tu pedido #{order_id} ({order.get('product_name')}) ha sido reembolsado (${sell_price:.2f} USDT).")
@@ -5597,10 +5748,10 @@ async def finish_fzr_cup_order_verification(merchant_order_id: str, provider_ord
     async with aiosqlite.connect(DB) as conn:
         await conn.execute("""
             UPDATE orders
-            SET cup_payment_verified_by=?, cup_payment_verified_at=?, buffpin_order_id=?,
+            SET payment_status='verified', cup_payment_verified_by=?, cup_payment_verified_at=?, buffpin_order_id=?, provider_order_id=?,
                 provider_status=?, order_status=?, updated_at=?
             WHERE merchant_order_id=? AND payment_status='verifying' AND provider_code='fzr'
-        """, (admin_id, now, provider_order_id, normalized, order_status, now, merchant_order_id))
+        """, (admin_id, now, provider_order_id, provider_order_id, normalized, order_status, now, merchant_order_id))
         await conn.commit()
 
 async def mark_cup_order_provider_failed(merchant_order_id: str, error_message: str) -> None:
@@ -7396,6 +7547,23 @@ async def find_matching_pending_order_for_receipt(tx_id: str, amount_cup: float,
                     row_phone = await c.fetchone()
                     if row_phone:
                         return dict(row_phone)
+
+        # Fallback para Saldo Móvil: si el cliente no especificó su número en la referencia,
+        # emparejar con el pedido pendiente de saldo móvil con el mismo monto en las últimas 24h
+        if provider == 'saldomovil':
+            query_amt = """
+                SELECT * FROM orders
+                WHERE payment_status IN ('awaiting_network_confirmation', 'awaiting_proof', 'pending_verification')
+                  AND payment_method = 'cup_mobile_balance'
+                  AND cup_amount_snapshot >= ? - 1.0 AND cup_amount_snapshot <= ? + 1.0
+                  AND created_at >= ?
+                ORDER BY created_at DESC LIMIT 1
+            """
+            recent_threshold = time.time() - (24 * 3600)
+            async with conn.execute(query_amt, (amount_cup, amount_cup, recent_threshold)) as c:
+                row_amt = await c.fetchone()
+                if row_amt:
+                    return dict(row_amt)
 
         return None
 

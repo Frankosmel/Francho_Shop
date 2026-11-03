@@ -2734,6 +2734,12 @@ def get_reseller_tier_info(max_single_deposit: float) -> dict:
 
 
 async def get_user_max_single_paid_deposit(user_id: int) -> float:
+    user = await db.get_user(user_id)
+    if user and user.get("reseller_tier"):
+        tier_map = {"oro": 100.0, "plata": 50.0, "bronce": 25.0, "standard": 0.0}
+        custom = tier_map.get(str(user["reseller_tier"]).lower().strip())
+        if custom is not None:
+            return custom
     deposits = await db.get_user_deposits(user_id, limit=10000)
     paid_amounts = [float(d.get("amount_usd") or 0) for d in deposits if d.get("status") == "paid"]
     return max(paid_amounts) if paid_amounts else 0.0
@@ -15081,6 +15087,25 @@ async def admin_update_user_role(req: AdminRoleUpdate, user: dict = Depends(get_
     return {"ok": True, "message": "Rol actualizado", "role": effective_role, "account_seller": req.role == "account_seller"}
 
 
+class AdminResellerTierUpdate(BaseModel):
+    user_id: int
+    tier: str | None = None
+
+
+@app.post("/api/admin/users/reseller-tier")
+async def admin_update_user_reseller_tier(req: AdminResellerTierUpdate, user: dict = Depends(get_current_user)):
+    role = await get_user_role(user["id"])
+    if role != "admin":
+        raise HTTPException(403, "Solo admin")
+    allowed = {None, "", "oro", "plata", "bronce", "standard"}
+    normalized_tier = req.tier.strip().lower() if req.tier else None
+    if normalized_tier not in allowed:
+        raise HTTPException(400, "Nivel de revendedor inválido (oro, plata, bronce, standard)")
+    await db.set_user_reseller_tier(req.user_id, normalized_tier)
+    await audit_json(user["id"], "user.reseller_tier_update", "user", req.user_id, {"tier": normalized_tier})
+    return {"ok": True, "message": "Nivel de revendedor actualizado", "tier": normalized_tier}
+
+
 @app.post("/api/admin/users/ban")
 async def admin_update_user_ban(req: AdminBanUpdate, user: dict = Depends(get_current_user)):
     role = await get_user_role(user["id"])
@@ -18406,9 +18431,7 @@ async def build_ai_user_context(user_id: int, user_message: str = "") -> dict:
             ctx["user"]["role_label"] = "Administrador"
             ctx["user"]["tier"] = {"tier_name": "Administrador", "markup_pct": 0.0}
         elif role == "reseller":
-            async with conn.execute("SELECT MAX(amount_usd) as max_dep FROM deposits WHERE user_id=? AND status IN ('completed', 'paid')", (user_id,)) as cur:
-                d_row = await cur.fetchone()
-                max_dep = float(d_row["max_dep"] or 0.0) if d_row else 0.0
+            max_dep = await get_user_max_single_paid_deposit(user_id)
             tier = get_reseller_tier_info(max_dep)
             ctx["user"]["tier"] = tier
             ctx["user"]["max_single_deposit"] = max_dep

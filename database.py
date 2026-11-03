@@ -742,6 +742,7 @@ async def init_db():
             ("auth_method", "TEXT DEFAULT 'telegram'"),  # telegram, email, google
             ("photo_url", "TEXT"),
             ("display_name", "TEXT"),
+            ("reseller_tier", "TEXT DEFAULT NULL"),
         ]
         async with db.execute("PRAGMA table_info(users)") as c:
             existing = {r[1] for r in await c.fetchall()}
@@ -1103,6 +1104,12 @@ async def get_user_role(user_id: int) -> str:
 async def set_user_role(user_id: int, role: str):
     async with aiosqlite.connect(DB) as db:
         await db.execute("UPDATE users SET role=? WHERE user_id=?", (role, user_id))
+        await db.commit()
+
+
+async def set_user_reseller_tier(user_id: int, tier: str | None):
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("UPDATE users SET reseller_tier=? WHERE user_id=?", (tier, user_id))
         await db.commit()
 
 

@@ -147,12 +147,16 @@
       }
 
       // Si es app Android
-      const isApp = window.Capacitor?.isNativePlatform?.() || /franchoshop/i.test(navigator.userAgent);
+      const urlParams = new URLSearchParams(window.location.search);
+      const isApp = window.Capacitor?.isNativePlatform?.() || /franchoshop/i.test(navigator.userAgent) || urlParams.get('app') === '1' || urlParams.get('native') === '1';
       if (isApp) {
-        window.location.href = "franchoshop://auth?credential=" + encodeURIComponent(credential);
-        setTimeout(function() {
-          if (fallbackBtn) fallbackBtn.style.display = "inline-block";
-        }, 1000);
+        const appDeepLink = "franchoshop://auth?credential=" + encodeURIComponent(credential);
+        if (fallbackBtn) {
+          fallbackBtn.innerText = "Toca para abrir Francho Shop";
+          fallbackBtn.href = appDeepLink;
+          fallbackBtn.style.display = "inline-block";
+        }
+        window.location.href = appDeepLink;
         return;
       }
 

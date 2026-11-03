@@ -11487,6 +11487,7 @@ class LoginRequest(BaseModel):
     email: str
     password: str
     totp_code: Optional[str] = None
+    device_id: Optional[str] = None
 
 
 class Enable2FaRequest(BaseModel):
@@ -11553,27 +11554,39 @@ async def auth_login(req: LoginRequest, request: Request):
         raise HTTPException(401, msg)
 
     # Verificación de doble factor Google Authenticator (TOTP)
-    if user.get("totp_enabled") and user.get("totp_secret"):
-        if not req.totp_code:
-            return {
-                "ok": True,
-                "requires_2fa": True,
-                "message": "Introduce el código de 6 dígitos de Google Authenticator",
-            }
-        try:
-            import pyotp
-            totp = pyotp.TOTP(user["totp_secret"])
-            if not totp.verify(req.totp_code.strip()):
-                raise HTTPException(401, "Código de Google Authenticator incorrecto o expirado")
-        except HTTPException:
-            raise
-        except Exception as e:
-            log.error("Error validando TOTP: %s", e)
-            raise HTTPException(400, "Error al validar código 2FA")
-
-    token = web_auth.generate_session_token()
+    # Solo pedir si el usuario activó 2FA Y se detecta un nuevo dispositivo no confiable
+    device_id = (req.device_id or request.headers.get("x-device-id") or "").strip()
     ip = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent", "")[:200]
+
+    if user.get("totp_enabled") and user.get("totp_secret"):
+        is_trusted = await db.is_trusted_device(user["user_id"], device_id) if device_id else False
+        if not is_trusted:
+            if not req.totp_code:
+                return {
+                    "ok": True,
+                    "requires_2fa": True,
+                    "message": "Nuevo dispositivo detectado. Introduce el código de 6 dígitos de Google Authenticator",
+                }
+            try:
+                import pyotp
+                totp = pyotp.TOTP(user["totp_secret"])
+                if not totp.verify(req.totp_code.strip()):
+                    raise HTTPException(401, "Código de Google Authenticator incorrecto o expirado")
+                # Si el código es correcto, recordar este dispositivo como confiable
+                if device_id:
+                    await db.register_trusted_device(user["user_id"], device_id, device_name=user_agent[:100], ip_address=ip)
+            except HTTPException:
+                raise
+            except Exception as e:
+                log.error("Error validando TOTP: %s", e)
+                raise HTTPException(400, "Error al validar código 2FA")
+        else:
+            # Dispositivo ya conocido y confiable: actualizar fecha de última conexión
+            if device_id:
+                await db.register_trusted_device(user["user_id"], device_id, device_name=user_agent[:100], ip_address=ip)
+
+    token = web_auth.generate_session_token()
     await db.create_session(token, user["user_id"], ttl_days=30, ip=ip, user_agent=user_agent)
     return {
         "ok": True,
@@ -11600,6 +11613,12 @@ async def auth_google(req: GoogleAuthRequest, request: Request):
     ip = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent", "")[:200]
     await db.create_session(token, user["user_id"], ttl_days=30, ip=ip, user_agent=user_agent)
+    device_id = (request.headers.get("x-device-id") or "").strip()
+    if device_id:
+        try:
+            await db.register_trusted_device(user["user_id"], device_id, device_name=user_agent[:100], ip_address=ip)
+        except Exception as e:
+            log.warning("No se pudo registrar dispositivo de confianza en google auth: %s", e)
     log.info("Google Auth exitoso para user_id=%s email=%s", user["user_id"], user.get("email"))
     return {
         "ok": True,
@@ -11784,7 +11803,7 @@ async def auth_2fa_setup(user: dict = Depends(get_current_user)):
 
 
 @app.post("/api/auth/2fa/enable")
-async def auth_2fa_enable(req: Enable2FaRequest, user: dict = Depends(get_current_user)):
+async def auth_2fa_enable(req: Enable2FaRequest, request: Request, user: dict = Depends(get_current_user)):
     """Verifica el código de Google Authenticator y activa el doble factor."""
     user_id = user["id"]
     u = await db.get_user(user_id)
@@ -11797,6 +11816,14 @@ async def auth_2fa_enable(req: Enable2FaRequest, user: dict = Depends(get_curren
         raise HTTPException(400, "Código de autenticación inválido o expirado. Verifica la hora de tu teléfono.")
 
     await db.set_user_totp_enabled(user_id, True)
+
+    # Registrar el dispositivo actual que activó 2FA como de confianza
+    device_id = (request.headers.get("x-device-id") or "").strip()
+    if device_id:
+        ip = request.client.host if request.client else None
+        user_agent = request.headers.get("user-agent", "")[:100]
+        await db.register_trusted_device(user_id, device_id, device_name=user_agent, ip_address=ip)
+
     return {"ok": True, "message": "Autenticación en dos pasos de Google activada correctamente"}
 
 

@@ -451,6 +451,19 @@ async def init_db():
             CREATE INDEX IF NOT EXISTS idx_sessions_user ON web_sessions(user_id);
             CREATE INDEX IF NOT EXISTS idx_sessions_expires ON web_sessions(expires_at);
 
+            CREATE TABLE IF NOT EXISTS trusted_user_devices (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id       INTEGER NOT NULL,
+                device_id     TEXT NOT NULL,
+                device_name   TEXT,
+                ip_address    TEXT,
+                created_at    REAL DEFAULT (unixepoch()),
+                last_seen_at  REAL DEFAULT (unixepoch()),
+                UNIQUE(user_id, device_id),
+                FOREIGN KEY (user_id) REFERENCES users(user_id)
+            );
+            CREATE INDEX IF NOT EXISTS idx_trusted_dev_user ON trusted_user_devices(user_id);
+
             CREATE TABLE IF NOT EXISTS email_verifications (
                 code          TEXT PRIMARY KEY,
                 email         TEXT NOT NULL,
@@ -2295,6 +2308,35 @@ async def delete_user_sessions(user_id: int, except_token: str | None = None):
             await db.execute("DELETE FROM web_sessions WHERE user_id=? AND token<>?", (user_id, except_token))
         else:
             await db.execute("DELETE FROM web_sessions WHERE user_id=?", (user_id,))
+        await db.commit()
+
+
+async def is_trusted_device(user_id: int, device_id: str) -> bool:
+    if not device_id or not device_id.strip():
+        return False
+    async with aiosqlite.connect(DB) as db:
+        async with db.execute(
+            "SELECT 1 FROM trusted_user_devices WHERE user_id=? AND device_id=?",
+            (user_id, device_id.strip())
+        ) as c:
+            row = await c.fetchone()
+            return row is not None
+
+
+async def register_trusted_device(user_id: int, device_id: str, device_name: str = None, ip_address: str = None):
+    if not device_id or not device_id.strip():
+        return
+    import time
+    now = time.time()
+    clean_dev = device_id.strip()
+    async with aiosqlite.connect(DB) as db:
+        await db.execute("""
+            INSERT INTO trusted_user_devices (user_id, device_id, device_name, ip_address, created_at, last_seen_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            ON CONFLICT(user_id, device_id) DO UPDATE SET
+                last_seen_at = excluded.last_seen_at,
+                ip_address = COALESCE(excluded.ip_address, ip_address)
+        """, (user_id, clean_dev, device_name, ip_address, now, now))
         await db.commit()
 
 

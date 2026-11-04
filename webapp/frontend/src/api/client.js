@@ -259,10 +259,17 @@ export const api = {
   cupPaymentSettings: () => request('/cup-payment/settings'),
   createCupOrder: (data) => request('/cup-orders', { method: 'POST', body: JSON.stringify(data) }),
   createManualCupOrder: (data) => request('/manual-cup-orders', { method: 'POST', body: JSON.stringify(data) }),
+  createStarsOrderInvoice: (product_id, option_id = null, customer_data = {}) =>
+    request('/stars/create-order-invoice', {
+      method: 'POST',
+      body: JSON.stringify({ product_id, option_id, customer_data })
+    }),
   cupOrderPaymentDetails: (orderId) => request(`/cup-orders/${encodeURIComponent(orderId)}`),
-  uploadCupPaymentProof: (orderId, reference, file) => multipart(`/cup-orders/${encodeURIComponent(orderId)}/proof`, { reference }, file),
+  uploadCupPaymentProof: (orderId, reference, file) => multipart(`/cup-orders/${encodeURIComponent(orderId)}/proof?reference=${encodeURIComponent(reference || '')}`, { reference }, file),
   adminCupPaymentSettingsGet: () => request('/admin/cup-payment/settings'),
   adminCupPaymentSettingsSet: (data) => request('/admin/cup-payment/settings', { method: 'POST', body: JSON.stringify(data) }),
+  adminCupPaymentSyncRates: () => request('/admin/cup-payment/sync-rates', { method: 'POST' }),
+  adminCreateInspectorPairingCode: () => request('/admin/transfermovil-inspector/pairing-code', { method: 'POST' }),
   adminCupOrders: (payment_status = '', limit = 100) => request(`/admin/cup-orders?limit=${limit}${payment_status ? `&payment_status=${encodeURIComponent(payment_status)}` : ''}`),
   adminAutoOrders: (params = {}) => {
     const qs = new URLSearchParams(); Object.entries(params).forEach(([key, value]) => { if (value) qs.set(key, value) });
@@ -355,6 +362,8 @@ export const api = {
   fzrCatalogOrder: (data) => request('/fzr/catalog/order', { method: 'POST', body: JSON.stringify(data) }),
   fzrCatalogCupOptions: (data) => request('/fzr/catalog/cup-options', { method: 'POST', body: JSON.stringify(data) }),
   fzrCatalogCupOrder: (data) => request('/fzr/catalog/cup-order', { method: 'POST', body: JSON.stringify(data) }),
+  createStarsCatalogOrderInvoice: (data) => request('/stars/create-catalog-order-invoice', { method: 'POST', body: JSON.stringify(data) }),
+  fzrCatalogStarsInvoice: (data) => request('/stars/create-catalog-order-invoice', { method: 'POST', body: JSON.stringify(data) }),
   fzrMyOrders: (limit = 50) => request(`/fzr/my-orders?limit=${limit}`),
   fzrAdminSettingsGet: () => request('/admin/fzr/settings'),
   fzrAdminSettingsSet: (data) => request('/admin/fzr/settings', { method: 'POST', body: JSON.stringify(data) }),

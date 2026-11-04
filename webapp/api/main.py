@@ -6221,6 +6221,50 @@ async def stars_payment_webhook(request: Request):
         except Exception as mo_err:
             log.error("Error procesando pago Stars para orden manual %s: %s", custom_order_id, mo_err)
 
+    if custom_order_id.startswith("FS-FZR-"):
+        try:
+            fzr_order_id = int(custom_order_id.replace("FS-FZR-", ""))
+            f_order = await db.get_fzr_order(fzr_order_id)
+            if f_order and f_order.get("provider_status") == "awaiting_stars_payment":
+                raw_data = json.loads(f_order.get("raw_response") or "{}")
+                ctx = raw_data.get("context")
+                if ctx:
+                    spend_ref = f"fzr_stars_{f_order['user_id']}_{uuid.uuid4().hex}"[:255]
+                    if ctx.get("is_multi_item"):
+                        provider = {}
+                        p_order_id = ""
+                        p_status = "completed"
+                        for idx, item_ctx in enumerate(ctx.get("items_detail", [])):
+                            if idx > 0:
+                                await asyncio.sleep(1.5)
+                            item_key = f"{spend_ref}_{idx}"
+                            sub_provider, sub_p_order_id, sub_p_status = await submit_fzr_catalog_provider_order(item_ctx, item_key)
+                            provider = sub_provider
+                            p_order_id = sub_p_order_id
+                            p_status = sub_p_status
+                        await db.update_fzr_order_status(fzr_order_id, "completed", provider_status=p_status, raw_response=json.dumps(provider, ensure_ascii=False))
+                    else:
+                        provider, p_order_id, p_status = await submit_fzr_catalog_provider_order(ctx, spend_ref)
+                        await db.update_fzr_order_status(fzr_order_id, "completed" if p_status == "completed" else "processing", provider_status=p_status, raw_response=json.dumps(provider, ensure_ascii=False))
+
+                    try:
+                        u_id = int(f_order["user_id"])
+                        await db.create_notification(
+                            user_id=u_id,
+                            type="order_completed",
+                            title="¡Recarga Procesada!",
+                            message=f"Tu compra de {f_order.get('product_name')} con {amount_stars} ⭐ ha sido entregada.",
+                            related_order_id=fzr_order_id,
+                            url=f"/pedido/{fzr_order_id}/seguimiento"
+                        )
+                    except Exception:
+                        pass
+
+                    log.info("Orden FZR Stars %s auto-completada con éxito tras pago de %s Stars", fzr_order_id, amount_stars)
+                    return {"ok": True, "status": "order_completed", "order_id": fzr_order_id, "stars": amount_stars}
+        except Exception as fzr_err:
+            log.error("Error procesando pago Stars para orden FZR %s: %s", custom_order_id, fzr_err)
+
     dep = None
     if invoice_id:
         dep = await db.get_deposit_by_track(invoice_id)
@@ -9648,6 +9692,73 @@ async def create_fzr_catalog_order(req: FzrCatalogOrderCreate, user: dict = Depe
         log.warning("No se pudo disparar alerta WhatsApp FZR: %s", ex)
 
     return {"ok": True, "id": local_id, "order_id": local_id, "provider_order_id": provider_order_id, "status": provider_status, "price": context["sell_price"], "product": context["product_name"], "provider_response": provider}
+
+
+
+@app.post("/api/stars/create-catalog-order-invoice")
+async def api_create_stars_catalog_order_invoice(req: FzrCatalogOrderCreate, user: dict = Depends(get_current_user)):
+    """Crea una factura de cobro con Telegram Stars ⭐ directa para comprar productos del catálogo FZR."""
+    user_id = int(user["id"])
+    if await db.is_banned(user_id):
+        raise HTTPException(403, "Cuenta suspendida")
+
+    context = await prepare_fzr_catalog_purchase(req, user_id)
+    if await fzr_provider_balance_amount() < context["cost_price"]:
+        raise HTTPException(503, "No disponible temporalmente. El proveedor no tiene saldo suficiente.")
+
+    price_usdt = float(context["sell_price"])
+    try:
+        rates = await stars_client.get_rates()
+        t_usdt = float(rates.get("tasa_usdt", 0.0065))
+    except Exception:
+        t_usdt = 0.0065
+
+    if price_usdt <= 0.01:
+        amount_stars = 1
+    else:
+        amount_stars = max(1, math.ceil(price_usdt / t_usdt))
+
+    prod_label = context["product_name"]
+
+    # Creamos la orden FZR en estado pendiente de pago Stars
+    order_id = await db.create_fzr_order(
+        user_id=user_id,
+        provider_order_id=None,
+        product_type=context["provider_type"],
+        product_name=context["product_name"],
+        target=json.dumps(context["fields"], ensure_ascii=False),
+        quantity=context["quantity"],
+        cost_price=context["cost_price"],
+        sell_price=context["sell_price"],
+        raw_response=json.dumps({"pending_stars": True, "context": context}, ensure_ascii=False, default=str),
+        provider_status="awaiting_stars_payment"
+    )
+
+    custom_order_id = f"FS-FZR-{order_id}"
+    desc = f"Pago de {prod_label} en Francho Shop ({amount_stars} ⭐)"[:255]
+    title = f"{prod_label}"[:32]
+
+    try:
+        inv = await stars_client.create_invoice(
+            amount_stars=amount_stars,
+            description=desc,
+            custom_order_id=custom_order_id,
+            title=title,
+            photo_url="https://franchoshop.com/franchoshop-banner.png"
+        )
+    except Exception as e:
+        log.error("Error al generar factura Stars para orden catalogo: %s", e)
+        raise HTTPException(502, f"Error al generar factura de Telegram Stars: {e}")
+
+    checkout_url = inv.get("checkout_url")
+    return {
+        "ok": True,
+        "order_id": order_id,
+        "amount_stars": amount_stars,
+        "checkout_url": checkout_url,
+        "invoice_id": inv.get("invoice_id"),
+        "status": "pending_stars"
+    }
 
 
 

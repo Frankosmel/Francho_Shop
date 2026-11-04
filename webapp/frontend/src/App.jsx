@@ -667,10 +667,10 @@ function AppInner({ adminPortal = false }) {
     try {
       if (theme === 'light' && isActAdmin) {
         document.documentElement.classList.add('light-theme')
-        document.documentElement.style.backgroundColor = '#FAF5FF'
-        document.body.style.backgroundColor = '#FAF5FF'
+        document.documentElement.style.backgroundColor = '#f8fafc'
+        document.body.style.backgroundColor = '#f8fafc'
         const meta = document.querySelector('meta[name="theme-color"]')
-        if (meta) meta.setAttribute('content', '#FAF5FF')
+        if (meta) meta.setAttribute('content', '#f8fafc')
         localStorage.setItem('francho_theme', 'light')
       } else {
         document.documentElement.classList.remove('light-theme')
@@ -3100,7 +3100,7 @@ function BottomNav({ active, me, onNav, showCryptoFeatures = false }) {
     { id: 'menu', label: 'Menú', icon: Menu },
   ]
   return (
-    <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-white/10 bg-[#0c101c]/95 px-3 pb-[calc(env(safe-area-inset-bottom)+8px)] pt-1.5 backdrop-blur-md md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-20 border-t border-slate-200 dark:border-white/10 bg-white/95 dark:bg-[#0c101c]/95 px-3 pb-[calc(env(safe-area-inset-bottom)+8px)] pt-1.5 backdrop-blur-md md:hidden shadow-lg">
       <div className="mx-auto grid max-w-md gap-1" style={{ gridTemplateColumns: `repeat(${items.length}, minmax(0, 1fr))` }}>
         {items.map((item) => {
           const Icon = item.icon
@@ -3109,10 +3109,14 @@ function BottomNav({ active, me, onNav, showCryptoFeatures = false }) {
             <button
               key={item.id}
               onClick={() => onNav(item.id)}
-              className={`flex min-h-[50px] flex-col items-center justify-center rounded-xl border text-[10px] font-bold transition active:scale-95 ${selected ? "border-accent/50 bg-accent/15 text-accent shadow-sm" : "border-white/5 bg-card/60 text-white/50 hover:text-white"}`}
+              className={`flex min-h-[50px] flex-col items-center justify-center rounded-xl border text-[10px] font-bold transition active:scale-95 ${
+                selected
+                  ? "border-emerald-500/50 dark:border-accent/50 bg-emerald-50 dark:bg-accent/15 text-emerald-700 dark:text-accent shadow-xs"
+                  : "border-slate-200 dark:border-white/5 bg-slate-50 dark:bg-card/60 text-slate-500 dark:text-white/50 hover:text-slate-900 dark:hover:text-white"
+              }`}
               aria-current={selected ? 'page' : undefined}
             >
-              <Icon className={`h-4 w-4 ${selected ? 'text-accent' : 'text-white/60'}`} aria-hidden="true" />
+              <Icon className={`h-4 w-4 ${selected ? 'text-emerald-700 dark:text-accent' : 'text-slate-400 dark:text-white/60'}`} aria-hidden="true" />
               <span className="mt-1 truncate">{item.label}</span>
             </button>
           )
@@ -5900,7 +5904,7 @@ function SmsCatalogCard({ onSelect }) {
   useEffect(() => { api.smsSettingsGet().then(setSettings).catch(() => {}) }, [])
   const imageUrl = settings?.sms_catalog_image_url
   return (
-    <button onClick={onSelect} className="group relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#16181f]/90 text-left transition-all duration-300 active:scale-95 hover:border-[#ffff00]/80 hover:shadow-[0_4px_20px_rgba(255,255,0,0.15)] hover:-translate-y-0.5">
+    <button onClick={onSelect} className="fs-catalog-card-3d group relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#16181f]/90 text-left transition-all duration-300 active:scale-95 hover:border-[#ffff00]/80 hover:shadow-[0_4px_20px_rgba(255,255,0,0.15)] hover:-translate-y-0.5">
       <span className="block relative aspect-[1/1.1] w-full flex-shrink-0 overflow-hidden bg-[#101318]">
         {imageUrl ? (
           <OptimizedImage src={storeAssetUrl(imageUrl)} alt="Números virtuales" className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105" />
@@ -6302,7 +6306,7 @@ function SmmCatalogCard({ onSelect }) {
   useEffect(() => { api.smmSettingsGet().then(setSettings).catch(() => {}) }, [])
   const imageUrl = settings?.smm_catalog_image_url
   return (
-    <button onClick={onSelect} className="group relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#16181f]/90 text-left transition-all duration-300 active:scale-95 hover:border-[#ffff00]/80 hover:shadow-[0_4px_20px_rgba(255,255,0,0.15)] hover:-translate-y-0.5">
+    <button onClick={onSelect} className="fs-catalog-card-3d group relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#16181f]/90 text-left transition-all duration-300 active:scale-95 hover:border-[#ffff00]/80 hover:shadow-[0_4px_20px_rgba(255,255,0,0.15)] hover:-translate-y-0.5">
       <span className="block relative aspect-[1/1.1] w-full flex-shrink-0 overflow-hidden bg-[#101318]">
         {imageUrl ? (
           <OptimizedImage src={storeAssetUrl(imageUrl)} alt="Servicios SMM" className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105" />
@@ -6535,7 +6539,7 @@ function SmmServicesScreen({ me, onBack, onLoginRequired, onBought }) {
         </div>
       </div>
       <main className="mx-auto flex w-full max-w-lg flex-1 flex-col overflow-hidden px-3 pt-3">
-        <section className="mb-3 overflow-hidden rounded-xl border border-white/10 bg-card flex-shrink-0">
+        <section className="fs-smm-hero mb-3 overflow-hidden rounded-xl border border-white/10 bg-card flex-shrink-0">
           <div className="relative min-h-[112px] bg-[#101820]">
             {settings?.smm_catalog_image_url ? <OptimizedImage src={storeAssetUrl(settings.smm_catalog_image_url)} alt="" className="absolute inset-0 h-full w-full object-cover" /> : <div className="absolute inset-0 bg-gradient-to-br from-violet-500/20 via-bg to-cyan-500/10" />}
             <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/65 to-black/30" />
@@ -6567,7 +6571,7 @@ function FzrCatalogCard({ type, onSelect }) {
     ;(isTelegram ? api.fzrTelegramCatalog() : api.fzrCapcutCatalog()).then(d => { if (d?.imageurl) setImg(d.imageurl) }).catch(() => {})
   }, [isTelegram])
   return (
-    <button onClick={onSelect} className="group relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#16181f]/90 text-left transition-all duration-300 active:scale-95 hover:border-[#ffff00]/80 hover:shadow-[0_4px_20px_rgba(255,255,0,0.15)] hover:-translate-y-0.5">
+    <button onClick={onSelect} className="fs-catalog-card-3d group relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#16181f]/90 text-left transition-all duration-300 active:scale-95 hover:border-[#ffff00]/80 hover:shadow-[0_4px_20px_rgba(255,255,0,0.15)] hover:-translate-y-0.5">
       <span className="block relative aspect-[1/1.1] w-full flex-shrink-0 overflow-hidden bg-[#101318]">
         <OptimizedImage src={img} alt={title} className="h-full w-full object-cover transition-transform duration-500 ease-out group-hover:scale-105" />
         <span className="pointer-events-none absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-[#16181f] to-transparent z-10" />
@@ -6646,7 +6650,7 @@ function FzrTelegramScreen({ me, onBack, onLoginRequired, onBought }) {
         <section className="mb-3 overflow-hidden rounded-xl border border-white/10 bg-card flex-shrink-0"><div className="relative min-h-[118px] bg-[#101820]"><OptimizedImage src={catalog?.imageurl || 'https://images.unsplash.com/photo-1611605698335-8b1569810432?auto=format&fit=crop&w=900&q=75'} alt="" className="absolute inset-0 h-full w-full object-cover" /><div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/65 to-black/25" /><div className="relative flex min-h-[118px] items-center p-4"><p className="text-xs leading-relaxed text-white/80">{catalog?.description || 'Compra Telegram Premium o Estrellas usando tu saldo de Francho Shop. Solo escribe el usuario correcto de Telegram y confirma el plan.'}</p></div></div></section>
         <div className="mb-3 grid grid-cols-2 gap-2 flex-shrink-0"><button onClick={() => { setMode('premium'); setSelected(premiumPlans[0] ? { type: 'premium', ...premiumPlans[0] } : null) }} className={`rounded-xl border px-3 py-2 text-left active:scale-[0.99] ${mode === 'premium' ? 'border-accent bg-accent/12' : 'border-white/10 bg-card'}`}><span className="block text-sm font-black">Telegram Premium</span><span className="text-[11px] text-white/45">Suscripción</span></button><button onClick={() => { setMode('stars'); setSelected(starPackages[0] ? { type: 'stars', ...starPackages[0] } : null) }} className={`rounded-xl border px-3 py-2 text-left active:scale-[0.99] ${mode === 'stars' ? 'border-accent bg-accent/12' : 'border-white/10 bg-card'}`}><span className="block text-sm font-black">Estrellas</span><span className="text-[11px] text-white/45">Stars</span></button></div>
         {err && <p className="mb-3 rounded-lg border border-red-500/25 bg-red-500/10 p-3 text-xs font-semibold text-red-300">{err}</p>}
-        {catalog && catalog.available === false && <p className="mb-3 rounded-lg border border-yellow-500/25 bg-yellow-500/10 p-3 text-xs font-semibold text-yellow-200">{catalog.unavailable_reason || 'No disponible temporalmente.'}</p>}
+        {catalog && catalog.available === false && <p className="fs-provider-unavailable mb-3 rounded-lg border border-yellow-500/25 bg-yellow-500/10 p-3 text-xs font-semibold text-yellow-200">{catalog.unavailable_reason || 'No disponible temporalmente.'}</p>}
         {catalog?.instructions && <div className="mb-3 rounded-xl border border-white/10 bg-card p-3 text-xs leading-relaxed text-white/65 whitespace-pre-line"><p className="mb-1 font-black text-white/80">Cómo comprar</p>{catalog.instructions}</div>}
         <div className="flex-1 overflow-y-auto space-y-2 pr-1">
           {items.map(item => <button key={`${item.type}-${item.months || item.quantity}`} onClick={() => setSelected(item)} className={`w-full rounded-xl border p-3 text-left active:scale-[0.99] ${selected?.type === item.type && (selected?.months || selected?.quantity) === (item.months || item.quantity) ? 'border-accent bg-accent/12' : 'border-white/10 bg-card'}`}><span className="flex items-center justify-between gap-3"><span><span className="block text-sm font-black">{item.type === 'premium' ? `${item.months} meses Premium` : `${item.quantity} Estrellas`}</span><span className="mt-1 block text-[11px] text-white/45">Entrega automática por proveedor</span></span><span className="text-lg font-black text-accent">${Number(item.price_usd || 0).toFixed(2)}</span></span></button>)}
@@ -6702,7 +6706,7 @@ function FzrCapCutScreen({ me, onBack, onLoginRequired, onBought }) {
       <main className="mx-auto flex w-full max-w-lg flex-1 flex-col overflow-hidden px-3 pt-3 pb-32">
         <section className="mb-3 overflow-hidden rounded-xl border border-white/10 bg-card flex-shrink-0"><div className="relative min-h-[118px] bg-[#101820]">{catalog?.imageurl ? <OptimizedImage src={catalog.imageurl} alt="" className="absolute inset-0 h-full w-full object-cover" /> : <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/20 via-bg to-pink-500/10" />}<div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/65 to-black/25" /><div className="relative flex min-h-[118px] items-center p-4"><p className="text-xs leading-relaxed text-white/80">{catalog?.description || 'Compra CapCut Standard o Pro por User ID. La recarga se entrega directamente a la cuenta indicada.'}</p></div></div></section>
         {err && <p className="mb-3 rounded-lg border border-red-500/25 bg-red-500/10 p-3 text-xs font-semibold text-red-300">{err}</p>}
-        {catalog && catalog.available === false && <p className="mb-3 rounded-lg border border-yellow-500/25 bg-yellow-500/10 p-3 text-xs font-semibold text-yellow-200">{catalog.unavailable_reason || 'No disponible temporalmente.'}</p>}
+        {catalog && catalog.available === false && <p className="fs-provider-unavailable mb-3 rounded-lg border border-yellow-500/25 bg-yellow-500/10 p-3 text-xs font-semibold text-yellow-200">{catalog.unavailable_reason || 'No disponible temporalmente.'}</p>}
         {catalog?.instructions && <div className="mb-3 rounded-xl border border-white/10 bg-card p-3 text-xs leading-relaxed text-white/65 whitespace-pre-line"><p className="mb-1 font-black text-white/80">Cómo comprar</p>{catalog.instructions}</div>}
         <div className="flex-1 overflow-y-auto space-y-2 pr-1">
           {(catalog?.offers || []).map(item => <button key={item.offer_id} onClick={() => setSelected(item)} className={`w-full rounded-xl border p-3 text-left active:scale-[0.99] ${selected?.offer_id === item.offer_id ? 'border-accent bg-accent/12' : 'border-white/10 bg-card'}`}><span className="flex items-center justify-between gap-3"><span><span className="block text-sm font-black">{item.name}</span><span className="mt-1 block text-[11px] text-white/45">CapCut · entrega directa</span></span><span className="text-lg font-black text-accent">${Number(item.price_usd || 0).toFixed(2)}</span></span></button>)}
@@ -6982,8 +6986,8 @@ function FzrFullCatalogScreen({
 
   const cardRate = Number(cupSettings?.transfer_rate) || 0
   const mobileRate = Number(cupSettings?.mobile_rate) || 0
-  const cardCupAmount = Math.round((effectiveCost * cardRate) / 10) * 10
-  const mobileCupAmount = Math.round((effectiveCost * mobileRate) / 10) * 10
+  const cardCupAmount = Math.ceil((totalPrice * cardRate) / 5) * 5
+  const mobileCupAmount = Math.ceil((totalPrice * mobileRate) / 5) * 5
   const cardEnabled = Boolean(cupSettings?.enabled && cupSettings?.methods?.cup_card_transfer?.enabled && cupSettings?.card_number)
   const mobileEnabled = Boolean(cupSettings?.enabled && cupSettings?.methods?.cup_mobile_balance?.enabled && cupSettings?.mobile_destination_number)
   const hasCupMethods = cardEnabled || mobileEnabled
@@ -7087,6 +7091,64 @@ function FzrFullCatalogScreen({
       return
     }
 
+    if (paymentMethod === 'telegram_stars') {
+      setBuying(true)
+      setErr(null)
+      try {
+        const orderPayload = {
+          provider_type: catalog?.provider_type || effectiveType,
+          category_id: String(effectiveCatId),
+          offer_id: String(primaryOffer?.offer_id || itemsPayload[0]?.offer_id || ''),
+          quantity: isStars ? currentQuantity : (selectedItemsList[0]?.quantity || 1),
+          fields: fields,
+          items: itemsPayload,
+        }
+        const invRes = await api.createStarsCatalogOrderInvoice(orderPayload)
+        if (!invRes?.checkout_url) {
+          throw new Error('No se pudo generar la orden de cobro con Telegram Stars')
+        }
+
+        const tg = window.Telegram?.WebApp
+        let invoiceOpened = false
+
+        if (tg && typeof tg.isVersionAtLeast === 'function' && tg.isVersionAtLeast('6.1') && typeof tg.openInvoice === 'function') {
+          try {
+            tg.openInvoice(invRes.checkout_url, (status) => {
+              if (status === 'paid') {
+                api.me().then(onBought).catch(() => {})
+                setSuccessOrder({
+                  order_id: invRes.order_id,
+                  product: fullOrderProductName,
+                  price: totalPrice,
+                  status: 'completed',
+                  is_stars: true,
+                  amount_stars: invRes.amount_stars,
+                })
+              }
+            })
+            invoiceOpened = true
+          } catch {}
+        }
+
+        if (!invoiceOpened) {
+          try {
+            if (tg && typeof tg.openLink === 'function') {
+              tg.openLink(invRes.checkout_url)
+            } else {
+              window.open(invRes.checkout_url, '_blank')
+            }
+          } catch {
+            window.location.href = invRes.checkout_url
+          }
+        }
+      } catch (e) {
+        setErr(e.message || 'Error al procesar el pago con Telegram Stars')
+      } finally {
+        setBuying(false)
+      }
+      return
+    }
+
     // Flujo Pago Directo CUP (Tarjeta o Saldo Móvil)
     if (!proofFile) {
       setErr('Debes adjuntar la captura del comprobante de transferencia para verificar tu pago.')
@@ -7156,10 +7218,10 @@ function FzrFullCatalogScreen({
 
       {/* STEP 1: Static / Fixed Top Header (Hero Card + Selecciona tu paquete) */}
       {step === 'catalog' && (
-        <header className="flex-shrink-0 z-30 w-full bg-[#0b0f17] border-b border-white/10 shadow-xl">
+        <header className="fs-purchase-header flex-shrink-0 z-30 w-full bg-[#0b0f17] border-b border-white/10 shadow-xl">
           <div className="mx-auto w-full max-w-lg px-3.5 pt-3 pb-2.5 space-y-2.5">
             {/* Hero Card */}
-            <section className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#151c2a] to-[#0e131d] p-3 sm:p-3.5 shadow-md">
+            <section className="fs-purchase-hero relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-b from-[#151c2a] to-[#0e131d] p-3 sm:p-3.5 shadow-md">
               {/* Subtle ambient glow */}
               <div className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-accent/10 blur-2xl" />
 
@@ -7239,6 +7301,99 @@ function FzrFullCatalogScreen({
               )}
             </section>
 
+            {/* Top Payment Method Selector */}
+            <div className="pt-2">
+              <div className="flex items-center justify-between px-1 mb-1.5">
+                <span className="text-[10px] font-black uppercase tracking-wider text-white/60">
+                  Método de pago
+                </span>
+                <span className="text-[10px] text-white/40 font-medium">
+                  Precios en tiempo real
+                </span>
+              </div>
+              <div className={`grid ${mobileEnabled ? 'grid-cols-4' : 'grid-cols-3'} gap-1.5`}>
+                {/* Saldo USDT */}
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('balance')}
+                  className={`group relative flex flex-col items-center justify-center py-2 px-1 rounded-xl border transition-all duration-150 active:scale-95 cursor-pointer ${
+                    paymentMethod === 'balance'
+                      ? 'border-accent bg-accent/15 text-white ring-1 ring-accent/60 shadow-[0_0_12px_rgba(34,197,94,0.2)]'
+                      : 'border-white/10 bg-[#121824]/80 text-white/70 hover:bg-[#161f2e] hover:border-white/20 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center gap-1 mb-0.5">
+                    <Gem className={`h-3.5 w-3.5 flex-shrink-0 ${paymentMethod === 'balance' ? 'text-accent' : 'text-accent/70'}`} />
+                    <span className="text-[11px] font-black truncate">Saldo</span>
+                  </div>
+                  <span className={`text-[10px] font-bold truncate max-w-full ${paymentMethod === 'balance' ? 'text-accent' : 'text-white/40'}`}>
+                    {me?.is_guest ? 'USDT' : `$${userBalance.toFixed(2)}`}
+                  </span>
+                </button>
+
+                {/* Transferencia CUP */}
+                {cardEnabled && (
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('cup_card_transfer')}
+                    className={`group relative flex flex-col items-center justify-center py-2 px-1 rounded-xl border transition-all duration-150 active:scale-95 cursor-pointer ${
+                      paymentMethod === 'cup_card_transfer'
+                        ? 'border-emerald-400 bg-emerald-500/15 text-white ring-1 ring-emerald-400/60 shadow-[0_0_12px_rgba(52,211,153,0.2)]'
+                        : 'border-white/10 bg-[#121824]/80 text-white/70 hover:bg-[#161f2e] hover:border-white/20 hover:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <CreditCard className={`h-3.5 w-3.5 flex-shrink-0 ${paymentMethod === 'cup_card_transfer' ? 'text-emerald-400' : 'text-emerald-400/70'}`} />
+                      <span className="text-[11px] font-black truncate">Tarjeta</span>
+                    </div>
+                    <span className={`text-[10px] font-bold truncate max-w-full ${paymentMethod === 'cup_card_transfer' ? 'text-emerald-400' : 'text-white/40'}`}>
+                      CUP
+                    </span>
+                  </button>
+                )}
+
+                {/* Telegram Stars */}
+                <button
+                  type="button"
+                  onClick={() => setPaymentMethod('telegram_stars')}
+                  className={`group relative flex flex-col items-center justify-center py-2 px-1 rounded-xl border transition-all duration-150 active:scale-95 cursor-pointer ${
+                    paymentMethod === 'telegram_stars'
+                      ? 'border-amber-400 bg-amber-500/15 text-white ring-1 ring-amber-400/60 shadow-[0_0_12px_rgba(251,191,36,0.2)]'
+                      : 'border-white/10 bg-[#121824]/80 text-white/70 hover:bg-[#161f2e] hover:border-white/20 hover:text-white'
+                  }`}
+                >
+                  <div className="flex items-center gap-1 mb-0.5">
+                    <Star className={`h-3.5 w-3.5 flex-shrink-0 fill-current ${paymentMethod === 'telegram_stars' ? 'text-amber-400' : 'text-amber-400/70'}`} />
+                    <span className="text-[11px] font-black truncate">Stars</span>
+                  </div>
+                  <span className={`text-[10px] font-bold truncate max-w-full ${paymentMethod === 'telegram_stars' ? 'text-amber-400' : 'text-white/40'}`}>
+                    Telegram
+                  </span>
+                </button>
+
+                {/* Saldo Móvil */}
+                {mobileEnabled && (
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('cup_mobile_balance')}
+                    className={`group relative flex flex-col items-center justify-center py-2 px-1 rounded-xl border transition-all duration-150 active:scale-95 cursor-pointer ${
+                      paymentMethod === 'cup_mobile_balance'
+                        ? 'border-yellow-400 bg-yellow-500/15 text-white ring-1 ring-yellow-400/60 shadow-[0_0_12px_rgba(250,204,21,0.2)]'
+                        : 'border-white/10 bg-[#121824]/80 text-white/70 hover:bg-[#161f2e] hover:border-white/20 hover:text-white'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1 mb-0.5">
+                      <Smartphone className={`h-3.5 w-3.5 flex-shrink-0 ${paymentMethod === 'cup_mobile_balance' ? 'text-yellow-400' : 'text-yellow-400/70'}`} />
+                      <span className="text-[11px] font-black truncate">Móvil</span>
+                    </div>
+                    <span className={`text-[10px] font-bold truncate max-w-full ${paymentMethod === 'cup_mobile_balance' ? 'text-yellow-400' : 'text-white/40'}`}>
+                      *234#
+                    </span>
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* Selecciona tu paquete bar */}
             <div className="flex items-center justify-between px-1 pt-0.5">
               <div className="flex items-center gap-2">
@@ -7257,7 +7412,7 @@ function FzrFullCatalogScreen({
 
       {/* STEP 2: Checkout Top Header */}
       {step === 'checkout' && (
-        <header className="flex-shrink-0 z-30 w-full bg-[#0b0f17] border-b border-white/10 shadow-lg">
+        <header className="fs-purchase-header flex-shrink-0 z-30 w-full bg-[#0b0f17] border-b border-white/10 shadow-lg">
           <div className="mx-auto flex w-full max-w-lg items-center justify-between px-3.5 py-3">
             <button
               type="button"
@@ -7367,10 +7522,35 @@ function FzrFullCatalogScreen({
 
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <div className="text-right">
-                        <span className="text-sm font-black text-accent block">
-                          ${itemPrice.toFixed(2)}
-                        </span>
-                        <span className="text-[10px] font-bold text-white/40">USDT</span>
+                        {paymentMethod === 'cup_card_transfer' ? (
+                          <>
+                            <span className="text-sm font-black text-emerald-400 block font-mono leading-tight">
+                              {(cardRate > 0 ? Math.ceil((itemPrice * cardRate) / 5) * 5 : Math.ceil((itemPrice * 1165) / 5) * 5).toLocaleString('es-ES')}
+                            </span>
+                            <span className="text-[10px] font-bold text-emerald-400/70 block">CUP</span>
+                          </>
+                        ) : paymentMethod === 'cup_mobile_balance' ? (
+                          <>
+                            <span className="text-sm font-black text-yellow-400 block font-mono leading-tight">
+                              {(mobileRate > 0 ? Math.ceil((itemPrice * mobileRate) / 5) * 5 : Math.ceil((itemPrice * 340) / 5) * 5).toLocaleString('es-ES')}
+                            </span>
+                            <span className="text-[10px] font-bold text-yellow-400/70 block">CUP Móvil</span>
+                          </>
+                        ) : paymentMethod === 'telegram_stars' ? (
+                          <>
+                            <span className="text-sm font-black text-amber-400 block font-mono leading-tight">
+                              {(itemPrice <= 0.01 ? 1 : Math.max(1, Math.ceil(itemPrice / 0.0065))).toLocaleString('es-ES')} ⭐
+                            </span>
+                            <span className="text-[10px] font-bold text-amber-400/70 block">Stars</span>
+                          </>
+                        ) : (
+                          <>
+                            <span className="text-sm font-black text-accent block font-mono leading-tight">
+                              ${itemPrice.toFixed(2)}
+                            </span>
+                            <span className="text-[10px] font-bold text-white/40 block">USDT</span>
+                          </>
+                        )}
                       </div>
 
                       {/* Stepper multi-item for normal games */}
@@ -7429,8 +7609,14 @@ function FzrFullCatalogScreen({
                   Mínimo {minQuantity} · Máximo {maxQuantity.toLocaleString()}
                 </span>
               </div>
-              <span className="text-xs font-bold text-accent">
-                ${(unitPrice * currentQuantity).toFixed(2)} USDT
+              <span className={`text-xs font-bold font-mono ${paymentMethod === 'cup_card_transfer' ? 'text-emerald-400' : paymentMethod === 'cup_mobile_balance' ? 'text-yellow-400' : paymentMethod === 'telegram_stars' ? 'text-amber-400' : 'text-accent'}`}>
+                {paymentMethod === 'cup_card_transfer'
+                  ? `${(cardRate > 0 ? Math.ceil(((unitPrice * currentQuantity) * cardRate) / 5) * 5 : Math.ceil(((unitPrice * currentQuantity) * 1165) / 5) * 5).toLocaleString('es-ES')} CUP`
+                  : paymentMethod === 'cup_mobile_balance'
+                  ? `${(mobileRate > 0 ? Math.ceil(((unitPrice * currentQuantity) * mobileRate) / 5) * 5 : Math.ceil(((unitPrice * currentQuantity) * 340) / 5) * 5).toLocaleString('es-ES')} CUP`
+                  : paymentMethod === 'telegram_stars'
+                  ? `${((unitPrice * currentQuantity) <= 0.01 ? 1 : Math.max(1, Math.ceil((unitPrice * currentQuantity) / 0.0065))).toLocaleString('es-ES')} ⭐`
+                  : `$${(unitPrice * currentQuantity).toFixed(2)} USDT`}
               </span>
             </div>
 
@@ -7564,11 +7750,42 @@ function FzrFullCatalogScreen({
             <div className="flex items-center justify-between pt-2 border-t border-white/10">
               <span className="text-xs font-bold text-white/70">Total a pagar:</span>
               <div className="text-right">
-                <span className="text-base font-black text-accent">${totalPrice.toFixed(2)} USDT</span>
-                {hasCupMethods && (
-                  <span className="block text-xs text-emerald-400 font-bold">
-                    o {Number(paymentMethod === 'cup_mobile_balance' ? mobileCupAmount : cardCupAmount).toLocaleString('es-ES')} CUP
-                  </span>
+                {paymentMethod === 'cup_card_transfer' ? (
+                  <>
+                    <span className="text-base font-black text-emerald-400 font-mono">
+                      {Number(cardCupAmount).toLocaleString('es-ES')} CUP
+                    </span>
+                    <span className="block text-[10px] text-white/50">
+                      ≈ ${totalPrice.toFixed(2)} USDT
+                    </span>
+                  </>
+                ) : paymentMethod === 'cup_mobile_balance' ? (
+                  <>
+                    <span className="text-base font-black text-yellow-400 font-mono">
+                      {Number(mobileCupAmount).toLocaleString('es-ES')} CUP
+                    </span>
+                    <span className="block text-[10px] text-white/50">
+                      ≈ ${totalPrice.toFixed(2)} USDT
+                    </span>
+                  </>
+                ) : paymentMethod === 'telegram_stars' ? (
+                  <>
+                    <span className="text-base font-black text-amber-400 font-mono">
+                      {(totalPrice <= 0.01 ? (totalPrice > 0 ? 1 : 0) : Math.max(1, Math.ceil(totalPrice / 0.0065))).toLocaleString('es-ES')} ⭐
+                    </span>
+                    <span className="block text-[10px] text-white/50">
+                      ≈ ${totalPrice.toFixed(2)} USDT
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-base font-black text-accent font-mono">${totalPrice.toFixed(2)} USDT</span>
+                    {hasCupMethods && (
+                      <span className="block text-xs text-emerald-400 font-bold">
+                        o {Number(cardCupAmount).toLocaleString('es-ES')} CUP
+                      </span>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -7690,6 +7907,11 @@ function FzrFullCatalogScreen({
               proofPreview={proofPreview}
               handleCopy={handleCopy}
               copiedField={copiedField}
+              hideSelector={true}
+              onChangeMethod={() => {
+                setStep('catalog')
+                mainRef.current?.scrollTo({ top: 0, behavior: 'smooth' })
+              }}
             />
           </div>
         )}
@@ -7709,13 +7931,44 @@ function FzrFullCatalogScreen({
                 </span>
               </div>
               <div className="text-right">
-                <span className="text-base font-black text-accent">
-                  ${totalPrice.toFixed(2)} <span className="text-xs font-bold text-white/40">USDT</span>
-                </span>
-                {hasCupMethods && totalPrice > 0 && (
-                  <span className="block text-[10px] text-white/50">
-                    ~ {Number(paymentMethod === 'cup_mobile_balance' ? mobileCupAmount : cardCupAmount).toLocaleString('es-ES')} CUP
-                  </span>
+                {paymentMethod === 'cup_card_transfer' ? (
+                  <>
+                    <span className="text-base font-black text-emerald-400 block font-mono">
+                      {cardCupAmount.toLocaleString('es-ES')} <span className="text-xs font-bold text-emerald-400/70">CUP</span>
+                    </span>
+                    <span className="block text-[10px] text-white/50">
+                      ≈ ${totalPrice.toFixed(2)} USDT
+                    </span>
+                  </>
+                ) : paymentMethod === 'cup_mobile_balance' ? (
+                  <>
+                    <span className="text-base font-black text-yellow-400 block font-mono">
+                      {mobileCupAmount.toLocaleString('es-ES')} <span className="text-xs font-bold text-yellow-400/70">CUP</span>
+                    </span>
+                    <span className="block text-[10px] text-white/50">
+                      ≈ ${totalPrice.toFixed(2)} USDT
+                    </span>
+                  </>
+                ) : paymentMethod === 'telegram_stars' ? (
+                  <>
+                    <span className="text-base font-black text-amber-400 block font-mono">
+                      {(totalPrice <= 0.01 ? (totalPrice > 0 ? 1 : 0) : Math.max(1, Math.ceil(totalPrice / 0.0065))).toLocaleString('es-ES')} <span className="text-xs font-bold text-amber-400/70">⭐</span>
+                    </span>
+                    <span className="block text-[10px] text-white/50">
+                      ≈ ${totalPrice.toFixed(2)} USDT
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-base font-black text-accent block font-mono">
+                      ${totalPrice.toFixed(2)} <span className="text-xs font-bold text-white/40">USDT</span>
+                    </span>
+                    {hasCupMethods && totalPrice > 0 && (
+                      <span className="block text-[10px] text-white/50">
+                        ~ {Number(cardCupAmount).toLocaleString('es-ES')} CUP
+                      </span>
+                    )}
+                  </>
                 )}
               </div>
             </div>
@@ -7749,7 +8002,15 @@ function FzrFullCatalogScreen({
                 </>
               ) : (
                 <>
-                  <span>Continuar a pagar</span>
+                  <span>
+                    {paymentMethod === 'cup_card_transfer'
+                      ? 'Continuar con Transferencia CUP'
+                      : paymentMethod === 'cup_mobile_balance'
+                      ? 'Continuar con Saldo Móvil'
+                      : paymentMethod === 'telegram_stars'
+                      ? 'Continuar con Telegram Stars ⭐'
+                      : 'Continuar a pagar'}
+                  </span>
                   <ArrowRight className="h-4 w-4 stroke-[3]" />
                 </>
               )}
@@ -7771,6 +8032,19 @@ function FzrFullCatalogScreen({
                     ? `Restante: $${balanceAfter.toFixed(2)} USDT`
                     : `Faltan $${(totalPrice - userBalance).toFixed(2)} USDT (o paga en CUP)`
                   }
+                </span>
+              </div>
+            ) : paymentMethod === 'telegram_stars' ? (
+              <div className="flex items-center justify-between text-xs px-0.5">
+                <span className="text-white/50 inline-flex items-center gap-1">
+                  Método:{' '}
+                  <b className="text-amber-400 font-bold inline-flex items-center gap-1">
+                    <Star className="h-3.5 w-3.5 fill-amber-400" />
+                    <span>Telegram Stars</span>
+                  </b>
+                </span>
+                <span className="text-amber-400 font-black">
+                  Total: {(totalPrice <= 0.01 ? (totalPrice > 0 ? 1 : 0) : Math.max(1, Math.ceil(totalPrice / 0.0065))).toLocaleString('es-ES')} ⭐
                 </span>
               </div>
             ) : (
@@ -7804,7 +8078,7 @@ function FzrFullCatalogScreen({
                 buying ||
                 (!primaryOffer && selectedItemsList.length === 0) ||
                 (!me?.is_guest && paymentMethod === 'balance' && !hasEnoughBalance) ||
-                (!me?.is_guest && paymentMethod !== 'balance' && (!proofFile || !cupReference.trim()))
+                (!me?.is_guest && (paymentMethod === 'cup_card_transfer' || paymentMethod === 'cup_mobile_balance') && (!proofFile || !cupReference.trim()))
               }
               className={`w-full rounded-xl py-3.5 px-4 text-sm font-black flex items-center justify-center gap-2 transition shadow-lg active:scale-95 ${
                 !primaryOffer && selectedItemsList.length === 0
@@ -7813,7 +8087,7 @@ function FzrFullCatalogScreen({
                   ? 'bg-accent text-bg hover:bg-accent/90'
                   : paymentMethod === 'balance' && !hasEnoughBalance
                   ? 'bg-red-500/20 text-red-300 border border-red-500/30'
-                  : paymentMethod !== 'balance' && (!proofFile || !cupReference.trim())
+                  : (paymentMethod === 'cup_card_transfer' || paymentMethod === 'cup_mobile_balance') && (!proofFile || !cupReference.trim())
                   ? 'bg-emerald-600/30 text-emerald-200 border border-emerald-500/40 opacity-70'
                   : buying
                   ? 'bg-accent/70 text-bg cursor-wait'
@@ -7840,8 +8114,13 @@ function FzrFullCatalogScreen({
                 ) : (
                   `Pagar $${totalPrice.toFixed(2)} USDT`
                 )
+              ) : paymentMethod === 'telegram_stars' ? (
+                <span className="inline-flex items-center justify-center gap-2">
+                  <Star className="h-4 w-4 fill-current text-bg" />
+                  <span>Pagar {(totalPrice <= 0.01 ? 1 : Math.max(1, Math.ceil(totalPrice / 0.0065))).toLocaleString('es-ES')} ⭐</span>
+                </span>
               ) : !proofFile || !cupReference.trim() ? (
-                `${!cupReference.trim() ? 'Completa el número de transacción' : 'Adjunta el comprobante'} (${Number(paymentMethod === 'cup_card_transfer' ? cardCupAmount : mobileCupAmount).toLocaleString('es-ES')} CUP)`
+                `${!cupReference.trim() ? (paymentMethod === 'cup_mobile_balance' ? 'Ingresa el número remitente' : 'Ingresa el número de transacción') : 'Adjunta el comprobante'} (${Number(paymentMethod === 'cup_card_transfer' ? cardCupAmount : mobileCupAmount).toLocaleString('es-ES')} CUP)`
               ) : (
                 `Enviar Comprobante (${Number(paymentMethod === 'cup_card_transfer' ? cardCupAmount : mobileCupAmount).toLocaleString('es-ES')} CUP)`
               )}
@@ -8251,8 +8530,35 @@ function StreamingBuyModal({ product, onClose, onBought, buyResult, me, onLoginR
                       )}
                     </div>
 
+                    {/* Enlace directo de activación */}
+                    {(cred.link || (cred.email && cred.email.startsWith('http'))) && (
+                      <div className="flex items-center justify-between gap-2 bg-emerald-500/10 border border-emerald-500/30 p-2.5 rounded-lg">
+                        <div className="min-w-0 flex-1">
+                          <span className="block text-[10px] text-emerald-400 uppercase font-black">🔗 Enlace de Activación / Canje</span>
+                          <span className="block font-mono text-xs text-emerald-200 truncate select-all">{cred.link || cred.email}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <a
+                            href={cred.link || cred.email}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="px-2.5 py-1 rounded bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-[11px] shadow transition active:scale-95"
+                          >
+                            Abrir
+                          </a>
+                          <button
+                            type="button"
+                            onClick={() => copyText(cred.link || cred.email, `link-${idx}`)}
+                            className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-white text-[10px] font-bold transition active:scale-95"
+                          >
+                            {copiedKey === `link-${idx}` ? '¡Copiado!' : 'Copiar'}
+                          </button>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Email / Usuario */}
-                    {cred.email && (
+                    {cred.email && !cred.email.startsWith('http') && (
                       <div className="flex items-center justify-between gap-2 bg-white/5 p-2 rounded-lg">
                         <div className="min-w-0">
                           <span className="block text-[10px] text-white/40 uppercase font-bold">Correo / Usuario</span>
@@ -8362,9 +8668,15 @@ function StreamingBuyModal({ product, onClose, onBought, buyResult, me, onLoginR
                   <div>
                     <h4 className="font-black text-sm text-white truncate">{product.name}</h4>
                     <p className="text-[11px] text-white/50 mt-0.5 flex items-center gap-2">
-                      <span>⏱️ {product.duration_days || 30} días</span>
+                      <span>⏱️ {product.duration_days ? `${product.duration_days}d` : 'Digital'}</span>
                       <span>•</span>
-                      <span>🛡️ Garantía {product.guarantee_days || 30}d</span>
+                      <span>
+                        {product.guarantee_days && product.guarantee_days > 0
+                          ? `🛡️ Garantía ${product.guarantee_days}d`
+                          : product.raw_warranty && /^\d+h/i.test(product.raw_warranty)
+                          ? `🛡️ Garantía ${product.raw_warranty.toUpperCase()}`
+                          : '⚠️ Sin garantía post-canje (NW)'}
+                      </span>
                     </p>
                   </div>
                   <div className="flex items-center justify-between">
@@ -8728,12 +9040,12 @@ function HomeScreen({
                 type="button"
                 onClick={onOpenNotifications}
                 data-tour="header-notifications"
-                className="fs-balance-depth relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-white/10 text-white transition hover:brightness-110 active:translate-y-[2px]"
+                className="fs-balance-depth relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-slate-200 dark:border-white/10 bg-white dark:bg-card text-slate-700 dark:text-white transition hover:brightness-105 active:translate-y-[2px] shadow-sm"
                 aria-label="Notificaciones"
               >
                 <Bell className="h-4 w-4" />
                 {unreadNotifsCount > 0 && (
-                  <span className="absolute -top-1 -right-1 flex items-center justify-center rounded-full bg-accent text-[9px] font-black text-bg ring-2 ring-bg animate-pulse" style={{ width: '16px', height: '16px' }}>
+                  <span className="absolute -top-1 -right-1 flex items-center justify-center rounded-full bg-emerald-600 dark:bg-accent text-[9px] font-black text-white ring-2 ring-white dark:ring-slate-900 animate-pulse" style={{ width: '16px', height: '16px' }}>
                     {unreadNotifsCount}
                   </span>
                 )}
@@ -8748,13 +9060,13 @@ function HomeScreen({
                 if (me?.is_guest) return typeof onLoginRequired === 'function' ? onLoginRequired() : null
                 setBalanceMenuOpen(open => !open)
               }}
-              className="fs-balance-depth rounded-full border border-accent/25 px-4 py-1.5 text-center transition active:translate-y-[2px] active:shadow-none"
+              className="fs-balance-depth rounded-full border border-emerald-300 dark:border-accent/25 px-4 py-1.5 text-center transition active:translate-y-[2px] active:shadow-none shadow-sm"
               aria-label="Abrir acciones de saldo"
               aria-expanded={balanceMenuOpen}
             >
-              <span className="block text-[10px] leading-none text-white/45">Saldo</span>
-              <span className="mt-1 flex items-center justify-center gap-1 text-xs font-black leading-none text-white">
-                {!me?.is_guest && <FranchoFMark className="h-3.5 w-3.5 shrink-0 text-accent" title="Francho Shop" />}
+              <span className="block text-[10px] leading-none text-slate-500 dark:text-white/45 font-bold">Saldo</span>
+              <span className="mt-1 flex items-center justify-center gap-1 text-xs font-black leading-none text-slate-900 dark:text-white">
+                {!me?.is_guest && <FranchoFMark className="h-3.5 w-3.5 shrink-0 text-emerald-600 dark:text-accent" title="Francho Shop" />}
                 {me?.is_guest ? 'Entrar' : `${Number(me.balance || 0).toFixed(2)} FC`}
               </span>
             </button>
@@ -8779,15 +9091,15 @@ function HomeScreen({
             )}
           </div>
           <div className="flex items-center gap-2">
-            {isActualAdmin && onToggleTheme && (
+            {false && isActualAdmin && onToggleTheme && (
               <button
                 type="button"
                 onClick={onToggleTheme}
-                title={theme === 'light' ? 'Cambiar a Modo Oscuro' : 'Cambiar a Modo Claro (Morado & Blanco)'}
+                title={theme === 'light' ? 'Cambiar a Modo Oscuro' : 'Cambiar a Modo Claro'}
                 className={`relative flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border transition active:scale-95 shadow-sm ${
                   theme === 'light'
-                    ? 'bg-purple-600 border-purple-500 text-white shadow-purple-500/25'
-                    : 'bg-card border-purple-500/30 text-purple-400 hover:bg-purple-500/15'
+                    ? 'bg-white hover:bg-slate-100 border-slate-200 text-slate-700 shadow-slate-200/50'
+                    : 'bg-card border-white/10 text-amber-300 hover:bg-white/10'
                 }`}
                 aria-label="Alternar Modo Claro / Oscuro"
               >
@@ -9388,22 +9700,22 @@ function CatalogViewMoreCard({ title, onClick }) {
   return (
     <button
       onClick={onClick}
-      className="fs-catalog-card-3d group relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#16181f]/90 text-left transition-all duration-300 active:scale-95 hover:border-[#ffff00]/80 hover:-translate-y-0.5"
+      className="fs-catalog-card-3d group relative flex h-full w-full min-w-0 flex-col overflow-hidden rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#16181f]/90 text-left transition-all duration-300 active:scale-95 hover:border-emerald-500/80 dark:hover:border-[#ffff00]/80 hover:-translate-y-0.5 shadow-xs"
       aria-label={`Ver más ${title}`}
     >
-      <span className="block flex aspect-[1/1.1] w-full items-center justify-center bg-white/5 text-[#ffff00] transition group-hover:scale-105">
+      <span className="block flex aspect-[1/1.1] w-full items-center justify-center bg-slate-50 dark:bg-white/5 text-emerald-600 dark:text-[#ffff00] transition group-hover:scale-105">
         <div className="flex flex-col items-center gap-1">
-          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-[#ffff00]/10 border border-[#ffff00]/30 text-[#ffff00]">
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-100 dark:bg-[#ffff00]/10 border border-emerald-300 dark:border-[#ffff00]/30 text-emerald-700 dark:text-[#ffff00]">
             <ChevronRight className="h-4 w-4" />
           </span>
-          <span className="text-[9px] font-bold text-white/60">Ver todo</span>
+          <span className="text-[9px] font-bold text-slate-600 dark:text-white/60">Ver todo</span>
         </div>
       </span>
       <span className="block flex-1 p-1.5">
-        <span className="block line-clamp-1 truncate text-[11px] font-bold leading-tight text-[#ffff00]">Ver más</span>
+        <span className="block line-clamp-1 truncate text-[11px] font-bold leading-tight text-emerald-700 dark:text-[#ffff00]">Ver más</span>
         <span className="block mt-0.5 flex min-w-0 items-center justify-between gap-1">
-          <span className="truncate text-[8px] text-white/45">{title}</span>
-          <ChevronRight className="h-2.5 w-2.5 flex-shrink-0 text-white/35 group-hover:text-[#ffff00] group-hover:translate-x-0.5 transition-all" />
+          <span className="truncate text-[8px] text-slate-500 dark:text-white/45">{title}</span>
+          <ChevronRight className="h-2.5 w-2.5 flex-shrink-0 text-slate-400 dark:text-white/35 group-hover:text-emerald-600 dark:group-hover:text-[#ffff00] group-hover:translate-x-0.5 transition-all" />
         </span>
       </span>
     </button>
@@ -9665,13 +9977,13 @@ function CatalogSection({ title, icon: Icon, count, children, onViewAll }) {
   return (
     <section className="mb-5 [content-visibility:auto] [contain-intrinsic-size:260px]">
       <div className="mb-2.5 flex items-center justify-between gap-2">
-        <h3 className="inline-flex min-w-0 items-center gap-1.5 text-xs font-black uppercase text-white/85">
-          <Icon className="h-3.5 w-3.5 flex-shrink-0 text-[#ffff00]" />
+        <h3 className="inline-flex min-w-0 items-center gap-1.5 text-xs font-black uppercase text-slate-900 dark:text-white/85">
+          <Icon className="h-3.5 w-3.5 flex-shrink-0 text-emerald-600 dark:text-[#ffff00]" />
           <span className="truncate">{title}</span>
-          <span className="rounded-full bg-[#ffff00]/10 border border-[#ffff00]/25 px-1.5 py-0.2 text-[9px] font-black text-[#ffff00]">{count}</span>
+          <span className="rounded-full bg-emerald-100 dark:bg-[#ffff00]/10 border border-emerald-300 dark:border-[#ffff00]/25 px-1.5 py-0.2 text-[9px] font-black text-emerald-800 dark:text-[#ffff00]">{count}</span>
         </h3>
         {count > 5 && (
-          <button onClick={onViewAll} className="text-xs font-bold text-[#ffff00] hover:underline flex items-center gap-0.5">
+          <button onClick={onViewAll} className="text-xs font-bold text-emerald-600 dark:text-[#ffff00] hover:underline flex items-center gap-0.5 cursor-pointer">
             Ver más <ChevronRight className="h-3.5 w-3.5" />
           </button>
         )}
@@ -10072,8 +10384,11 @@ function PaymentMethodSection({
   proofPreview,
   handleCopy,
   copiedField,
+  hideSelector = false,
+  onChangeMethod,
 }) {
   const [showTutorialModal, setShowTutorialModal] = useState(false)
+  const [tutorialTab, setTutorialTab] = useState('transfermovil')
   if (cupSettingsError) {
     return (
       <div className="mb-4 rounded-2xl border border-amber-400/25 bg-amber-500/10 p-3.5 text-center shadow-lg">
@@ -10114,87 +10429,221 @@ function PaymentMethodSection({
 
   return (
     <div className="mb-4 space-y-3">
-      <div className="flex items-center justify-between">
-        <label className="text-xs font-semibold uppercase tracking-wider text-white/60">
-          Método de pago
-        </label>
-        <span className="text-[11px] text-white/40">
-          Toca para elegir
-        </span>
-      </div>
-
-      {/* Selector simplificado de métodos de pago (Pills segmentadas compactas) */}
-      <div className="grid grid-cols-3 gap-1.5 p-1 rounded-2xl bg-[#090d16] border border-white/10">
-        {/* Saldo USDT */}
-        <button
-          type="button"
-          onClick={() => setPaymentMethod('balance')}
-          className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-xl transition-all cursor-pointer ${
-            paymentMethod === 'balance'
-              ? 'bg-accent/20 border border-accent text-white shadow-sm ring-1 ring-accent/50'
-              : 'border border-transparent hover:bg-white/5 text-white/70 hover:text-white'
-          }`}
-        >
-          <div className="flex items-center gap-1 mb-0.5">
-            <Gem className="h-3.5 w-3.5 text-accent flex-shrink-0" />
-            <span className="text-[11px] font-bold">Saldo</span>
+      {hideSelector ? (
+        /* Resumen del método de pago elegido (selector en pantalla previa) */
+        <div className="flex items-center justify-between p-3 rounded-2xl bg-[#090d16] border border-white/10 mb-3 shadow-inner">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {paymentMethod === 'balance' ? (
+              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-accent/20 border border-accent/40 text-accent">
+                <Gem className="h-4 w-4" />
+              </div>
+            ) : paymentMethod === 'telegram_stars' ? (
+              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-400">
+                <Star className="h-4 w-4 fill-amber-400" />
+              </div>
+            ) : paymentMethod === 'cup_card_transfer' ? (
+              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 border border-emerald-500/40 text-emerald-400">
+                <CreditCard className="h-4 w-4" />
+              </div>
+            ) : (
+              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-yellow-500/20 border border-yellow-500/40 text-yellow-400">
+                <Smartphone className="h-4 w-4" />
+              </div>
+            )}
+            <div className="min-w-0">
+              <span className="text-xs font-black text-white truncate block">
+                {paymentMethod === 'balance'
+                  ? 'Pago con Saldo USDT'
+                  : paymentMethod === 'telegram_stars'
+                  ? 'Pago con Telegram Stars ⭐'
+                  : paymentMethod === 'cup_card_transfer'
+                  ? 'Transferencia Bancaria (CUP)'
+                  : 'Transferencia Saldo Móvil (*234#)'}
+              </span>
+              <span className="text-[10px] text-white/50 block truncate">
+                {paymentMethod === 'balance'
+                  ? `Saldo disponible: $${Number(userBalance || 0).toFixed(2)} USDT`
+                  : paymentMethod === 'telegram_stars'
+                  ? 'Factura nativa en Telegram'
+                  : paymentMethod === 'cup_card_transfer'
+                  ? 'Transfermóvil / EnZona'
+                  : 'Saldo Cubacel ETECSA'}
+              </span>
+            </div>
           </div>
-          <p className="text-xs font-black text-accent">
-            ${Number(priceUsdt || 0).toFixed(2)}
+
+          {onChangeMethod && (
+            <button
+              type="button"
+              onClick={onChangeMethod}
+              className="flex-shrink-0 inline-flex items-center gap-1 rounded-xl bg-white/5 border border-white/10 px-2.5 py-1.5 text-xs font-bold text-accent hover:bg-white/10 active:scale-95 transition cursor-pointer"
+            >
+              <span>Cambiar</span>
+            </button>
+          )}
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center justify-between">
+            <label className="text-xs font-semibold uppercase tracking-wider text-white/60">
+              Método de pago
+            </label>
+            <span className="text-[11px] text-white/40">
+              Toca para elegir
+            </span>
+          </div>
+
+          {/* Selector simplificado de métodos de pago (Pills segmentadas compactas) */}
+          <div className="grid grid-cols-4 gap-1 p-1 rounded-2xl bg-[#090d16] border border-white/10">
+            {/* Saldo USDT */}
+            <button
+              type="button"
+              onClick={() => setPaymentMethod('balance')}
+              className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all cursor-pointer ${
+                paymentMethod === 'balance'
+                  ? 'bg-accent/20 border border-accent text-white shadow-sm ring-1 ring-accent/50'
+                  : 'border border-transparent hover:bg-white/5 text-white/70 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-1 mb-0.5">
+                <Gem className="h-3 w-3 text-accent flex-shrink-0" />
+                <span className="text-[10px] font-bold">Saldo</span>
+              </div>
+              <p className="text-[11px] font-black text-accent truncate max-w-full">
+                ${Number(priceUsdt || 0).toFixed(2)}
+              </p>
+              <span className={`text-[9px] truncate max-w-full ${userBalance >= priceUsdt ? 'text-emerald-400 font-medium' : 'text-red-400 font-bold'}`}>
+                {userBalance >= priceUsdt ? `$${Number(userBalance || 0).toFixed(2)}` : 'Sin saldo'}
+              </span>
+            </button>
+
+            {/* Telegram Stars */}
+            <button
+              type="button"
+              onClick={() => setPaymentMethod('telegram_stars')}
+              className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all cursor-pointer ${
+                paymentMethod === 'telegram_stars'
+                  ? 'bg-amber-500/20 border border-amber-500 text-white shadow-sm ring-1 ring-amber-500/50'
+                  : 'border border-transparent hover:bg-white/5 text-white/70 hover:text-white'
+              }`}
+            >
+              <div className="flex items-center gap-1 mb-0.5">
+                <Star className="h-3 w-3 text-amber-400 flex-shrink-0 fill-amber-400" />
+                <span className="text-[10px] font-bold">Stars</span>
+              </div>
+              <p className="text-[11px] font-black text-amber-400 truncate max-w-full">
+                {Number(priceUsdt || 0) <= 0.01 ? 1 : Math.max(1, Math.ceil(Number(priceUsdt || 0) / 0.0065))} ⭐
+              </p>
+              <span className="text-[9px] text-white/40">
+                Nativo
+              </span>
+            </button>
+
+            {/* Transferencia CUP */}
+            {cardEnabled && (
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('cup_card_transfer')}
+                className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all cursor-pointer ${
+                  paymentMethod === 'cup_card_transfer'
+                    ? 'bg-emerald-500/20 border border-emerald-500 text-white shadow-sm ring-1 ring-emerald-500/50'
+                    : 'border border-transparent hover:bg-white/5 text-white/70 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-1 mb-0.5">
+                  <CreditCard className="h-3 w-3 text-emerald-400 flex-shrink-0" />
+                  <span className="text-[10px] font-bold">Tarjeta</span>
+                </div>
+                <p className="text-[11px] font-black text-emerald-400 truncate max-w-full">
+                  {Number(cardCupAmount || 0).toLocaleString('es-ES')}
+                </p>
+                <span className="text-[9px] text-white/40">
+                  CUP
+                </span>
+              </button>
+            )}
+
+            {/* Saldo Móvil */}
+            {mobileEnabled && (
+              <button
+                type="button"
+                onClick={() => setPaymentMethod('cup_mobile_balance')}
+                className={`flex flex-col items-center justify-center py-2 px-1 rounded-xl transition-all cursor-pointer ${
+                  paymentMethod === 'cup_mobile_balance'
+                    ? 'bg-yellow-500/20 border border-yellow-500 text-white shadow-sm ring-1 ring-yellow-500/50'
+                    : 'border border-transparent hover:bg-white/5 text-white/70 hover:text-white'
+                }`}
+              >
+                <div className="flex items-center gap-1 mb-0.5">
+                  <Smartphone className="h-3 w-3 text-yellow-400 flex-shrink-0" />
+                  <span className="text-[10px] font-bold">Móvil</span>
+                </div>
+                <p className="text-[11px] font-black text-yellow-400 truncate max-w-full">
+                  {Number(mobileCupAmount || 0).toLocaleString('es-ES')}
+                </p>
+                <span className="text-[9px] text-white/40">
+                  *234#
+                </span>
+              </button>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Saldo Francho Details (cuando hideSelector es true) */}
+      {paymentMethod === 'balance' && (
+        <div className="rounded-2xl border border-accent/30 bg-accent/10 p-3.5 space-y-2.5">
+          <div className="flex items-center justify-between pb-2 border-b border-accent/20">
+            <span className="text-xs font-bold text-accent flex items-center gap-1.5">
+              <Gem className="h-3.5 w-3.5 text-accent flex-shrink-0" />
+              <span>Pago con Saldo Francho (USDT)</span>
+            </span>
+            <span className="text-sm font-black text-accent">
+              ${Number(priceUsdt || 0).toFixed(2)} USDT
+            </span>
+          </div>
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-white/60">Tu saldo disponible:</span>
+            <span className="font-bold font-mono text-white">${Number(userBalance || 0).toFixed(2)} USDT</span>
+          </div>
+          {userBalance >= priceUsdt ? (
+            <p className="text-[11px] text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 p-2 rounded-xl">
+              ✓ Tienes saldo suficiente. El monto se debitará al confirmar la compra y la recarga se procesará de forma inmediata.
+            </p>
+          ) : (
+            <div className="text-[11px] text-red-300 bg-red-500/10 border border-red-500/20 p-2.5 rounded-xl space-y-2">
+              <p>⚠️ Tu saldo es insuficiente para completar esta compra (te faltan ${(priceUsdt - userBalance).toFixed(2)} USDT).</p>
+              {onChangeMethod && (
+                <button
+                  type="button"
+                  onClick={onChangeMethod}
+                  className="text-xs font-bold text-accent underline cursor-pointer"
+                >
+                  Cambiar a Transferencia CUP o Telegram Stars
+                </button>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Telegram Stars Info */}
+      {paymentMethod === 'telegram_stars' && (
+        <div className="rounded-2xl border border-amber-500/30 bg-amber-950/20 p-3.5 space-y-2">
+          <div className="flex items-center justify-between pb-1.5 border-b border-amber-500/20">
+            <span className="text-xs font-bold text-amber-300 flex items-center gap-1.5">
+              <Star className="h-3.5 w-3.5 text-amber-400 fill-amber-400 flex-shrink-0" />
+              <span>Pago con Telegram Stars ⭐</span>
+            </span>
+            <span className="text-sm font-black text-amber-400">
+              {Number(priceUsdt || 0) <= 0.01 ? 1 : Math.max(1, Math.ceil(Number(priceUsdt || 0) / 0.0065))} ⭐
+            </span>
+          </div>
+          <p className="text-xs text-white/70 leading-relaxed">
+            Se generará una orden nativa de cobro en Telegram Stars. El pago se verifica al instante y el pedido se entrega de forma 100% automática.
           </p>
-          <span className={`text-[10px] truncate max-w-full ${userBalance >= priceUsdt ? 'text-emerald-400 font-medium' : 'text-red-400 font-bold'}`}>
-            {userBalance >= priceUsdt ? `$${Number(userBalance || 0).toFixed(2)}` : 'Sin saldo'}
-          </span>
-        </button>
-
-        {/* Transferencia CUP */}
-        {cardEnabled && (
-          <button
-            type="button"
-            onClick={() => setPaymentMethod('cup_card_transfer')}
-            className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-xl transition-all cursor-pointer ${
-              paymentMethod === 'cup_card_transfer'
-                ? 'bg-emerald-500/20 border border-emerald-500 text-white shadow-sm ring-1 ring-emerald-500/50'
-                : 'border border-transparent hover:bg-white/5 text-white/70 hover:text-white'
-            }`}
-          >
-            <div className="flex items-center gap-1 mb-0.5">
-              <CreditCard className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0" />
-              <span className="text-[11px] font-bold">Tarjeta</span>
-            </div>
-            <p className="text-xs font-black text-emerald-400">
-              {Number(cardCupAmount || 0).toLocaleString('es-ES')}
-            </p>
-            <span className="text-[10px] text-white/40">
-              CUP
-            </span>
-          </button>
-        )}
-
-        {/* Saldo Móvil */}
-        {mobileEnabled && (
-          <button
-            type="button"
-            onClick={() => setPaymentMethod('cup_mobile_balance')}
-            className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-xl transition-all cursor-pointer ${
-              paymentMethod === 'cup_mobile_balance'
-                ? 'bg-yellow-500/20 border border-yellow-500 text-white shadow-sm ring-1 ring-yellow-500/50'
-                : 'border border-transparent hover:bg-white/5 text-white/70 hover:text-white'
-            }`}
-          >
-            <div className="flex items-center gap-1 mb-0.5">
-              <Smartphone className="h-3.5 w-3.5 text-yellow-400 flex-shrink-0" />
-              <span className="text-[11px] font-bold">Móvil</span>
-            </div>
-            <p className="text-xs font-black text-yellow-400">
-              {Number(mobileCupAmount || 0).toLocaleString('es-ES')}
-            </p>
-            <span className="text-[10px] text-white/40">
-              *234#
-            </span>
-          </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* CUP Card Transfer Form */}
       {paymentMethod === 'cup_card_transfer' && (
@@ -10250,6 +10699,20 @@ function PaymentMethodSection({
             <span>Transfiere exactamente <b>{Number(cardCupAmount || 0).toLocaleString('es-ES')} CUP</b> e incluye el número a confirmar si usas Transfermóvil.</span>
           </div>
 
+          {/* Aviso directo y claro */}
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 space-y-1.5 text-xs text-white/85">
+            <div className="flex items-center gap-1.5 text-amber-300 font-bold">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0 text-amber-400" />
+              <span>Aviso importante sobre tu pago:</span>
+            </div>
+            <ul className="space-y-1 text-[11px] leading-relaxed text-white/80 list-disc pl-4">
+              <li><b>Transfermóvil (Android):</b> Si agregas el número a confirmar y entra el SMS del banco, se entrega automáticamente.</li>
+              <li><b>EnZona:</b> Pasa a <b>pago manual</b> porque EnZona no incluye la tarjeta en la que se recibió el pago por seguridad.</li>
+              <li><b>iPhone:</b> Pasa a <b>pago manual</b> porque desde iPhone no se puede poner número a confirmar para que llegue el SMS.</li>
+              <li><b>Si el receptor (admin) está en apagón:</b> El SMS del banco puede demorar en entrar; en ese caso se verificará manualmente con tu comprobante.</li>
+            </ul>
+          </div>
+
           {/* Botón Acceso Rápido al Tutorial */}
           <button
             type="button"
@@ -10270,7 +10733,7 @@ function PaymentMethodSection({
                   </span>
                 </div>
                 <p className="text-[10px] text-white/70 truncate">
-                  Toca aquí para ver la foto de dónde encontrarlo en tu SMS
+                  Toca aquí para ver dónde encontrarlo en Transfermóvil o EnZona
                 </p>
               </div>
             </div>
@@ -10280,8 +10743,8 @@ function PaymentMethodSection({
           <div className="space-y-1">
             <div className="flex items-center justify-between">
               <label className="text-[11px] text-emerald-300 font-bold flex items-center gap-1">
-                <span>Nro. de Transacción (Transfermóvil):</span>
-                <span className="text-emerald-400">*</span>
+                <span>Número de transacción bancaria (Transfermóvil / EnZona):</span>
+                <span className="text-emerald-400 font-black">* OBLIGATORIO</span>
               </label>
               <button
                 type="button"
@@ -10295,11 +10758,11 @@ function PaymentMethodSection({
               type="text"
               value={cupReference}
               onChange={(e) => setCupReference(e.target.value)}
-              placeholder="Ej: BR601BIS6A997 (del SMS del banco)"
+              placeholder="Obligatorio: pega el Nro. de Transacción (ej: BR601BIS... o ID EnZona)"
               className="w-full rounded-xl border border-white/15 bg-black/40 px-3 py-2 text-xs font-mono font-bold tracking-wider text-white placeholder-white/30 outline-none focus:border-emerald-500 uppercase"
             />
-            <p className="text-[10px] text-emerald-400/90 leading-tight">
-              ⚡ Al ingresar este número del SMS bancario, tu pedido se verifica y entrega automáticamente en segundos las 24 horas.
+            <p className="text-[10px] text-emerald-300/90 leading-tight">
+              ⚠️ <b>Obligatorio:</b> Ingresa el código de transacción de tu transferencia bancaria para validar tu pago y acreditar tu compra automáticamente al instante.
             </p>
           </div>
 
@@ -10381,17 +10844,34 @@ function PaymentMethodSection({
             <span>Transfiere exactamente <b>{Number(mobileCupAmount || 0).toLocaleString('es-ES')} CUP</b> marcando <b>*234#</b> en tu teléfono.</span>
           </div>
 
+          {/* Instrucciones Saldo Móvil */}
+          <div className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-3 space-y-1.5 text-xs text-white/85">
+            <div className="flex items-center gap-1.5 text-amber-300 font-bold">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0 text-amber-400" />
+              <span>Instrucciones para Saldo Móvil (*234#):</span>
+            </div>
+            <ul className="space-y-1 text-[11px] leading-relaxed text-white/80 list-disc pl-4">
+              <li><b>Número del remitente obligatorio:</b> Escribe abajo el número exacto desde el que transfieres (o el del remitente si es de un familiar o amigo) para <b>validar tu pago al instante</b>.</li>
+              <li><b>Acreditación automática:</b> El sistema reconoce el SMS de ETECSA y procesa tu pedido de inmediato.</li>
+              <li><b>Si hay demora o apagón de ETECSA:</b> Tu captura adjunta del SMS nos permite validar y activar tu recarga de inmediato.</li>
+            </ul>
+          </div>
+
           <div className="space-y-1">
-            <label className="text-[11px] text-white/70 font-medium">
-              Tu número de teléfono emisor:
+            <label className="text-[11px] text-yellow-300 font-bold flex items-center gap-1">
+              <span>Número desde donde transfieres el saldo:</span>
+              <span className="text-yellow-400 font-black">* OBLIGATORIO</span>
             </label>
             <input
               type="tel"
               value={cupReference}
               onChange={(e) => setCupReference(e.target.value)}
-              placeholder="Ej: 5351234567"
-              className="w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-xs text-white placeholder-white/30 outline-none focus:border-yellow-500"
+              placeholder="Obligatorio: Ej: 53123456 (8 dígitos del remitente)"
+              className="w-full rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-xs font-mono font-bold tracking-wider text-white placeholder-white/30 outline-none focus:border-yellow-500"
             />
+            <p className="text-[10px] text-yellow-300/80 leading-tight">
+              ⚠️ <b>Obligatorio:</b> Indispensable ingresar el número desde el que transfieres para validar tu pago y procesar tu pedido de inmediato.
+            </p>
           </div>
 
           <div className="space-y-1.5">
@@ -10465,39 +10945,129 @@ function PaymentMethodSection({
               </button>
             </div>
 
-            {/* Pasos */}
-            <div className="space-y-2 text-xs">
-              <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
-                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-black flex items-center justify-center text-[10px]">1</span>
-                <p className="text-white/80"><b className="text-white">Haz la transferencia:</b> Envía el monto exacto por Transfermóvil a la tarjeta CUP de la tienda.</p>
-              </div>
-              <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
-                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-black flex items-center justify-center text-[10px]">2</span>
-                <p className="text-white/80"><b className="text-white">Revisa el SMS del banco:</b> Recibirás un SMS de BPA, BANDEC o Metropolitano confirmando el envío.</p>
-              </div>
-              <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
-                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-500 text-slate-950 font-black flex items-center justify-center text-[10px]">3</span>
-                <p className="text-emerald-200"><b className="text-white">Copia el "Nro. Transaccion":</b> Mira el recuadro rojo en la foto inferior. Suele incluir números y letras (ej: <b className="font-mono text-white underline">BR601BIS6A997</b>).</p>
-              </div>
-              <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
-                <span className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-black flex items-center justify-center text-[10px]">4</span>
-                <p className="text-white/80"><b className="text-white">Pégalo en la tienda:</b> Escribe ese código y tu pedido será <span className="text-emerald-400 font-bold">despachado de inmediato</span>.</p>
-              </div>
+            {/* Selector de Pestaña: Transfermóvil vs EnZona */}
+            <div className="flex rounded-xl bg-black/50 p-1 border border-white/10 gap-1">
+              <button
+                type="button"
+                onClick={() => setTutorialTab('transfermovil')}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                  tutorialTab === 'transfermovil'
+                    ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                    : 'text-white/50 hover:text-white'
+                }`}
+              >
+                <span>📱 Transfermóvil</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setTutorialTab('enzona')}
+                className={`flex-1 py-1.5 px-3 rounded-lg text-xs font-bold transition cursor-pointer flex items-center justify-center gap-1.5 ${
+                  tutorialTab === 'enzona'
+                    ? 'bg-emerald-500/25 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                    : 'text-white/50 hover:text-white'
+                }`}
+              >
+                <span>⚡ EnZona</span>
+              </button>
             </div>
 
-            {/* Foto de ejemplo */}
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-bold text-white/70 flex items-center justify-between">
-                <span>Foto de ejemplo del SMS bancario:</span>
-                <span className="text-[10px] text-emerald-400 font-mono font-bold">Resaltado en rojo</span>
-              </label>
-              <div className="rounded-xl overflow-hidden border-2 border-emerald-500/40 bg-black/60 shadow-lg">
-                <img
-                  src="/tutorial-transfermovil.jpg"
-                  alt="Ejemplo SMS con Nro. de Transacción"
-                  className="w-full object-contain max-h-72"
-                />
+            {/* Contenido según pestaña seleccionada */}
+            {tutorialTab === 'transfermovil' ? (
+              <>
+                {/* Pasos Transfermóvil */}
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-black flex items-center justify-center text-[10px]">1</span>
+                    <p className="text-white/80"><b className="text-white">Haz la transferencia:</b> Envía el monto exacto por Transfermóvil a la tarjeta CUP e incluye el número a confirmar.</p>
+                  </div>
+                  <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-black flex items-center justify-center text-[10px]">2</span>
+                    <p className="text-white/80"><b className="text-white">Revisa el SMS del banco:</b> Recibirás un SMS de BPA, BANDEC o Metropolitano confirmando el envío.</p>
+                  </div>
+                  <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-500 text-slate-950 font-black flex items-center justify-center text-[10px]">3</span>
+                    <p className="text-emerald-200"><b className="text-white">Copia el "Nro. Transaccion":</b> Mira el recuadro rojo en la foto inferior. Suele incluir números y letras (ej: <b className="font-mono text-white underline">BR601BIS6A997</b>).</p>
+                  </div>
+                  <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-black flex items-center justify-center text-[10px]">4</span>
+                    <p className="text-white/80"><b className="text-white">Pégalo en la tienda:</b> Escribe ese código y tu pedido será <span className="text-emerald-400 font-bold">despachado de inmediato</span>.</p>
+                  </div>
+                </div>
+
+                {/* Foto de ejemplo Transfermóvil */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-white/70 flex items-center justify-between">
+                    <span>Foto de ejemplo del SMS bancario:</span>
+                    <span className="text-[10px] text-emerald-400 font-mono font-bold">Resaltado en rojo</span>
+                  </label>
+                  <div className="rounded-xl overflow-hidden border-2 border-emerald-500/40 bg-black/60 shadow-lg">
+                    <img
+                      src="/tutorial-transfermovil.jpg"
+                      alt="Ejemplo SMS con Nro. de Transacción"
+                      className="w-full object-contain max-h-72"
+                    />
+                  </div>
+                </div>
+              </>
+            ) : (
+              <>
+                {/* Pasos EnZona */}
+                <div className="space-y-2 text-xs">
+                  <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-black flex items-center justify-center text-[10px]">1</span>
+                    <p className="text-white/80"><b className="text-white">Transfiere en EnZona:</b> Envía el monto exacto a la tarjeta CUP de la tienda desde tu cuenta de EnZona.</p>
+                  </div>
+                  <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-black flex items-center justify-center text-[10px]">2</span>
+                    <p className="text-white/80"><b className="text-white">Abre el detalle del pago:</b> En tus transferencias de EnZona, abre el comprobante de la operación.</p>
+                  </div>
+                  <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-500 text-slate-950 font-black flex items-center justify-center text-[10px]">3</span>
+                    <p className="text-emerald-200"><b className="text-white">Copia el Nro. de Transacción:</b> Copia el número de transacción / referencia que aparece en tu comprobante.</p>
+                  </div>
+                  <div className="flex items-start gap-2.5 p-2.5 rounded-xl bg-white/[0.03] border border-white/5">
+                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500/50 text-emerald-300 font-black flex items-center justify-center text-[10px]">4</span>
+                    <p className="text-white/80"><b className="text-white">Pégalo y sube la captura:</b> Escribe ese código obligatorio y adjunta la captura para que un admin lo verifique.</p>
+                  </div>
+                </div>
+
+                {/* Foto de ejemplo EnZona */}
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-bold text-white/70 flex items-center justify-between">
+                    <span>Comprobante de EnZona:</span>
+                    <span className="text-[10px] text-emerald-400 font-mono font-bold">Nro. de Transacción</span>
+                  </label>
+                  <div className="rounded-xl overflow-hidden border-2 border-emerald-500/40 bg-black/60 shadow-lg min-h-40 flex items-center justify-center p-2">
+                    <img
+                      src="/tutorial-enzona.jpg"
+                      alt="Ejemplo Comprobante EnZona"
+                      className="w-full object-contain max-h-72"
+                      onError={(e) => {
+                        e.currentTarget.style.display = 'none';
+                        const fallback = e.currentTarget.nextElementSibling;
+                        if (fallback) fallback.style.display = 'flex';
+                      }}
+                    />
+                    <div style={{ display: 'none' }} className="flex-col items-center justify-center p-6 text-center space-y-2 text-white/60">
+                      <span className="text-3xl">🧾</span>
+                      <p className="text-xs font-semibold text-white/80">Busca el "Nro. de Transacción" en los detalles de tu transferencia en EnZona.</p>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Aviso EnZona / iPhone / Apagón */}
+            <div className="p-3 rounded-xl border border-amber-500/40 bg-amber-500/10 space-y-1.5 text-xs">
+              <div className="flex items-center gap-2 text-amber-300 font-bold">
+                <AlertTriangle className="h-4 w-4 flex-shrink-0 text-amber-400" />
+                <span>¿Por qué puede pasar a pago manual?</span>
               </div>
+              <ul className="space-y-1 text-[11px] text-white/80 leading-relaxed list-disc pl-4">
+                <li><b>EnZona:</b> No incluye la tarjeta de destino en la confirmación por seguridad bancaria.</li>
+                <li><b>iPhone:</b> La app en iOS no permite poner número a confirmar, impidiendo el SMS automático.</li>
+                <li><b>Si el receptor (admin) está en apagón:</b> El SMS del banco no entra a tiempo y se verificará manualmente con tu captura.</li>
+              </ul>
             </div>
 
             {/* Botón cerrar */}
@@ -10545,11 +11115,35 @@ function CupOrderSuccessView({ order, onClose, onOrders }) {
         </div>
       </div>
 
-      <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 mb-6 text-xs text-white/70 text-left space-y-1">
-        <p className="font-semibold text-emerald-300">✅ ¿Qué sigue ahora?</p>
-        <p>• Un administrador revisará la transferencia bancaria con el comprobante adjunto.</p>
-        <p>• Recibirás una notificación por Telegram y por correo cuando se confirme tu pago.</p>
-        <p>• Puedes revisar el progreso en cualquier momento desde tu panel de pedidos.</p>
+      <div className="rounded-xl border border-white/10 bg-black/40 p-3.5 mb-6 text-xs text-white/80 text-left space-y-2.5">
+        <p className="font-bold text-sm text-white flex items-center gap-1.5">
+          <Clock className="h-4 w-4 text-accent" />
+          <span>¿Cómo se procesará tu pedido?</span>
+        </p>
+        
+        <div className="space-y-2 text-[11px] leading-relaxed">
+          <div className="p-2.5 rounded-xl bg-emerald-500/10 border border-emerald-500/20">
+            <p className="font-bold text-emerald-300 flex items-center gap-1">
+              <span>⚡ Si pagaste por Transfermóvil (Android con SMS):</span>
+            </p>
+            <p className="text-white/75 mt-0.5">
+              Si pusiste el número a confirmar y el teléfono del receptor recibe el SMS bancario, tu pedido se auto-entrega al instante.
+            </p>
+          </div>
+
+          <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25">
+            <p className="font-bold text-amber-300 flex items-center gap-1">
+              <span>⚠️ Si pagaste por EnZona, iPhone o el receptor está en apagón:</span>
+            </p>
+            <p className="text-white/75 mt-0.5">
+              Por motivos de seguridad (EnZona no indica tarjeta destino) o falta de SMS (iPhone / corte de luz en el receptor), el pedido pasa a <b>pago manual</b> y un administrador lo activará con tu comprobante.
+            </p>
+          </div>
+        </div>
+
+        <p className="text-[10px] text-white/50 pt-1 border-t border-white/10">
+          • Te notificaremos por Telegram y correo en cuanto se complete. Puedes dar seguimiento en todo momento desde <b className="text-white">Mis Pedidos</b>.
+        </p>
       </div>
 
       {onOrders ? (
@@ -10748,7 +11342,7 @@ function ProductsScreen({ game, gameData, region, me, onSelectProduct, onLoginRe
           order_id: cupOrder.order_id,
           product_name: selectedProduct.displayName || selectedProduct.name,
           payment_status: 'pending_verification',
-          message: 'Comprobante recibido. Un administrador verificará la transferencia y activará tu recarga enseguida.'
+          message: 'Comprobante recibido. Se verificará automáticamente con el SMS bancario o manualmente si usaste EnZona, iPhone o hay demoras de red/apagón de ETECSA.'
         }
       })
     } catch (e) {
@@ -11067,7 +11661,7 @@ function ProductsScreen({ game, gameData, region, me, onSelectProduct, onLoginRe
             )}
             {!me?.is_guest && allFilled && selectedId && paymentMethod !== 'balance' && (!proofFile || !cupReference.trim()) && (
               <p className="text-xs text-yellow-400/70 text-center mt-2">
-                <span className="inline-flex items-center justify-center gap-1"><AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />{!cupReference.trim() ? 'Completa el número de transacción o teléfono emisor' : 'Adjunta el comprobante de pago para continuar'}</span>
+                <span className="inline-flex items-center justify-center gap-1"><AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />{!cupReference.trim() ? (paymentMethod === 'cup_mobile_balance' ? 'Ingresa el número desde donde transfieres el saldo' : 'Ingresa el número de transacción') : 'Adjunta el comprobante de pago para continuar'}</span>
               </p>
             )}
           </div>
@@ -11295,8 +11889,8 @@ function ProductDetailScreen({ productId, region, me, onCancel, onBought, onLogi
   const cardRate = Number(cupSettings?.transfer_rate) || 0
   const mobileRate = Number(cupSettings?.mobile_rate) || 0
   const numericDetailPrice = Number(detail?.price || 0)
-  const cardCupAmount = Math.round((numericDetailPrice * cardRate) / 10) * 10
-  const mobileCupAmount = Math.round((numericDetailPrice * mobileRate) / 10) * 10
+  const cardCupAmount = Math.ceil((numericDetailPrice * cardRate) / 5) * 5
+  const mobileCupAmount = Math.ceil((numericDetailPrice * mobileRate) / 5) * 5
   const cardEnabled = Boolean(cupSettings?.enabled && cupSettings?.methods?.cup_card_transfer?.enabled && cupSettings?.card_number)
   const mobileEnabled = Boolean(cupSettings?.enabled && cupSettings?.methods?.cup_mobile_balance?.enabled && cupSettings?.mobile_destination_number)
   const hasCupMethods = cardEnabled || mobileEnabled
@@ -11359,7 +11953,7 @@ function ProductDetailScreen({ productId, region, me, onCancel, onBought, onLogi
         order_id: cupOrder.order_id,
         product_name: detail.name,
         payment_status: 'pending_verification',
-        message: 'Comprobante recibido. Un administrador verificará la transferencia y activará tu recarga enseguida.'
+        message: 'Comprobante recibido. Se verificará automáticamente con el SMS bancario o manualmente si usaste EnZona, iPhone o hay demoras de red/apagón de ETECSA.'
       })
     } catch (e) {
       setOrderError(pendingCupOrder ? `El pedido #${pendingCupOrder.order_id} ya fue creado. Corrige el comprobante o la conexión y vuelve a enviarlo; no se generará otro pedido.` : e.message)
@@ -11559,7 +12153,7 @@ function ProductDetailScreen({ productId, region, me, onCancel, onBought, onLogi
             <Share2 className="h-5 w-5 mx-auto text-violet-400" />
           </button>
           <button
-            disabled={!me?.is_guest && (!canBuy || submitting || (paymentMethod !== 'balance' && !cupReference.trim()))}
+            disabled={!me?.is_guest && (!canBuy || submitting || (paymentMethod !== 'balance' && (!proofFile || !cupReference.trim())))}
             onClick={me?.is_guest ? onLoginRequired : handleDirectBuy}
             className="min-w-0 flex-1 rounded-xl bg-gradient-to-r from-accent to-accent2 px-3 py-3 font-bold active:scale-95 disabled:opacity-50 text-bg"
           >
@@ -11591,6 +12185,11 @@ function ProductDetailScreen({ productId, region, me, onCancel, onBought, onLogi
             )}
           </button>
         </div>
+        {!me?.is_guest && canBuy && paymentMethod !== 'balance' && (!proofFile || !cupReference.trim()) && (
+          <p className="text-xs text-yellow-400/70 text-center mt-2">
+            <span className="inline-flex items-center justify-center gap-1"><AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />{!cupReference.trim() ? (paymentMethod === 'cup_mobile_balance' ? 'Ingresa el número desde donde transfieres el saldo' : 'Ingresa el número de transacción') : 'Adjunta el comprobante de pago para continuar'}</span>
+          </p>
+        )}
       </div>
     </div>
   )
@@ -13801,7 +14400,7 @@ function PolicyHeaderLayout({ activeTab, onNav, onHome, title, description }) {
         </nav>
         <button
           onClick={onHome}
-          className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl border border-white/10 bg-[#16181f] px-3.5 py-1.5 text-xs font-bold text-white/80 active:scale-95 hover:border-[#ffff00]/60 hover:text-white transition"
+          className="fs-policy-back inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl border border-white/10 bg-[#16181f] px-3.5 py-1.5 text-xs font-bold text-white/80 active:scale-95 hover:border-[#ffff00]/60 hover:text-white transition"
         >
           <ArrowLeft className="h-3.5 w-3.5 text-[#ffff00]" />
           Ir a la tienda
@@ -13809,7 +14408,7 @@ function PolicyHeaderLayout({ activeTab, onNav, onHome, title, description }) {
       </div>
 
       {/* Título de la página */}
-      <div className="rounded-2xl border border-white/10 bg-gradient-to-r from-[#16181f] via-[#101318] to-[#16181f] p-4 sm:p-5">
+      <div className="fs-policy-hero rounded-2xl border border-white/10 bg-gradient-to-r from-[#16181f] via-[#101318] to-[#16181f] p-4 sm:p-5">
         <h1 className="flex min-w-0 items-center gap-2.5 text-xl font-black text-white md:text-2xl">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-[#ffff00]/10 border border-[#ffff00]/30 text-[#ffff00]">
             {activeTab === 'terms' ? <FileText className="h-4 w-4" /> :
@@ -13823,7 +14422,7 @@ function PolicyHeaderLayout({ activeTab, onNav, onHome, title, description }) {
       </div>
 
       {/* Pestañas de Navegación Bonoxs Style */}
-      <div className="flex w-full max-w-full min-w-0 items-center gap-2 overflow-x-auto pb-1 [scrollbar-width:none]">
+      <div className="fs-policy-tabs grid w-full min-w-0 grid-cols-2 gap-2 sm:flex sm:items-center sm:overflow-x-auto sm:pb-1 [scrollbar-width:none]">
         {tabs.map(tab => {
           const active = activeTab === tab.id
           const Icon = tab.icon
@@ -13831,7 +14430,7 @@ function PolicyHeaderLayout({ activeTab, onNav, onHome, title, description }) {
             <button
               key={tab.id}
               onClick={() => handleTabClick(tab)}
-              className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 ${
+              className={`fs-policy-tab min-w-0 inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 sm:flex-shrink-0 sm:px-3.5 ${
                 active
                   ? 'bg-[#ffff00] text-black border border-[#ffff00] shadow-[0_2px_14px_rgba(255,255,0,0.3)]'
                   : 'bg-[#16181f] text-white/70 border border-white/10 hover:border-white/20 hover:text-white'
@@ -15152,8 +15751,8 @@ function ManualBuyModal({ product: initialProduct, onClose, onBought, buyResult,
   const cardRate = Number(cupSettings?.transfer_rate) || 0
   const mobileRate = Number(cupSettings?.mobile_rate) || 0
   const numericDisplayPrice = Number(displayPrice || 0)
-  const cardCupAmount = Math.round((numericDisplayPrice * cardRate) / 10) * 10
-  const mobileCupAmount = Math.round((numericDisplayPrice * mobileRate) / 10) * 10
+  const cardCupAmount = Math.ceil((numericDisplayPrice * cardRate) / 5) * 5
+  const mobileCupAmount = Math.ceil((numericDisplayPrice * mobileRate) / 5) * 5
   const cardEnabled = Boolean(cupSettings?.enabled && cupSettings?.methods?.cup_card_transfer?.enabled && cupSettings?.card_number)
   const mobileEnabled = Boolean(cupSettings?.enabled && cupSettings?.methods?.cup_mobile_balance?.enabled && cupSettings?.mobile_destination_number)
   const hasCupMethods = cardEnabled || mobileEnabled
@@ -15192,6 +15791,95 @@ function ManualBuyModal({ product: initialProduct, onClose, onBought, buyResult,
         const res = await api.buyManualProduct(product.id, selectedOptionId, customerData, getProductReferral(product.id))
         onBought(res)
       } catch (e) { setErr(e.message); setBuying(false) }
+      return
+    }
+
+    if (paymentMethod === 'telegram_stars') {
+      setBuying(true); setErr(null)
+      try {
+        const invRes = await api.createStarsOrderInvoice(product.id, selectedOptionId, customerData)
+        if (!invRes?.checkout_url) {
+          throw new Error('No se pudo generar la orden de cobro con Telegram Stars')
+        }
+
+        const tg = window.Telegram?.WebApp
+        let invoiceOpened = false
+
+        // 1. Probar openInvoice nativo solo si Bot API >= 6.1
+        if (tg && typeof tg.isVersionAtLeast === 'function' && tg.isVersionAtLeast('6.1') && typeof tg.openInvoice === 'function') {
+          try {
+            tg.openInvoice(invRes.checkout_url, (status) => {
+              if (status === 'paid') {
+                onBought({
+                  order_id: invRes.order_id,
+                  product: product.name,
+                  status: 'completed',
+                  delivery_data: product.auto_delivery_text || '✅ ¡Pago con Telegram Stars verificado!'
+                })
+              }
+            })
+            invoiceOpened = true
+          } catch (invErr) {
+            console.warn("tg.openInvoice falló, usando fallback de enlace Telegram:", invErr)
+            invoiceOpened = false
+          }
+        }
+
+        // 2. Si openInvoice no está soportado (ej. WebAppMethodUnsupported), usar openTelegramLink
+        if (!invoiceOpened) {
+          if (tg && typeof tg.openTelegramLink === 'function') {
+            try {
+              tg.openTelegramLink(invRes.checkout_url)
+              invoiceOpened = true
+            } catch (linkErr) {
+              console.warn("tg.openTelegramLink falló:", linkErr)
+            }
+          }
+        }
+
+        // 3. Si no, usar openLink
+        if (!invoiceOpened) {
+          if (tg && typeof tg.openLink === 'function') {
+            try {
+              tg.openLink(invRes.checkout_url)
+              invoiceOpened = true
+            } catch (err) {}
+          }
+        }
+
+        // 4. Fallback final estándar
+        if (!invoiceOpened) {
+          const w = window.open(invRes.checkout_url, '_blank')
+          if (!w) window.location.href = invRes.checkout_url
+        }
+
+        // 5. Polling para detectar automáticamente cuando el usuario complete el pago en Telegram
+        let checkCount = 0
+        const statusChecker = setInterval(async () => {
+          checkCount++
+          if (checkCount > 35) {
+            clearInterval(statusChecker)
+            return
+          }
+          try {
+            const check = await api.request(`/manual-orders/${invRes.order_id}/status`)
+            if (check?.status === 'completed') {
+              clearInterval(statusChecker)
+              onBought({
+                order_id: invRes.order_id,
+                product: product.name,
+                status: 'completed',
+                delivery_data: check.delivery_data || product.auto_delivery_text || '✅ ¡Pago con Telegram Stars verificado!'
+              })
+            }
+          } catch (e) {}
+        }, 2000)
+
+      } catch (e) {
+        setErr(e.message || 'Error al generar cobro con Telegram Stars')
+      } finally {
+        setBuying(false)
+      }
       return
     }
 
@@ -15558,7 +16246,7 @@ Francho Shop no vende cuentas robadas, hackeadas, recuperadas, baneadas o con da
                 </button>
                 <button
                   onClick={me?.is_guest ? onLoginRequired : handleBuy}
-                  disabled={!me?.is_guest && (buying || (paymentMethod !== 'balance' && (!proofFile || !cupReference.trim())))}
+                  disabled={!me?.is_guest && (buying || (paymentMethod !== 'balance' && paymentMethod !== 'telegram_stars' && (!proofFile || !cupReference.trim())))}
                   className="min-w-0 flex-1 rounded-xl bg-gradient-to-r from-accent to-accent2 px-3 py-3 font-bold active:scale-95 disabled:opacity-50 text-bg">
                   {me?.is_guest ? (
                     <span key="login_req" className="inline-flex items-center justify-center gap-2">
@@ -15569,6 +16257,11 @@ Francho Shop no vende cuentas robadas, hackeadas, recuperadas, baneadas o con da
                     <span key="buying" className="inline-flex items-center justify-center gap-2">
                       <Loader2 className="h-4 w-4 animate-spin" />
                       <span>Procesando...</span>
+                    </span>
+                  ) : paymentMethod === 'telegram_stars' ? (
+                    <span key="buy_stars" className="inline-flex items-center justify-center gap-2">
+                      <Star className="h-5 w-5 fill-current" />
+                      <span>Pagar con Telegram Stars ({numericDisplayPrice <= 0.01 ? 1 : Math.max(1, Math.ceil(numericDisplayPrice / 0.0065))} ⭐)</span>
                     </span>
                   ) : paymentMethod === 'cup_card_transfer' ? (
                     <span key="buy_cup_card" className="inline-flex items-center justify-center gap-2">
@@ -15588,6 +16281,11 @@ Francho Shop no vende cuentas robadas, hackeadas, recuperadas, baneadas o con da
                   )}
                 </button>
               </div>
+              {!me?.is_guest && paymentMethod !== 'balance' && paymentMethod !== 'telegram_stars' && (!proofFile || !cupReference.trim()) && (
+                <p className="text-xs text-yellow-400/70 text-center mt-2">
+                  <span className="inline-flex items-center justify-center gap-1"><AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />{!cupReference.trim() ? (paymentMethod === 'cup_mobile_balance' ? 'Ingresa el número desde donde transfieres el saldo' : 'Ingresa el número de transacción') : 'Adjunta el comprobante de pago para continuar'}</span>
+                </p>
+              )}
             </div>
           </>
         )}
@@ -17072,9 +17770,9 @@ function SellerDashboardPanel({ dashboard, onGoProducts, onGoOrders, onGoWithdra
             <button
               type="button"
               onClick={onGoWithdrawals}
-              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:bg-emerald-500/20 active:scale-95 transition cursor-pointer"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 px-3 py-1.5 text-xs font-bold text-emerald-800 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-500/20 active:scale-95 transition cursor-pointer shadow-sm"
             >
-              <WalletCards className="h-3.5 w-3.5" />
+              <WalletCards className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-300" />
               <span>Saldo y Retiros</span>
               <ArrowUpRight className="h-3.5 w-3.5" />
             </button>
@@ -17082,9 +17780,9 @@ function SellerDashboardPanel({ dashboard, onGoProducts, onGoOrders, onGoWithdra
           <button
             type="button"
             onClick={onRefresh}
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-white/10 bg-card px-3 py-1.5 text-xs font-bold text-white hover:bg-white/5 active:scale-95 transition cursor-pointer"
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-card px-3 py-1.5 text-xs font-bold text-slate-800 dark:text-white hover:bg-slate-50 dark:hover:bg-white/5 active:scale-95 transition cursor-pointer shadow-sm"
           >
-            <RefreshCcw className="h-3.5 w-3.5 text-accent" />
+            <RefreshCcw className="h-3.5 w-3.5 text-emerald-600 dark:text-accent" />
             <span>Actualizar</span>
           </button>
         </div>
@@ -17092,21 +17790,21 @@ function SellerDashboardPanel({ dashboard, onGoProducts, onGoOrders, onGoWithdra
 
       {/* Widget Destacado de Ranking y Puntuación Mensual */}
       {dashboard.ranking && (
-        <div className="rounded-xl border border-yellow-500/30 bg-gradient-to-r from-yellow-500/15 via-card to-card p-3 sm:p-4 shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="rounded-xl border border-amber-300/80 dark:border-yellow-500/30 bg-gradient-to-r from-amber-50 via-yellow-50/40 to-white dark:from-yellow-500/15 dark:via-card dark:to-card p-3 sm:p-4 shadow-sm dark:shadow-md flex flex-col sm:flex-row sm:items-center justify-between gap-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="rounded-xl bg-yellow-500/20 p-2.5 text-yellow-300 border border-yellow-500/30 flex items-center justify-center text-xl shrink-0">
+            <div className="rounded-xl bg-amber-100 dark:bg-yellow-500/20 p-2.5 text-amber-600 dark:text-yellow-300 border border-amber-200 dark:border-yellow-500/30 flex items-center justify-center text-xl shrink-0 shadow-sm">
               {dashboard.ranking.summary?.badge?.icon || '🏆'}
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-black text-white">Ranking Mensual de Tiendas</span>
-                <span className="inline-flex items-center gap-1 rounded-full bg-yellow-500/20 border border-yellow-500/30 px-2 py-0.2 text-[10px] font-black text-yellow-300">
+                <span className="text-sm font-black text-slate-900 dark:text-white">Ranking Mensual de Tiendas</span>
+                <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 dark:bg-yellow-500/20 border border-amber-300 dark:border-yellow-500/30 px-2 py-0.2 text-[10px] font-black text-amber-800 dark:text-yellow-300">
                   Posición #{dashboard.ranking.summary?.rank_position || 1}
                 </span>
-                <span className="text-[10px] text-white/50">de {dashboard.ranking.total_sellers || 1} tiendas activas</span>
+                <span className="text-[10px] text-slate-500 dark:text-white/50">de {dashboard.ranking.total_sellers || 1} tiendas activas</span>
               </div>
-              <p className="text-xs text-white/60 mt-0.5">
-                Score auditado: <strong className="text-accent">{dashboard.ranking.summary?.score || 100} pts</strong> · {dashboard.ranking.summary?.badge?.label || 'Top Vendedor'}
+              <p className="text-xs text-slate-600 dark:text-white/60 mt-0.5">
+                Score auditado: <strong className="text-emerald-600 dark:text-accent font-black">{dashboard.ranking.summary?.score || 100} pts</strong> · {dashboard.ranking.summary?.badge?.label || 'Top Vendedor'}
               </p>
             </div>
           </div>
@@ -17114,7 +17812,7 @@ function SellerDashboardPanel({ dashboard, onGoProducts, onGoOrders, onGoWithdra
           <button
             type="button"
             onClick={() => setShowScoreBreakdown(true)}
-            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-accent/40 bg-accent/15 px-3 py-1.5 text-xs font-bold text-accent hover:bg-accent/25 active:scale-95 transition cursor-pointer shrink-0"
+            className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-emerald-600/30 dark:border-accent/40 bg-emerald-50 dark:bg-accent/15 px-3 py-1.5 text-xs font-bold text-emerald-700 dark:text-accent hover:bg-emerald-100 dark:hover:bg-accent/25 active:scale-95 transition cursor-pointer shrink-0 shadow-sm"
           >
             <Sparkles className="h-3.5 w-3.5" />
             <span>Ver Desglose de Puntos</span>
@@ -17130,143 +17828,143 @@ function SellerDashboardPanel({ dashboard, onGoProducts, onGoOrders, onGoWithdra
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
         {/* Ventas Hoy */}
         <div className="rounded-xl border border-emerald-500/30 bg-gradient-to-br from-emerald-500/15 via-emerald-950/20 to-card p-3 shadow-md shadow-emerald-950/20">
-          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-emerald-400">
+          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">
             <span>Ventas Hoy</span>
-            <span className="rounded bg-emerald-500/20 px-1.5 py-0.5 text-[9px] font-black text-emerald-300">24h</span>
+            <span className="rounded bg-emerald-100 dark:bg-emerald-500/20 border border-emerald-200 dark:border-transparent px-1.5 py-0.5 text-[9px] font-black text-emerald-800 dark:text-emerald-300">24h</span>
           </div>
           <div className="mt-1 flex items-baseline gap-1">
-            <span className="text-xl sm:text-2xl font-black text-white tracking-tight">{money(summary.today?.revenue)}</span>
-            <span className="text-[10px] font-bold text-emerald-400">USDT</span>
+            <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">{money(summary.today?.revenue)}</span>
+            <span className="text-[10px] font-bold text-emerald-600 dark:text-emerald-400">USDT</span>
           </div>
-          <p className="mt-0.5 text-[10px] text-white/45 truncate">{summary.today?.orders || 0} pedidos hoy</p>
+          <p className="mt-0.5 text-[10px] text-slate-500 dark:text-white/45 truncate">{summary.today?.orders || 0} pedidos hoy</p>
         </div>
 
         {/* Ventas 7 Días */}
         <div className="rounded-xl border border-sky-500/25 bg-gradient-to-br from-sky-500/10 via-sky-950/10 to-card p-3">
-          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-sky-400">
+          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-sky-600 dark:text-sky-400">
             <span className="flex items-center gap-1"><Clock className="h-3 w-3" /> 7 Días</span>
-            <span className="rounded bg-sky-500/20 px-1.5 py-0.5 text-[9px] font-bold text-sky-300">Semana</span>
+            <span className="rounded bg-sky-100 dark:bg-sky-500/20 border border-sky-200 dark:border-transparent px-1.5 py-0.5 text-[9px] font-bold text-sky-800 dark:text-sky-300">Semana</span>
           </div>
           <div className="mt-1 flex items-baseline gap-1">
-            <span className="text-xl sm:text-2xl font-black text-white tracking-tight">{money(summary.week?.revenue)}</span>
-            <span className="text-[10px] font-bold text-sky-400">USDT</span>
+            <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">{money(summary.week?.revenue)}</span>
+            <span className="text-[10px] font-bold text-sky-600 dark:text-sky-400">USDT</span>
           </div>
-          <p className="mt-0.5 text-[10px] text-white/45 truncate">{summary.week?.orders || 0} pedidos en 7d</p>
+          <p className="mt-0.5 text-[10px] text-slate-500 dark:text-white/45 truncate">{summary.week?.orders || 0} pedidos en 7d</p>
         </div>
 
         {/* Ventas 30 Días */}
         <div className="rounded-xl border border-purple-500/25 bg-gradient-to-br from-purple-500/10 via-purple-950/10 to-card p-3">
-          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-purple-300">
+          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-300">
             <span className="flex items-center gap-1"><ClipboardList className="h-3 w-3" /> 30 Días</span>
-            <span className="rounded bg-purple-500/20 px-1.5 py-0.5 text-[9px] font-bold text-purple-200">Mes</span>
+            <span className="rounded bg-purple-100 dark:bg-purple-500/20 border border-purple-200 dark:border-transparent px-1.5 py-0.5 text-[9px] font-bold text-purple-800 dark:text-purple-200">Mes</span>
           </div>
           <div className="mt-1 flex items-baseline gap-1">
-            <span className="text-xl sm:text-2xl font-black text-white tracking-tight">{money(summary.month?.revenue)}</span>
-            <span className="text-[10px] font-bold text-purple-300">USDT</span>
+            <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">{money(summary.month?.revenue)}</span>
+            <span className="text-[10px] font-bold text-purple-600 dark:text-purple-300">USDT</span>
           </div>
-          <p className="mt-0.5 text-[10px] text-white/45 truncate">{summary.month?.orders || 0} pedidos en 30d</p>
+          <p className="mt-0.5 text-[10px] text-slate-500 dark:text-white/45 truncate">{summary.month?.orders || 0} pedidos en 30d</p>
         </div>
 
         {/* Pedidos Pendientes */}
         <div className={`rounded-xl border p-3 ${
           (summary.pending_orders || 0) > 0
             ? 'border-yellow-500/30 bg-gradient-to-br from-yellow-500/15 via-yellow-950/15 to-card'
-            : 'border-white/10 bg-card'
+            : 'border-slate-200 dark:border-white/10 bg-white dark:bg-card'
         }`}>
-          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-yellow-300">
+          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-amber-700 dark:text-yellow-300">
             <span className="flex items-center gap-1"><Inbox className="h-3 w-3" /> Pendientes</span>
             <span className={`rounded px-1.5 py-0.5 text-[9px] font-bold ${
-              (summary.pending_orders || 0) > 0 ? 'bg-yellow-500/20 text-yellow-200' : 'bg-white/10 text-white/60'
+              (summary.pending_orders || 0) > 0 ? 'bg-amber-100 dark:bg-yellow-500/20 text-amber-800 dark:text-yellow-200 border border-amber-200 dark:border-transparent' : 'bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-white/60 border border-slate-200 dark:border-transparent'
             }`}>
               {(summary.pending_orders || 0) > 0 ? 'Por entregar' : 'Al día'}
             </span>
           </div>
           <div className="mt-1 flex items-baseline gap-1">
-            <span className="text-xl sm:text-2xl font-black text-white tracking-tight">{summary.pending_orders || 0}</span>
-            <span className="text-[10px] font-bold text-white/50">pedidos</span>
+            <span className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white tracking-tight">{summary.pending_orders || 0}</span>
+            <span className="text-[10px] font-bold text-slate-500 dark:text-white/50">pedidos</span>
           </div>
-          <p className="mt-0.5 text-[10px] text-white/45 truncate">{summary.products_active || 0} activos de {summary.products_total || 0}</p>
+          <p className="mt-0.5 text-[10px] text-slate-500 dark:text-white/45 truncate">{summary.products_active || 0} activos de {summary.products_total || 0}</p>
         </div>
       </div>
 
       {/* 4 Métricas de Calidad y Rendimiento: Ticket, Satisfacción, SLA y Velocidad */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-        <div className="rounded-xl border border-white/10 bg-card p-3 flex items-center justify-between shadow-sm">
+        <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-card p-3 flex items-center justify-between shadow-xs">
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block">Ticket Promedio</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-white/50 block">Ticket Promedio</span>
             <div className="mt-0.5 flex items-baseline gap-1">
-              <span className="text-base sm:text-lg font-black text-white tracking-tight">{money(avgTicket)}</span>
-              <span className="text-[10px] font-bold text-accent">USDT</span>
+              <span className="text-base sm:text-lg font-black text-slate-900 dark:text-white tracking-tight">{money(avgTicket)}</span>
+              <span className="text-[10px] font-bold text-emerald-600 dark:text-accent">USDT</span>
             </div>
-            <p className="text-[10px] text-white/40 mt-0.5">Por pedido completado</p>
+            <p className="text-[10px] text-slate-500 dark:text-white/40 mt-0.5">Por pedido completado</p>
           </div>
-          <div className="rounded-lg bg-white/5 p-2 text-white/40 flex-shrink-0">
-            <DollarSign className="h-4 w-4 text-accent" />
+          <div className="rounded-lg bg-emerald-50 dark:bg-white/5 p-2 text-emerald-600 dark:text-white/40 flex-shrink-0">
+            <DollarSign className="h-4 w-4 text-emerald-600 dark:text-accent" />
           </div>
         </div>
 
-        <div className="rounded-xl border border-white/10 bg-card p-3 flex items-center justify-between shadow-sm">
+        <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-card p-3 flex items-center justify-between shadow-xs">
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block">Satisfacción</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-white/50 block">Satisfacción</span>
             <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="text-base sm:text-lg font-black text-amber-300 tracking-tight">
+              <span className="text-base sm:text-lg font-black text-amber-600 dark:text-amber-300 tracking-tight">
                 {satisfaction.reviews_count > 0 ? `⭐ ${Number(satisfaction.avg_rating || 0).toFixed(1)}` : '⭐ 5.0'}
               </span>
-              <span className="text-[10px] font-bold text-white/40">/ 5.0</span>
+              <span className="text-[10px] font-bold text-slate-400 dark:text-white/40">/ 5.0</span>
             </div>
-            <p className="text-[10px] text-white/40 mt-0.5">
+            <p className="text-[10px] text-slate-500 dark:text-white/40 mt-0.5">
               {satisfaction.reviews_count > 0 ? `${satisfaction.reviews_count} valoraciones` : 'Excelente servicio'}
             </p>
           </div>
-          <div className="rounded-lg bg-amber-500/10 p-2 text-amber-400 flex-shrink-0">
+          <div className="rounded-lg bg-amber-100 dark:bg-amber-500/10 p-2 text-amber-600 dark:text-amber-400 flex-shrink-0">
             <Star className="h-4 w-4" />
           </div>
         </div>
 
-        <div className="rounded-xl border border-white/10 bg-card p-3 flex items-center justify-between shadow-sm">
+        <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-card p-3 flex items-center justify-between shadow-xs">
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block">Entregas a Tiempo</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-white/50 block">Entregas a Tiempo</span>
             <div className="flex items-center gap-1 mt-0.5">
-              <span className="text-base sm:text-lg font-black text-emerald-400 tracking-tight">
+              <span className="text-base sm:text-lg font-black text-emerald-600 dark:text-emerald-400 tracking-tight">
                 {summary.on_time_rate !== undefined ? `${summary.on_time_rate}%` : '100%'}
               </span>
             </div>
-            <p className="text-[10px] text-white/40 mt-0.5">
+            <p className="text-[10px] text-slate-500 dark:text-white/40 mt-0.5">
               {summary.on_time_orders || 0} a tiempo · {summary.delayed_orders || 0} demoras
             </p>
           </div>
-          <div className="rounded-lg bg-emerald-500/10 p-2 text-emerald-400 flex-shrink-0">
+          <div className="rounded-lg bg-emerald-100 dark:bg-emerald-500/10 p-2 text-emerald-600 dark:text-emerald-400 flex-shrink-0">
             <Zap className="h-4 w-4" />
           </div>
         </div>
 
-        <div className="rounded-xl border border-white/10 bg-card p-3 flex items-center justify-between shadow-sm">
+        <div className="rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-card p-3 flex items-center justify-between shadow-xs">
           <div>
-            <span className="text-[10px] font-bold uppercase tracking-wider text-white/50 block">Tiempo Promedio</span>
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-white/50 block">Tiempo Promedio</span>
             <div className="flex items-center gap-1 mt-0.5">
-              <span className="text-base sm:text-lg font-black text-blue-400 tracking-tight">
+              <span className="text-base sm:text-lg font-black text-blue-600 dark:text-blue-400 tracking-tight">
                 {Number(summary.avg_delivery_minutes || 0) > 0 ? `${summary.avg_delivery_minutes} min` : 'Inmediato'}
               </span>
             </div>
-            <p className="text-[10px] text-white/40 mt-0.5">Velocidad real auditada</p>
+            <p className="text-[10px] text-slate-500 dark:text-white/40 mt-0.5">Velocidad real auditada</p>
           </div>
-          <div className="rounded-lg bg-blue-500/10 p-2 text-blue-400 flex-shrink-0">
+          <div className="rounded-lg bg-blue-100 dark:bg-blue-500/10 p-2 text-blue-600 dark:text-blue-400 flex-shrink-0">
             <Clock className="h-4 w-4" />
           </div>
         </div>
       </div>
 
       {/* Banner Compacto de Saldo con enlace directo a Saldo y Retiros */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-500/20 bg-gradient-to-r from-emerald-500/10 via-emerald-950/15 to-black/30 p-3 text-xs">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 dark:border-emerald-500/20 bg-gradient-to-r from-emerald-50 to-white dark:from-emerald-500/10 dark:via-emerald-950/15 dark:to-black/30 p-3 text-xs shadow-sm">
         <div className="flex items-center gap-2.5 min-w-0">
-          <div className="rounded-lg bg-emerald-500/20 p-1.5 text-emerald-400">
+          <div className="rounded-lg bg-emerald-100 dark:bg-emerald-500/20 p-1.5 text-emerald-700 dark:text-emerald-400">
             <WalletCards className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <span className="text-white font-bold block sm:inline">Saldo disponible: </span>
-            <span className="text-emerald-400 font-mono font-black text-sm sm:text-base mr-2">{money(wallet.available_balance)} USDT</span>
+            <span className="text-slate-800 dark:text-white font-bold block sm:inline">Saldo disponible: </span>
+            <span className="text-emerald-700 dark:text-emerald-400 font-mono font-black text-sm sm:text-base mr-2">{money(wallet.available_balance)} USDT</span>
             {Number(wallet.held_balance || 0) > 0 && (
-              <span className="text-yellow-300/80 text-[11px] block sm:inline">
+              <span className="text-amber-700 dark:text-yellow-300/80 text-[11px] block sm:inline">
                 (⏳ Retenido en garantía: {money(wallet.held_balance)} USDT)
               </span>
             )}
@@ -17277,7 +17975,7 @@ function SellerDashboardPanel({ dashboard, onGoProducts, onGoOrders, onGoWithdra
           <button
             type="button"
             onClick={onGoWithdrawals}
-            className="inline-flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-emerald-500 to-emerald-400 px-3.5 py-1.5 text-xs font-black text-black shadow-md shadow-emerald-500/20 hover:from-emerald-400 hover:to-emerald-300 active:scale-95 transition cursor-pointer ml-auto"
+            className="inline-flex items-center gap-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 dark:bg-gradient-to-r dark:from-emerald-500 dark:to-emerald-400 px-3.5 py-1.5 text-xs font-black text-white dark:text-black shadow-sm dark:shadow-md dark:shadow-emerald-500/20 active:scale-95 transition cursor-pointer ml-auto"
           >
             <span>Retirar en Saldo y Retiros</span>
             <ArrowUpRight className="h-3.5 w-3.5 stroke-[2.5]" />
@@ -17655,10 +18353,19 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
   const [savingResellerSettings, setSavingResellerSettings] = useState(false)
   const [cupSettings, setCupSettings] = useState(() => _cachedAdminData?.cupSettings || {
     enabled: true,
-    purchase_price_usdt_cup: '1000',
-    mobile_credit_value: '1.85',
-    transfer_rate: '1190.91',
-    mobile_rate: '643.73',
+    purchase_price_usdt_cup: '1112.05',
+    mobile_credit_value: '3.32',
+    transfer_rate: '1162.05',
+    mobile_rate: '350.16',
+    auto_rate_enabled: true,
+    transfer_markup_type: 'fixed',
+    transfer_markup_val: '50',
+    mobile_mode: 'qvapay_direct',
+    mobile_markup_val: '50',
+    auto_last_sync: '',
+    qvapay_raw_cup: '',
+    qvapay_raw_etecsa: '',
+    qvapay_raw_mlc: '',
     card_transfer_enabled: true,
     card_number: '',
     confirmation_number: '',
@@ -17667,7 +18374,11 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
     max_delivery_hours: 24,
   })
   const [savingCupSettings, setSavingCupSettings] = useState(false)
+  const [syncingQvapayRates, setSyncingQvapayRates] = useState(false)
   const [cupSettingsSuccess, setCupSettingsSuccess] = useState(false)
+  const [inspectorPairingCode, setInspectorPairingCode] = useState('')
+  const [generatingPairingCode, setGeneratingPairingCode] = useState(false)
+  const [pairingCodeCopied, setPairingCodeCopied] = useState(false)
   const [sellers, setSellers] = useState(() => _cachedAdminData?.sellers || [])
   const [accountSellers, setAccountSellers] = useState(() => _cachedAdminData?.accountSellers || [])
   const [accountStore, setAccountStore] = useState(() => _cachedAdminData?.accountStore || null)
@@ -17797,10 +18508,19 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
         if (cupSet) {
           mappedCup = {
             enabled: !!cupSet.enabled,
-            purchase_price_usdt_cup: String(cupSet.purchase_price_usdt_cup || '1000'),
-            mobile_credit_value: String(cupSet.mobile_credit_value || '1.85'),
+            purchase_price_usdt_cup: String(cupSet.purchase_price_usdt_cup || '1112.05'),
+            mobile_credit_value: String(cupSet.mobile_credit_value || '2.2'),
             transfer_rate: String(cupSet.transfer_rate || ''),
             mobile_rate: String(cupSet.mobile_rate || ''),
+            auto_rate_enabled: cupSet.auto_rate_enabled !== false,
+            transfer_markup_type: cupSet.transfer_markup_type || 'fixed',
+            transfer_markup_val: String(cupSet.transfer_markup_val || '50'),
+            mobile_mode: cupSet.mobile_mode || 'qvapay_direct',
+            mobile_markup_val: String(cupSet.mobile_markup_val || '50'),
+            auto_last_sync: cupSet.auto_last_sync || '',
+            qvapay_raw_cup: String(cupSet.qvapay_raw_cup || ''),
+            qvapay_raw_etecsa: String(cupSet.qvapay_raw_etecsa || ''),
+            qvapay_raw_mlc: String(cupSet.qvapay_raw_mlc || ''),
             card_transfer_enabled: cupSet.methods?.cup_card_transfer ? !!cupSet.methods.cup_card_transfer.enabled : true,
             card_number: String(cupSet.card_number || ''),
             confirmation_number: String(cupSet.confirmation_number || ''),
@@ -17999,15 +18719,63 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
   const computedTransferRate = useMemo(() => {
     const p = Number(String(cupSettings.purchase_price_usdt_cup).replace(',', '.'))
     if (!Number.isFinite(p) || p <= 0) return null
-    return (p * (1310 / 1100)).toFixed(2)
-  }, [cupSettings.purchase_price_usdt_cup])
+    let raw = p * (1310 / 1100)
+    if (cupSettings.transfer_markup_type === 'fixed') {
+      const m = Number(String(cupSettings.transfer_markup_val ?? '50').replace(',', '.')) || 0
+      raw = p + m
+    } else if (cupSettings.transfer_markup_type === 'percent') {
+      const m = Number(String(cupSettings.transfer_markup_val ?? '10').replace(',', '.')) || 0
+      raw = p * (1 + m / 100)
+    }
+    return (Math.ceil(raw / 5) * 5).toFixed(2)
+  }, [cupSettings.purchase_price_usdt_cup, cupSettings.transfer_markup_type, cupSettings.transfer_markup_val])
 
   const computedMobileRate = useMemo(() => {
-    const tr = Number(computedTransferRate)
-    const m = Number(String(cupSettings.mobile_credit_value).replace(',', '.'))
-    if (!Number.isFinite(tr) || tr <= 0 || !Number.isFinite(m) || m <= 0) return null
-    return (tr / m).toFixed(2)
-  }, [computedTransferRate, cupSettings.mobile_credit_value])
+    let raw = 0
+    if (cupSettings.mobile_mode === 'factor') {
+      const tr = Number(computedTransferRate)
+      const m = Number(String(cupSettings.mobile_credit_value).replace(',', '.'))
+      if (!Number.isFinite(tr) || tr <= 0 || !Number.isFinite(m) || m <= 0) return null
+      raw = tr / m
+    } else {
+      const qSaldo = Number(String(cupSettings.qvapay_raw_etecsa || '300.16').replace(',', '.'))
+      const m = Number(String(cupSettings.mobile_markup_val ?? '50').replace(',', '.')) || 0
+      raw = qSaldo + m
+    }
+    return (Math.ceil(raw / 5) * 5).toFixed(2)
+  }, [computedTransferRate, cupSettings.mobile_mode, cupSettings.mobile_credit_value, cupSettings.qvapay_raw_etecsa, cupSettings.mobile_markup_val])
+
+  async function syncRatesWithQvapay() {
+    setSyncingQvapayRates(true)
+    try {
+      const res = await api.adminCupPaymentSyncRates()
+      if (res && res.purchase_price_usdt_cup) {
+        setCupSettings(prev => ({
+          ...prev,
+          enabled: !!res.enabled,
+          purchase_price_usdt_cup: String(res.purchase_price_usdt_cup),
+          mobile_credit_value: String(res.mobile_credit_value),
+          transfer_rate: String(res.transfer_rate || ''),
+          mobile_rate: String(res.mobile_rate || ''),
+          auto_rate_enabled: res.auto_rate_enabled !== false,
+          transfer_markup_type: res.transfer_markup_type || 'fixed',
+          transfer_markup_val: String(res.transfer_markup_val || '50'),
+          mobile_mode: res.mobile_mode || prev.mobile_mode || 'qvapay_direct',
+          mobile_markup_val: String(res.mobile_markup_val || prev.mobile_markup_val || '50'),
+          auto_last_sync: res.auto_last_sync || '',
+          qvapay_raw_cup: String(res.qvapay_raw_cup || ''),
+          qvapay_raw_etecsa: String(res.qvapay_raw_etecsa || ''),
+          qvapay_raw_mlc: String(res.qvapay_raw_mlc || ''),
+        }))
+        setCupSettingsSuccess(true)
+        setTimeout(() => setCupSettingsSuccess(false), 3000)
+      }
+    } catch (err) {
+      alert('Error al sincronizar con QvaPay: ' + (err.message || err))
+    } finally {
+      setSyncingQvapayRates(false)
+    }
+  }
 
   async function saveCupSettings() {
     const purchase = Number(String(cupSettings.purchase_price_usdt_cup).replace(',', '.'))
@@ -18043,6 +18811,11 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
         mobile_transfer_enabled: !!cupSettings.mobile_transfer_enabled,
         mobile_destination_number: cupSettings.mobile_destination_number?.trim() || '',
         max_delivery_hours: maxHours,
+        auto_rate_enabled: !!cupSettings.auto_rate_enabled,
+        transfer_markup_type: cupSettings.transfer_markup_type || 'fixed',
+        transfer_markup_val: String(cupSettings.transfer_markup_val || '50'),
+        mobile_mode: cupSettings.mobile_mode || 'qvapay_direct',
+        mobile_markup_val: String(cupSettings.mobile_markup_val || '50'),
       }
       const res = await api.adminCupPaymentSettingsSet(payload)
       if (res) {
@@ -18056,6 +18829,15 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
             mobile_credit_value: String(res.mobile_credit_value),
             transfer_rate: String(res.transfer_rate || ''),
             mobile_rate: String(res.mobile_rate || ''),
+            auto_rate_enabled: res.auto_rate_enabled !== false,
+            transfer_markup_type: res.transfer_markup_type || prev.transfer_markup_type || 'fixed',
+            transfer_markup_val: String(res.transfer_markup_val || prev.transfer_markup_val || '50'),
+            mobile_mode: res.mobile_mode || prev.mobile_mode || 'qvapay_direct',
+            mobile_markup_val: String(res.mobile_markup_val || prev.mobile_markup_val || '50'),
+            auto_last_sync: res.auto_last_sync || prev.auto_last_sync || '',
+            qvapay_raw_cup: String(res.qvapay_raw_cup || prev.qvapay_raw_cup || ''),
+            qvapay_raw_etecsa: String(res.qvapay_raw_etecsa || prev.qvapay_raw_etecsa || ''),
+            qvapay_raw_mlc: String(res.qvapay_raw_mlc || prev.qvapay_raw_mlc || ''),
             card_number: String(res.card_number || prev.card_number),
             confirmation_number: String(res.confirmation_number || prev.confirmation_number),
             mobile_destination_number: String(res.mobile_destination_number || prev.mobile_destination_number),
@@ -18070,6 +18852,27 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
     } finally {
       setSavingCupSettings(false)
     }
+  }
+
+  async function generateInspectorPairingCode() {
+    setGeneratingPairingCode(true)
+    try {
+      const res = await api.adminCreateInspectorPairingCode()
+      if (res && res.code) {
+        setInspectorPairingCode(res.code)
+      }
+    } catch (err) {
+      alert('Error al generar código: ' + (err.message || err))
+    } finally {
+      setGeneratingPairingCode(false)
+    }
+  }
+
+  function copyInspectorPairingCode() {
+    if (!inspectorPairingCode) return
+    navigator.clipboard?.writeText(inspectorPairingCode)
+    setPairingCodeCopied(true)
+    setTimeout(() => setPairingCodeCopied(false), 2500)
   }
 
   async function savePricing(item) {
@@ -19399,59 +20202,157 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
               </label>
             </div>
 
+            {/* Sincronización Automática con QvaPay */}
+            <div className="mt-3 rounded-xl border border-sky-500/20 bg-sky-500/5 p-3.5">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-base">⚡</span>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-sky-400 uppercase tracking-wider">Sincronización Automática con QvaPay</span>
+                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-bold ${cupSettings.auto_rate_enabled ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-white/10 text-white/50'}`}>
+                        {cupSettings.auto_rate_enabled ? '● AUTO EN VIVO' : '○ MODO MANUAL'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-white/50 mt-0.5">
+                      {cupSettings.auto_last_sync ? `Última sincronización: ${cupSettings.auto_last_sync}` : 'Sincroniza en tiempo real cada 15 min'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <label className="flex items-center gap-1.5 cursor-pointer text-xs text-white/80 select-none mr-1">
+                    <input
+                      type="checkbox"
+                      checked={!!cupSettings.auto_rate_enabled}
+                      onChange={e => setCupSettings(v => ({ ...v, auto_rate_enabled: e.target.checked }))}
+                      className="h-3.5 w-3.5 rounded accent-sky-500 cursor-pointer"
+                    />
+                    <span>Auto-Sync</span>
+                  </label>
+
+                  <button
+                    type="button"
+                    onClick={syncRatesWithQvapay}
+                    disabled={syncingQvapayRates}
+                    className="flex items-center gap-1.5 rounded-lg bg-sky-500/20 px-3 py-1 text-xs font-bold text-sky-300 border border-sky-500/30 hover:bg-sky-500/30 transition-all disabled:opacity-50 cursor-pointer"
+                  >
+                    <RefreshCcw className={`h-3 w-3 ${syncingQvapayRates ? 'animate-spin' : ''}`} />
+                    {syncingQvapayRates ? 'Sincronizando...' : 'Sincronizar Ahora'}
+                  </button>
+                </div>
+              </div>
+
+              {/* Datos de mercado QvaPay */}
+              <div className="mt-2.5 grid grid-cols-3 gap-2 text-center text-xs">
+                <div className="rounded-lg bg-black/20 p-2 border border-white/5">
+                  <span className="block text-[10px] text-white/40 uppercase">CUP Bancario</span>
+                  <span className="font-mono font-bold text-white text-xs sm:text-sm">{cupSettings.qvapay_raw_cup || cupSettings.purchase_price_usdt_cup}</span>
+                  <span className="text-[10px] text-white/40 block">CUP / USDT</span>
+                </div>
+                <div className="rounded-lg bg-black/20 p-2 border border-white/5">
+                  <span className="block text-[10px] text-white/40 uppercase">Saldo Cubacel</span>
+                  <span className="font-mono font-bold text-white text-xs sm:text-sm">{cupSettings.qvapay_raw_etecsa || '300.16'}</span>
+                  <span className="text-[10px] text-white/40 block">Saldo / USDT</span>
+                </div>
+                <div className="rounded-lg bg-black/20 p-2 border border-white/5">
+                  <span className="block text-[10px] text-white/40 uppercase">Tarjeta MLC</span>
+                  <span className="font-mono font-bold text-white text-xs sm:text-sm">{cupSettings.qvapay_raw_mlc || '1.40'}</span>
+                  <span className="text-[10px] text-white/40 block">MLC / USDT</span>
+                </div>
+              </div>
+            </div>
+
             {/* Fórmulas y tasas calculadas */}
             <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="rounded-xl border border-white/10 bg-bg/60 p-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-white/60">💳 Tasa Transferencia Tarjeta</span>
-                  <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-bold text-accent">x1.1909</span>
+                  <span className="text-xs font-medium text-white/60">💳 Tasa Venta Transferencia CUP</span>
+                  <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-bold text-accent">
+                    {cupSettings.transfer_markup_type === 'fixed' ? `+${cupSettings.transfer_markup_val || '50'} CUP` : `+${cupSettings.transfer_markup_val || '10'}%`}
+                  </span>
                 </div>
                 <p className="mt-1 text-lg font-black text-white">
                   {computedTransferRate ? `${computedTransferRate} CUP` : '—'} <span className="text-xs font-normal text-white/40">/ USDT</span>
                 </p>
-                <p className="mt-1 text-[11px] text-white/40">Base de compra × 1.19090909 (1310 / 1100)</p>
+                <p className="mt-1 text-[11px] text-white/40">
+                  {cupSettings.transfer_markup_type === 'fixed'
+                    ? `Base QvaPay (${cupSettings.purchase_price_usdt_cup}) + ${cupSettings.transfer_markup_val || '50'} CUP de ganancia`
+                    : `Base QvaPay (${cupSettings.purchase_price_usdt_cup}) × (1 + ${cupSettings.transfer_markup_val}%)`}
+                </p>
               </div>
 
               <div className="rounded-xl border border-white/10 bg-bg/60 p-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs font-medium text-white/60">📱 Tasa Saldo Móvil Cubacel</span>
-                  <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-bold text-accent">÷ {cupSettings.mobile_credit_value || '1.85'}</span>
+                  <span className="text-xs font-medium text-white/60">📱 Tasa Venta Saldo Móvil Cubacel</span>
+                  <span className="rounded bg-accent/20 px-1.5 py-0.5 text-[10px] font-bold text-accent">
+                    +{cupSettings.mobile_markup_val || '50'} Saldo
+                  </span>
                 </div>
                 <p className="mt-1 text-lg font-black text-white">
-                  {computedMobileRate ? `${computedMobileRate} CUP` : '—'} <span className="text-xs font-normal text-white/40">/ USDT</span>
+                  {computedMobileRate ? `${computedMobileRate} Saldo` : '—'} <span className="text-xs font-normal text-white/40">/ USDT</span>
                 </p>
-                <p className="mt-1 text-[11px] text-white/40">Tasa de tarjeta ÷ Factor de saldo móvil</p>
+                <p className="mt-1 text-[11px] text-white/40">
+                  Base QvaPay Saldo ({cupSettings.qvapay_raw_etecsa || '300.16'}) + {cupSettings.mobile_markup_val || '50'} pesos de saldo
+                </p>
               </div>
             </div>
 
-            {/* Inputs de tasas */}
-            <div className="mt-3 grid grid-cols-1 sm:grid-cols-3 gap-3">
+            {/* Inputs de tasas y márgenes */}
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-4 gap-3">
               <label className="block text-xs text-white/60">
-                Tasa Base Compra USDT (CUP)
+                Tasa Base QvaPay (CUP)
                 <input
                   type="text"
                   inputMode="decimal"
                   value={cupSettings.purchase_price_usdt_cup}
                   onChange={e => setCupSettings(v => ({ ...v, purchase_price_usdt_cup: e.target.value }))}
-                  placeholder="1000"
+                  placeholder="1112.05"
                   className="mt-1 w-full rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm text-white font-mono outline-none focus:border-accent"
                 />
               </label>
 
               <label className="block text-xs text-white/60">
-                Factor Saldo Móvil Cubacel
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={cupSettings.mobile_credit_value}
-                  onChange={e => setCupSettings(v => ({ ...v, mobile_credit_value: e.target.value }))}
-                  placeholder="1.85"
-                  className="mt-1 w-full rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm text-white font-mono outline-none focus:border-accent"
-                />
+                Margen Venta CUP
+                <div className="mt-1 flex gap-1">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={cupSettings.transfer_markup_val}
+                    onChange={e => setCupSettings(v => ({ ...v, transfer_markup_val: e.target.value }))}
+                    placeholder="50"
+                    className="w-full rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm text-white font-mono outline-none focus:border-accent"
+                  />
+                  <select
+                    value={cupSettings.transfer_markup_type || 'fixed'}
+                    onChange={e => setCupSettings(v => ({ ...v, transfer_markup_type: e.target.value }))}
+                    className="rounded-lg border border-white/10 bg-bg px-2 text-xs text-white outline-none focus:border-accent"
+                  >
+                    <option value="fixed">+ CUP</option>
+                    <option value="percent">+ %</option>
+                  </select>
+                </div>
               </label>
 
               <label className="block text-xs text-white/60">
-                Horas Máximas de Entrega
+                Margen Saldo Móvil
+                <div className="mt-1 flex gap-1">
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={cupSettings.mobile_markup_val}
+                    onChange={e => setCupSettings(v => ({ ...v, mobile_markup_val: e.target.value }))}
+                    placeholder="50"
+                    className="w-full rounded-lg border border-white/10 bg-bg px-3 py-2 text-sm text-white font-mono outline-none focus:border-accent"
+                  />
+                  <span className="inline-flex items-center rounded-lg border border-white/10 bg-bg px-2 text-xs text-white/60">
+                    + Saldo
+                  </span>
+                </div>
+              </label>
+
+              <label className="block text-xs text-white/60">
+                Horas Máx. Entrega
                 <input
                   type="number"
                   min="1"
@@ -19562,6 +20463,76 @@ function AdminProductsScreen({ onEdit, onOpenCase, externalTab, onTabChange }) {
                   'Guardar Configuración CUP'
                 )}
               </button>
+            </div>
+          </div>
+
+          {/* Card Inspector Transfermóvil (Android Sync & Alertas) */}
+          <div className="card p-4 border border-emerald-500/20 bg-emerald-500/5">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-3">
+              <div className="flex items-center gap-2">
+                <Smartphone className="h-5 w-5 text-emerald-400" />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-bold text-white">Inspector Transfermóvil (APK Android)</p>
+                    <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-bold text-emerald-300 border border-emerald-500/30">
+                      v1.3.0
+                    </span>
+                  </div>
+                  <p className="text-xs text-white/50">Auto-entrega pedidos al detectar SMS de Transfermóvil/Cubacel y te notifica pagos pendientes en tu teléfono</p>
+                </div>
+              </div>
+
+              <a
+                href="/TransfermovilInspector.apk"
+                download="TransfermovilInspector.apk"
+                className="flex items-center gap-1.5 rounded-lg bg-emerald-500/20 px-3 py-1.5 text-xs font-bold text-emerald-300 border border-emerald-500/30 hover:bg-emerald-500/30 transition-all cursor-pointer"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Descargar APK
+              </a>
+            </div>
+
+            <div className="mt-3.5 space-y-3">
+              <p className="text-xs text-white/70 leading-relaxed">
+                Empareja tu teléfono Android una sola vez con un código seguro de 10 minutos. Al vincularlo, la aplicación consultará alertas cada 45 segundos y te mostrará una notificación de <strong className="text-emerald-300">"Revisar Pago"</strong> tan pronto un cliente suba su comprobante.
+              </p>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={generateInspectorPairingCode}
+                  disabled={generatingPairingCode}
+                  className="flex items-center gap-2 rounded-lg bg-emerald-600 px-3.5 py-2 text-xs font-bold text-white hover:bg-emerald-500 disabled:opacity-50 transition-all cursor-pointer shadow-lg shadow-emerald-600/20"
+                >
+                  <KeyRound className="h-3.5 w-3.5" />
+                  {generatingPairingCode ? 'Generando código...' : 'Generar Código de Emparejamiento'}
+                </button>
+
+                {inspectorPairingCode && (
+                  <div className="flex items-center gap-2 rounded-lg border border-emerald-500/40 bg-black/40 px-3 py-1.5">
+                    <span className="text-xs text-white/50">Código:</span>
+                    <span className="font-mono text-base font-black tracking-widest text-emerald-400">
+                      {inspectorPairingCode}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={copyInspectorPairingCode}
+                      className="ml-1 rounded p-1 text-white/60 hover:text-white transition-colors cursor-pointer"
+                      title="Copiar código"
+                    >
+                      {pairingCodeCopied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
+                    </button>
+                    <span className="text-[10px] text-white/40 ml-1">(Vence en 10 min)</span>
+                  </div>
+                )}
+              </div>
+
+              <div className="rounded-lg bg-black/20 p-2.5 border border-white/5 text-[11px] text-white/50 space-y-1">
+                <p className="font-semibold text-white/70">Instrucciones de Vinculación:</p>
+                <p>1. Instala y abre <strong className="text-white/80">TransfermovilInspector</strong> en el teléfono donde recibes los SMS bancarios.</p>
+                <p>2. Pulsa el botón <strong className="text-emerald-300">"VINCULAR INSPECTOR DE PAGOS"</strong>.</p>
+                <p>3. Escribe el código generado arriba y confirma. ¡El dispositivo quedará emparejado automáticamente!</p>
+              </div>
             </div>
           </div>
 
@@ -19965,9 +20936,34 @@ function AdminUsersPanel() {
             <button onClick={saveNote} disabled={loading} className="mt-3 w-full rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold text-white/75 disabled:opacity-60">Guardar nota</button>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-2">
-            <div className="card p-4"><p className="mb-2 text-sm font-semibold">Balance log</p>{detail.balance_log.slice(0, 8).map(x => <p key={x.id} className="border-t border-white/5 py-2 text-xs text-white/60">{fmtDate(x.created_at)} · {Number(x.amount || 0).toFixed(2)} · {x.type} · {x.note}</p>)}</div>
-            <div className="card p-4"><p className="mb-2 text-sm font-semibold">Pedidos manuales</p>{detail.manual_orders.slice(0, 8).map(o => <p key={o.id} className="border-t border-white/5 py-2 text-xs text-white/60">#{o.id} · {o.product_name} · ${Number(o.price || 0).toFixed(2)} · {o.status}</p>)}</div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="card p-4">
+              <p className="mb-2 text-sm font-semibold">Pedidos automáticos ({detail.orders?.length || 0})</p>
+              {(detail.orders || []).slice(0, 8).map(o => (
+                <p key={o.id || o.merchant_order_id} className="border-t border-white/5 py-2 text-xs text-white/60">
+                  #{o.id || o.merchant_order_id} · {o.product_name} · ${Number(o.sell_price || o.price || 0).toFixed(2)} · <span className={o.status === 'completed' ? 'text-green-400 font-semibold' : o.status === 'refunded' ? 'text-amber-400 font-semibold' : 'text-white/60'}>{o.status}</span>
+                </p>
+              ))}
+              {(!detail.orders || detail.orders.length === 0) && <p className="text-xs text-white/40">Sin pedidos automáticos</p>}
+            </div>
+            <div className="card p-4">
+              <p className="mb-2 text-sm font-semibold">Pedidos manuales ({detail.manual_orders?.length || 0})</p>
+              {(detail.manual_orders || []).slice(0, 8).map(o => (
+                <p key={o.id} className="border-t border-white/5 py-2 text-xs text-white/60">
+                  #{o.id} · {o.product_name} · ${Number(o.price || 0).toFixed(2)} · {o.status}
+                </p>
+              ))}
+              {(!detail.manual_orders || detail.manual_orders.length === 0) && <p className="text-xs text-white/40">Sin pedidos manuales</p>}
+            </div>
+            <div className="card p-4">
+              <p className="mb-2 text-sm font-semibold">Balance log</p>
+              {(detail.balance_log || []).slice(0, 8).map(x => (
+                <p key={x.id} className="border-t border-white/5 py-2 text-xs text-white/60">
+                  {fmtDate(x.created_at)} · {Number(x.amount || 0).toFixed(2)} · {x.type} · {x.note}
+                </p>
+              ))}
+              {(!detail.balance_log || detail.balance_log.length === 0) && <p className="text-xs text-white/40">Sin movimientos</p>}
+            </div>
           </div>
         </div>
       )}
@@ -21116,7 +22112,7 @@ function PublicPaymentProfileScreen({ handle }) {
 
           <div className="mt-4 flex items-center justify-center gap-1.5">
             <h1 className="max-w-[255px] truncate text-[21px] font-black leading-tight tracking-normal text-white">{profileName}</h1>
-            <UserIdentityBadges profile={{ is_verified: profile.is_verified, is_vip: profile.is_gold }} />
+            <UserIdentityBadges profile={profile} />
           </div>
           <p className="mt-1 text-sm font-extrabold text-emerald-300">@{profile.handle}</p>
           {profile.public_code && <p className="mt-1.5 font-data text-[10px] font-bold tracking-[0.16em] text-white/35">{profile.public_code}</p>}
@@ -21496,6 +22492,17 @@ function ProfileScreen({ me, onBack, onOrders, onSupport, onHome, onAdmin, onPar
             <p className="text-[10px] text-white/45">Ajustes de cuenta, seguridad y compras</p>
           </div>
         </div>
+        {!isTg && (
+          <button
+            type="button"
+            onClick={async () => { await api.logout(); location.reload() }}
+            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-red-500/25 bg-red-500/10 px-2.5 text-[11px] font-black text-red-300 transition hover:bg-red-500/15 active:scale-95"
+            title="Cerrar sesión"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">Cerrar sesión</span>
+          </button>
+        )}
       </div>
 
       {/* Perfil principal */}
@@ -23622,21 +24629,21 @@ function OrdersScreen({ onOpenCase, onGoSupport, onBack }) {
 
         {/* Banner de Soporte & Reclamos */}
         {onGoSupport && (
-          <div className="fs-orders-card mb-4 flex items-center justify-between gap-3 rounded-2xl border border-accent/25 bg-gradient-to-r from-accent/15 via-accent/5 to-transparent p-3">
+          <div className="fs-orders-card mb-4 flex items-center justify-between gap-3 rounded-2xl border border-emerald-200 dark:border-accent/25 bg-gradient-to-r from-emerald-50 via-white to-white dark:from-accent/15 dark:via-accent/5 dark:to-transparent p-3 shadow-sm">
             <div className="flex items-center gap-3 min-w-0">
-              <div className="h-9 w-9 rounded-xl bg-accent/20 border border-accent/30 flex items-center justify-center text-accent flex-shrink-0">
+              <div className="h-9 w-9 rounded-xl bg-emerald-100 dark:bg-accent/20 border border-emerald-200 dark:border-accent/30 flex items-center justify-center text-emerald-700 dark:text-accent flex-shrink-0">
                 <Headphones className="h-4 w-4" />
               </div>
               <div className="min-w-0">
-                <p className="text-xs font-bold text-white">¿Problemas con alguna compra?</p>
-                <p className="text-[11px] text-white/50 truncate">Reporta un pedido o consulta tus reclamos abiertos</p>
+                <p className="text-xs font-bold text-slate-900 dark:text-white">¿Problemas con alguna compra?</p>
+                <p className="text-[11px] text-slate-500 dark:text-white/50 truncate">Reporta un pedido o consulta tus reclamos abiertos</p>
               </div>
             </div>
             <button
               data-tour="orders-support-btn"
               type="button"
               onClick={onGoSupport}
-              className="flex-shrink-0 rounded-xl bg-accent px-3 py-1.5 text-xs font-black text-[#07110f] hover:bg-accent/90 active:scale-95 transition shadow-sm"
+              className="flex-shrink-0 rounded-xl bg-emerald-600 hover:bg-emerald-700 dark:bg-accent dark:hover:bg-accent/90 px-3 py-1.5 text-xs font-black text-white dark:text-[#07110f] active:scale-95 transition shadow-sm"
             >
               Centro de Ayuda
             </button>
@@ -23668,8 +24675,8 @@ function OrdersScreen({ onOpenCase, onGoSupport, onBack }) {
                   data-tour={idx === 0 ? "orders-item-first" : undefined}
                   className={`fs-orders-card rounded-2xl border transition overflow-hidden ${
                     isExpanded
-                      ? 'border-accent/40 bg-[#121829] shadow-lg shadow-accent/5'
-                      : 'border-white/10 bg-[#0e1322] hover:border-white/20'
+                      ? 'border-emerald-500/50 dark:border-accent/40 bg-white dark:bg-[#121829] shadow-md dark:shadow-lg dark:shadow-accent/5'
+                      : 'border-slate-200 dark:border-white/10 bg-white dark:bg-[#0e1322] hover:border-slate-300 dark:hover:border-white/20'
                   }`}
                 >
                   {/* Tarjeta Compacta (Cabecera Clickable para abrir/cerrar) */}
@@ -23678,15 +24685,15 @@ function OrdersScreen({ onOpenCase, onGoSupport, onBack }) {
                     tabIndex={0}
                     onClick={() => toggleExpand(orderKey)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleExpand(orderKey) } }}
-                    className="w-full text-left p-3 flex items-center gap-3 cursor-pointer select-none transition hover:bg-white/[0.02] active:bg-white/[0.04]"
+                    className="w-full text-left p-3 flex items-center gap-3 cursor-pointer select-none transition hover:bg-slate-50/80 dark:hover:bg-white/[0.02] active:bg-slate-100 dark:active:bg-white/[0.04]"
                   >
                     {/* Thumbnail Compacto */}
-                    <div className="h-11 w-11 sm:h-12 sm:w-12 flex-shrink-0 overflow-hidden rounded-xl border border-white/10 bg-bg/80 relative">
+                    <div className="h-11 w-11 sm:h-12 sm:w-12 flex-shrink-0 overflow-hidden rounded-xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-bg/80 relative flex items-center justify-center p-0.5">
                       {productImage ? (
-                        <OptimizedImage src={productImage} alt={o.product || 'Producto'} className="h-full w-full object-cover" />
+                        <OptimizedImage src={productImage} alt={o.product || 'Producto'} className="h-full w-full object-contain rounded-lg" />
                       ) : (
                         <div className="flex h-full w-full items-center justify-center">
-                          {o.type === 'sms' ? <Smartphone className="h-5 w-5 text-accent" /> : o.type === 'smm' ? <Share2 className="h-5 w-5 text-accent" /> : o.type === 'streaming' ? <Tv className="h-5 w-5 text-purple-300" /> : o.type === 'manual' ? <Wrench className="h-5 w-5 text-accent" /> : <ShoppingCart className="h-5 w-5 text-accent" />}
+                          {o.type === 'sms' ? <Smartphone className="h-5 w-5 text-emerald-600 dark:text-accent" /> : o.type === 'smm' ? <Share2 className="h-5 w-5 text-emerald-600 dark:text-accent" /> : o.type === 'streaming' ? <Tv className="h-5 w-5 text-purple-600 dark:text-purple-300" /> : o.type === 'manual' ? <Wrench className="h-5 w-5 text-emerald-600 dark:text-accent" /> : <ShoppingCart className="h-5 w-5 text-emerald-600 dark:text-accent" />}
                         </div>
                       )}
                     </div>
@@ -23694,7 +24701,7 @@ function OrdersScreen({ onOpenCase, onGoSupport, onBack }) {
                     {/* Resumen Central */}
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="rounded-full bg-white/10 px-2 py-0.2 text-[9px] font-bold text-white/60">
+                        <span className="rounded-full bg-slate-100 dark:bg-white/10 px-2 py-0.5 text-[9px] font-bold text-slate-700 dark:text-white/60 border border-slate-200 dark:border-transparent">
                           {o.type === 'sms' ? 'SMS' : o.type === 'smm' ? 'SMM' : o.type === 'fzr' ? 'Digital' : o.type === 'streaming' ? 'Streaming' : o.type === 'manual' ? 'Manual' : 'Automático'}
                         </span>
                         <span className={`${info.color} inline-flex items-center gap-1 text-[11px] font-bold`}>
@@ -23704,15 +24711,15 @@ function OrdersScreen({ onOpenCase, onGoSupport, onBack }) {
                         {o.type === 'manual' && <OrderSlaBadge order={o} />}
                       </div>
 
-                      <p className="text-xs sm:text-sm font-black leading-tight text-white truncate mt-0.5">
+                      <p className="text-xs sm:text-sm font-black leading-tight text-slate-900 dark:text-white truncate mt-0.5">
                         {o.product || 'Producto'}
                       </p>
 
-                      <div className="flex items-center gap-2 text-[10px] text-white/45 mt-0.5 truncate">
+                      <div className="flex items-center gap-2 text-[10px] text-slate-500 dark:text-white/45 mt-0.5 truncate">
                         {o.option_name ? (
-                          <span className="text-accent font-semibold truncate">{o.option_name}</span>
+                          <span className="text-emerald-700 dark:text-accent font-semibold truncate">{o.option_name}</span>
                         ) : o.type === 'sms' && o.phone ? (
-                          <span className="font-mono text-white/70 truncate">{o.phone}</span>
+                          <span className="font-mono text-slate-700 dark:text-white/70 truncate">{o.phone}</span>
                         ) : (
                           <span className="truncate">Por {sellerName}</span>
                         )}
@@ -23723,13 +24730,13 @@ function OrdersScreen({ onOpenCase, onGoSupport, onBack }) {
 
                     {/* Precio y Chevron de Apertura */}
                     <div className="flex flex-col items-end justify-center shrink-0 pl-1">
-                      <span className="text-sm sm:text-base font-black text-accent">
+                      <span className="text-sm sm:text-base font-black text-emerald-600 dark:text-accent">
                         ${Number(o.price || 0).toFixed(2)}
                       </span>
-                      <div className="flex items-center gap-1 text-[10px] text-white/40 mt-0.5">
+                      <div className="flex items-center gap-1 text-[10px] text-slate-500 dark:text-white/40 mt-0.5">
                         <span className="hidden sm:inline font-bold">{isExpanded ? 'Ocultar' : 'Detalles'}</span>
                         <ChevronDown
-                          className={`h-4 w-4 text-white/50 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-accent' : ''}`}
+                          className={`h-4 w-4 text-slate-400 dark:text-white/50 transition-transform duration-200 ${isExpanded ? 'rotate-180 text-emerald-600 dark:text-accent' : ''}`}
                         />
                       </div>
                     </div>
@@ -23739,20 +24746,20 @@ function OrdersScreen({ onOpenCase, onGoSupport, onBack }) {
                   {isExpanded && (
                     <div
                       onClick={(e) => e.stopPropagation()}
-                      className="border-t border-white/10 bg-[#0a0e1a]/80 p-3 sm:p-4 space-y-3 animate-in fade-in duration-200"
+                      className="border-t border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-[#0a0e1a]/80 p-3 sm:p-4 space-y-3 animate-in fade-in duration-200"
                     >
-                      <div className="grid gap-1 rounded-xl bg-black/30 p-2.5 text-xs text-white/65 border border-white/5">
+                      <div className="grid gap-1 rounded-xl bg-white dark:bg-black/30 p-2.5 text-xs text-slate-700 dark:text-white/65 border border-slate-200 dark:border-white/5 shadow-xs">
                         <div className="flex items-center justify-between">
-                          <p><span className="text-white/35">Orden:</span> <code className="text-white font-mono font-bold">{o.id}</code></p>
+                          <p><span className="text-slate-400 dark:text-white/35">Orden:</span> <code className="text-slate-900 dark:text-white font-mono font-bold">{o.id}</code></p>
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(String(o.id)) }}
-                            className="text-[10px] text-white/50 hover:text-white bg-white/5 hover:bg-white/10 px-2 py-0.5 rounded transition"
+                            className="text-[10px] text-slate-600 dark:text-white/50 hover:text-slate-900 dark:hover:text-white bg-slate-100 hover:bg-slate-200 dark:bg-white/5 dark:hover:bg-white/10 px-2 py-0.5 rounded transition font-bold border border-slate-200 dark:border-transparent"
                           >
                             Copiar ID
                           </button>
                         </div>
-                        <p><span className="text-white/35">Creada:</span> {date}</p>
+                        <p><span className="text-slate-400 dark:text-white/35">Creada:</span> {date}</p>
                         {o.delivery_time && (
                           <p className="flex items-center gap-1.5">
                             <span className="text-white/35">Tiempo estimado:</span>{' '}
@@ -23872,7 +24879,35 @@ function OrdersScreen({ onOpenCase, onGoSupport, onBack }) {
                                   {cred.profile}
                                 </div>
                               )}
-                              {cred.email && (
+                              {/* Enlace directo de activación */}
+                              {(cred.link || (cred.email && cred.email.startsWith('http'))) && (
+                                <div className="flex items-center justify-between gap-2 bg-emerald-500/10 border border-emerald-500/30 p-2.5 rounded-lg text-xs">
+                                  <div className="min-w-0 flex-1">
+                                    <span className="block text-[9px] text-emerald-400 uppercase font-black">🔗 Enlace de Activación / Canje</span>
+                                    <span className="block font-mono text-[11px] text-emerald-200 truncate select-all">{cred.link || cred.email}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <a
+                                      href={cred.link || cred.email}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      onClick={(e) => e.stopPropagation()}
+                                      className="px-2.5 py-1 rounded bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-[10px] shadow transition active:scale-95"
+                                    >
+                                      Abrir
+                                    </a>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => { e.stopPropagation(); navigator.clipboard.writeText(cred.link || cred.email) }}
+                                      className="px-2 py-1 rounded bg-white/10 hover:bg-white/20 text-[10px] font-bold text-white transition active:scale-95"
+                                    >
+                                      Copiar
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
+                              {cred.email && !cred.email.startsWith('http') && (
                                 <div className="flex items-center justify-between gap-2 bg-white/5 p-2 rounded-lg text-xs">
                                   <div className="min-w-0">
                                     <span className="block text-[9px] text-white/40 uppercase font-bold">Correo / Usuario</span>
@@ -27028,17 +28063,17 @@ function PanelScreen({ me, setMe, onLogout, onHome, onOpenCase, onEditProduct, i
         </nav>
 
         {/* Footer Sidebar / Volver a la tienda */}
-        <div className="p-3 border-t border-white/10 bg-black/20 flex-shrink-0">
+        <div className="p-3 border-t border-slate-200 dark:border-white/10 bg-slate-100/70 dark:bg-black/20 flex-shrink-0">
           <button
             onClick={onHome}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-accent py-2.5 text-xs font-bold text-bg hover:bg-accent/90 active:scale-95 transition"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 dark:bg-accent dark:hover:bg-accent/90 py-2.5 text-xs font-black text-white active:scale-95 transition shadow-sm"
           >
             <ArrowLeft className="h-4 w-4" />
             {portalMode ? 'Abrir tienda' : 'Volver a la tienda'}
           </button>
-          <div className="mt-3 flex items-center justify-between text-[10px] text-white/35 font-bold">
+          <div className="mt-3 flex items-center justify-between text-[10px] text-slate-500 dark:text-white/35 font-bold">
             <span className="truncate max-w-[125px]">{me.name}</span>
-            <button onClick={onLogout} className="hover:text-red-400 font-bold active:scale-95 transition">Cerrar sesión</button>
+            <button onClick={onLogout} className="text-rose-600 dark:text-red-400 hover:underline font-bold active:scale-95 transition">Cerrar sesión</button>
           </div>
         </div>
       </aside>
@@ -27068,15 +28103,15 @@ function PanelScreen({ me, setMe, onLogout, onHome, onOpenCase, onEditProduct, i
           </div>
           
           <div className="flex items-center gap-3 sm:gap-4">
-            {onToggleTheme && (
+            {false && onToggleTheme && (
               <button
                 type="button"
                 onClick={onToggleTheme}
-                title={theme === 'light' ? 'Cambiar a Modo Oscuro' : 'Cambiar a Modo Claro (Morado & Blanco)'}
-                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[10px] font-black border transition active:scale-95 ${
+                title={theme === 'light' ? 'Cambiar a Modo Oscuro' : 'Cambiar a Modo Claro'}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[10px] font-black border transition active:scale-95 shadow-sm ${
                   theme === 'light'
-                    ? 'bg-purple-600 text-white border-purple-500 shadow-sm'
-                    : 'bg-purple-500/15 border-purple-500/30 text-purple-300 hover:bg-purple-500/25'
+                    ? 'bg-white hover:bg-slate-100 text-slate-800 border-slate-300 shadow-slate-200/50'
+                    : 'bg-amber-500/15 border-amber-500/30 text-amber-300 hover:bg-amber-500/25'
                 }`}
               >
                 {theme === 'light' ? <Moon className="h-3.5 w-3.5" /> : <Sun className="h-3.5 w-3.5" />}

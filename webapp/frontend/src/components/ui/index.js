@@ -1,5 +1,5 @@
 /**
- * Francho Shop - Universal UI Components (Fase UI-0)
+ * Francho Shop - Universal UI Components (Fase UI-0 & UI-0.1)
  * Reusable, accessible, presentation-only components.
  */
 
@@ -22,3 +22,22 @@ export {
   ModalContent,
   ModalFooter,
 } from './Modal'
+
+export { Input } from './Input'
+export { Textarea } from './Textarea'
+export { Select } from './Select'
+export {
+  Field,
+  FieldLabel,
+  FieldDescription,
+  FieldError,
+  useFieldContext,
+} from './Field'
+export { Alert } from './Alert'
+export {
+  Tabs,
+  TabList,
+  Tab,
+  TabPanel,
+  useTabsContext,
+} from './Tabs'
